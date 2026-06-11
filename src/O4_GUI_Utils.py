@@ -271,7 +271,7 @@ class Ortho4XP_GUI(tk.Tk):
         # ── FRAME STEPS (ligne 2 : 5 boutons build) ───────────────────
         self.frame_steps = tk.Frame(self.frame_top, border=0, padx=5, pady=5, bg=_BG)
         self.frame_steps.grid(row=2, column=0, sticky=N+S+W+E)
-        for i in range(5): self.frame_steps.columnconfigure(i, weight=1)
+        for i in range(6): self.frame_steps.columnconfigure(i, weight=1)
 
         ttk.Button(self.frame_steps, text=tr("Assemble Vector data"), command=self.build_poly_file).grid(
             row=0, column=0, padx=5, pady=0, sticky=N+S+E+W)
@@ -280,14 +280,16 @@ class Ortho4XP_GUI(tk.Tk):
         build_mesh_button.bind("<ButtonPress-1>",         self.build_mesh)
         build_mesh_button.bind("<Shift-ButtonPress-1>",   self.sort_mesh)
         build_mesh_button.bind("<Control-ButtonPress-1>", self.community_mesh)
+        ttk.Button(self.frame_steps, text=tr("Sea Patches (2.1)"), command=self.build_sea_patches).grid(
+            row=0, column=2, padx=5, pady=0, sticky=N+S+E+W)
         build_masks_button = ttk.Button(self.frame_steps, text=tr(" Draw Water Masks  "))
-        build_masks_button.grid(row=0, column=2, padx=5, pady=0, sticky=N+S+E+W)
+        build_masks_button.grid(row=0, column=3, padx=5, pady=0, sticky=N+S+E+W)
         build_masks_button.bind("<ButtonPress-1>",       self.build_masks)
         build_masks_button.bind("<Shift-ButtonPress-1>", self.build_masks)
         ttk.Button(self.frame_steps, text=tr(" Build Imagery/DSF "), command=self.build_tile).grid(
-            row=0, column=3, padx=5, pady=0, sticky=N+S+E+W)
-        ttk.Button(self.frame_steps, text=tr("    All in one     "), command=self.build_all).grid(
             row=0, column=4, padx=5, pady=0, sticky=N+S+E+W)
+        ttk.Button(self.frame_steps, text=tr("    All in one     "), command=self.build_all).grid(
+            row=0, column=5, padx=5, pady=0, sticky=N+S+E+W)
 
         # ── FRAME BARS (ligne 3 : barres de progression) ──────────────
         self.frame_bars = tk.Frame(self.frame_top, border=0, padx=5, pady=5, bg=_BG)
@@ -345,24 +347,56 @@ class Ortho4XP_GUI(tk.Tk):
             font=("TkFixedFont", fs(11), "bold"))
         self.cnorm_ref_label.grid(row=0, column=5, padx=10, sticky=W+E)
 
-        # ── LIGNE 2 :  Color Check + Timeline + RAM ────────────────────
+        # ── LIGNE 2 : Augmenter saturation ────────────────────────────
+        tk.Label(self.frame_cnorm, text=tr("Saturation:"), bg=_BG, fg=_FG,
+                 font=("TkFixedFont", fs(11))).grid(row=1, column=0, padx=6, sticky=E)
+
+        self.cnorm_sat_enabled = tk.IntVar(value=0)
+        self.cnorm_sat_checkbox = tk.Checkbutton(self.frame_cnorm, text=tr("Enable"),
+            fg=_FG, selectcolor=_BG,
+            activeforeground="#ffffff", activebackground=_BG,
+            variable=self.cnorm_sat_enabled, command=self.toggle_cnorm_sat,
+            font=("TkFixedFont", fs(11)), bg=_BG)
+        self.cnorm_sat_checkbox.grid(row=1, column=1, padx=8, sticky=W)
+
+        tk.Label(self.frame_cnorm, text=tr("Boost:"), bg=_BG, fg=_FG,
+                 font=("TkFixedFont", fs(11))).grid(row=1, column=2, padx=6, sticky=E)
+
+        self.cnorm_sat_value = tk.IntVar(value=100)
+        self.cnorm_sat_slider = tk.Scale(self.frame_cnorm, from_=0, to=200, orient=HORIZONTAL,
+            variable=self.cnorm_sat_value, command=self.update_cnorm_sat,
+            bg=_BG, fg=_FG, troughcolor="#1a2e25",
+            length=int(200*s), showvalue=True)
+        self.cnorm_sat_slider.grid(row=1, column=3, padx=6, sticky=W+E)
+
+        self.cnorm_sat_label = tk.Label(self.frame_cnorm, text="100%  (réf.)",
+            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(11), "bold"),
+            width=14, anchor=W)
+        self.cnorm_sat_label.grid(row=1, column=4, padx=6, sticky=W)
+
+        tk.Label(self.frame_cnorm,
+            text=tr("0%=gris  100%=réf.48753JPG  200%=×2"),
+            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(10))).grid(
+            row=1, column=5, padx=10, sticky=W+E)
+
+        # ── LIGNE 3 :  Color Check + Timeline + RAM ────────────────────
         ttk.Button(self.frame_cnorm,
             text=tr("RGB adjustments, sharpness, saturation"),
             command=self.open_color_check,
-            width=32).grid(row=1, column=3, padx=5, pady=(8,4))
+            width=32).grid(row=2, column=3, padx=5, pady=(8,4))
 
         # Bouton Timeline — affiche le rapport des durées d'étapes
         ttk.Button(self.frame_cnorm,
             text=tr("⏱ Timeline"),
             command=self._show_timeline,
-            width=12).grid(row=1, column=4, padx=5, pady=(8,4))
+            width=12).grid(row=2, column=4, padx=5, pady=(8,4))
 
         # Label RAM live
         self._ram_label = tk.Label(self.frame_cnorm,
             text="RAM: --",
             bg=_BG, fg=_FG2,
             font=("TkFixedFont", fs(10)))
-        self._ram_label.grid(row=1, column=5, padx=8, sticky=W)
+        self._ram_label.grid(row=2, column=5, padx=8, sticky=W)
         self._update_ram_label()
 
         # ── CONSOLE (row=1 principal — extensible) ─────────────────────
@@ -435,6 +469,19 @@ class Ortho4XP_GUI(tk.Tk):
     def update_cnorm_strength(self, value):
         CNORM.CORRECTION_STRENGTH = int(value) / 100.0
         self.cnorm_pct_label.config(text=str(value) + "%")
+
+    def toggle_cnorm_sat(self):
+        CNORM.saturation_enabled = bool(self.cnorm_sat_enabled.get())
+
+    def update_cnorm_sat(self, value):
+        v = int(value)
+        CNORM.saturation_strength = v / 100.0
+        if v == 100:
+            self.cnorm_sat_label.config(text="100%  (réf.)")
+        elif v < 100:
+            self.cnorm_sat_label.config(text=f"{v}%  (−sat.)")
+        else:
+            self.cnorm_sat_label.config(text=f"{v}%  (+sat.)")
 
     def _show_timeline(self):
         """Affiche le rapport Timeline dans une fenêtre popup."""
@@ -594,6 +641,15 @@ class Ortho4XP_GUI(tk.Tk):
         def _run():
             MASK.build_masks(tile)
             _build_timeline.end(tr("Step 2.5 — Masks"))
+        threading.Thread(target=_run).start()
+
+    def build_sea_patches(self):
+        tile = self.tile_from_interface()
+        _build_timeline.start(tr("Step 2.1 — Sea Patches"))
+        def _run():
+            TILE.build_sea_patches(tile)
+            _build_timeline.end(tr("Step 2.1 — Sea Patches"))
+            _build_timeline.report()
         threading.Thread(target=_run).start()
 
     def build_tile(self):

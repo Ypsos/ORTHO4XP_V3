@@ -24,6 +24,7 @@ T = {
     " Draw Water Masks  "               : " Dessiner masques eau  ",
     " Build Imagery/DSF "               : " Construire Imagerie/DSF ",
     "    All in one     "               : "    Tout en un     ",
+    "Sea Patches (2.1)"                : "Patches Mer (2.1)",
 
     # ── VUE CARTE / TUILE ──────────────────────────────────────────
     "Active tile"                       : "Tuile active",
@@ -66,6 +67,12 @@ T = {
     "Strength:"                         : "Intensité :",
 
     # ── PANNEAU COLOR NORMALIZE ────────────────────────────────────
+    "Saturation:"                       : "Saturation :",
+    "Boost:"                            : "Boost :",
+    "0%=gris  100%=réf.48753JPG  200%=×2"
+                                        : "0%=gris  100%=réf.48753JPG  200%=×2",
+    "100%  (réf.)"                      : "100%  (réf.)",
+
     # ── TIMELINE / BENCHMARK (Phase 3) ────────────────────────────
     "⏱ Timeline"                        : "⏱ Chronologie",
     "⏱ Timeline — Durées du build"      : "⏱ Chronologie — Durées du build",
@@ -74,6 +81,7 @@ T = {
     "Step 1 — Vectors"                  : "Étape 1 — Vecteurs",
     "Step 2 — Mesh"                     : "Étape 2 — Maillage",
     "Step 2.5 — Masks"                  : "Étape 2.5 — Masques",
+    "Step 2.1 — Sea Patches"            : "Étape 2.1 — Patches Mer",
     "Step 3 — DSF/Imagery"              : "Étape 3 — DSF/Imagerie",
     "Build All"                         : "Tout construire",
 
@@ -337,6 +345,22 @@ T = {
     "BC1 — TERRE"                       : "BC1 — TERRE",
     "BC1 — MER"                         : "BC1 — MER",
     "BC3 — MER"                         : "BC3 — MER",
+
+
+    # ── GESTION JPG-PATCH — textes fenêtre ────────────────────────
+    "Gestion JPG-Patch — Ortho4XP V3"       : "Gestion JPG-Patch — Ortho4XP V3",
+    "Gestion des JPG-Patch existants"        : "Gestion des JPG-Patch existants",
+    "patch(es) trouvé(s) dans"              : "patch(es) trouvé(s) dans",
+    "Sélection patches à conserver — Ortho4XP V3" : "Sélection patches à conserver — Ortho4XP V3",
+    "Cocher les patches à CONSERVER"         : "Cocher les patches à CONSERVER",
+    "(Les patches non cochés seront supprimés)" : "(Les patches non cochés seront supprimés)",
+    "Tout cocher"   : "Tout cocher",
+    "Tout décocher" : "Tout décocher",
+    "← Cliquer sur un patch"                : "← Cliquer sur un patch",
+    # ── GESTION JPG-PATCH — fenêtre dialogue ──────────────────────
+    "🗑  Tout supprimer"                 : "🗑  Tout supprimer",
+    "✅  Tout conserver"                 : "✅  Tout conserver",
+    "🔍  Sélection patches"             : "🔍  Sélection patches",
 
     # ── COLOR CHECK — boutons et labels dynamiques ─────────────────
     "🗑 Supprimer TOUS DDS ZL"          : "🗑 Supprimer TOUS DDS ZL",

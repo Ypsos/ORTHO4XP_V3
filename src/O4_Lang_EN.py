@@ -23,6 +23,7 @@ T = {
     " Draw Water Masks  "               : " Draw Water Masks  ",
     " Build Imagery/DSF "               : " Build Imagery/DSF ",
     "    All in one     "               : "    All in one     ",
+    "Sea Patches (2.1)"                : "Sea Patches (2.1)",
 
     # ── MAP / TILE VIEW ────────────────────────────────────────────
     "Active tile"                       : "Active tile",
@@ -69,6 +70,11 @@ T = {
     "RGB adjustments, sharpness, saturation"
                                         : "RGB adjustments, sharpness, saturation",
     "Réf: "                             : "Ref: ",
+    "Saturation:"                       : "Saturation:",
+    "Boost:"                            : "Boost:",
+    "0%=gris  100%=réf.48753JPG  200%=×2"
+                                        : "0%=grey  100%=ref.48753JPG  200%=×2",
+    "100%  (réf.)"                      : "100%  (ref.)",
 
     # ── TIMELINE / BENCHMARK (Phase 3) ────────────────────────────
     "⏱ Timeline"                        : "⏱ Timeline",
@@ -78,6 +84,7 @@ T = {
     "Step 1 — Vectors"                  : "Step 1 — Vectors",
     "Step 2 — Mesh"                     : "Step 2 — Mesh",
     "Step 2.5 — Masks"                  : "Step 2.5 — Masks",
+    "Step 2.1 — Sea Patches"            : "Step 2.1 — Sea Patches",
     "Step 3 — DSF/Imagery"              : "Step 3 — DSF/Imagery",
     "Build All"                         : "Build All",
 
@@ -336,6 +343,22 @@ T = {
     "BC1 — TERRE"                       : "BC1 — LAND",
     "BC1 — MER"                         : "BC1 — SEA",
     "BC3 — MER"                         : "BC3 — SEA",
+
+    # ── JPG-PATCH MANAGEMENT — window texts ───────────────────────
+    "Gestion JPG-Patch — Ortho4XP V3"       : "JPG-Patch Manager — Ortho4XP V3",
+    "Gestion des JPG-Patch existants"        : "Existing JPG-Patches",
+    "patch(es) trouvé(s) dans"              : "patch(es) found in",
+    "Sélection patches à conserver — Ortho4XP V3" : "Select patches to keep — Ortho4XP V3",
+    "Cocher les patches à CONSERVER"         : "Check the patches to KEEP",
+    "(Les patches non cochés seront supprimés)" : "(Unchecked patches will be deleted)",
+    "Tout cocher"   : "Check all",
+    "Tout décocher" : "Uncheck all",
+    "← Cliquer sur un patch"                : "← Click on a patch",
+
+    # ── JPG-PATCH MANAGEMENT — dialog window ──────────────────────
+    "🗑  Tout supprimer"                 : "🗑  Delete all",
+    "✅  Tout conserver"                 : "✅  Keep all",
+    "🔍  Sélection patches"             : "🔍  Select patches",
 
     # ── COLOR CHECK — boutons et labels dynamiques ─────────────────
     "🗑 Supprimer TOUS DDS ZL"          : "🗑 Delete ALL ZL DDS",

@@ -49,6 +49,11 @@ import random
 from math import ceil, log, tan, pi
 import numpy
 from PIL import Image, ImageFilter, ImageEnhance, ImageOps
+try:
+    from scipy import ndimage as _ndi
+    _scipy_enabled = True
+except Exception:
+    _scipy_enabled = False
 
 Image.MAX_IMAGE_PIXELS = 1000000000  # Not a decompression bomb attack!
 
@@ -76,11 +81,48 @@ def _find_sea_mask(tile, til_x_left, til_y_top, zoomlevel, provider_code):
     """
     Trouve le masque PNG côtier en convertissant les coordonnées ZL texture
     vers les coordonnées ZL masque (mask_zl).
-    Cherche dans textures/ (ZL direct) puis dans Masks/ (avec conversion ZL).
     Retourne (chemin_masque, crop_box) ou (None, None) si absent.
-    crop_box = (x0, y0, x1, y1) pixels dans le masque ZL masque, None si déjà ZL texture.
+
+    RÈGLE BIBLE ZonePhoto (v3.2) :
+      - ZonePhoto extent_code != global (extent réel dans Extents/) → PAS de masque
+        Les PNG dans Masks/ sont ignorés → zéro rectangle XP12.
+      - ZonePhoto extent_code = global → masque côtier autorisé (générer masque)
+      - Non-ZonePhoto (BI, Esri, ARC) → masque côtier autorisé
+
+    ORDRE :
+      0. Si ZonePhoto.comb ET au moins un layer avec extent réel → return alpha=255 solide
+         AVANT Masks/ (les PNG de build_masks sont court-circuités).
+      1. Chercher dans textures/ (masques manuels ZL direct)
+      2. Chercher dans Masks/ avec conversion ZL→mask_zl
+      3. Coastal Manager auto
     """
     textures_dir = os.path.join(tile.build_dir, "textures")
+    mask_zl = int(getattr(tile, "mask_zl", 15))
+
+    # 0. ZonePhoto.comb présent : extent réel → PAS de masque côtier
+    try:
+        if CNORM.load_zonephoto():
+            _layers = local_combined_providers_dict.get(provider_code, [])
+            _has_real_extent = any(
+                rl.get("extent_code", "global") != "global"
+                for rl in _layers
+                if rl.get("layer_code") != "PATCH"
+            )
+            if _has_real_extent:
+                # extent réel dans Extents/ → alpha=255 solide, Masks/ ignoré
+                _white_mask = os.path.join(textures_dir, "_sea_alpha_solid.png")
+                if not os.path.isfile(_white_mask):
+                    try:
+                        from PIL import Image as _PILI
+                        os.makedirs(textures_dir, exist_ok=True)
+                        _PILI.new("L", (64, 64), 255).save(_white_mask)
+                    except Exception:
+                        return None, None
+                return _white_mask, None
+            # extent_code = global → masque côtier autorisé, continuer normalement
+    except Exception:
+        pass
+
     # 1. Chercher dans textures/ (formats ZL direct)
     for candidate in [
         os.path.join(textures_dir,
@@ -92,8 +134,8 @@ def _find_sea_mask(tile, til_x_left, til_y_top, zoomlevel, provider_code):
     ]:
         if os.path.isfile(candidate):
             return candidate, None
+
     # 2. Chercher dans Masks/ avec conversion coordonnées ZL→mask_zl
-    mask_zl = int(getattr(tile, "mask_zl", 15))
     if int(zoomlevel) >= mask_zl:
         factor   = 2 ** (int(zoomlevel) - mask_zl)
         m_til_x  = (int(til_x_left / factor) // 16) * 16
@@ -108,7 +150,8 @@ def _find_sea_mask(tile, til_x_left, til_y_top, zoomlevel, provider_code):
             y0 = int(ry * 4096 / factor)
             sz = 4096 // factor
             return mask_path, (x0, y0, x0 + sz, y0 + sz)
-    # 3. Aucun masque trouvé → générer depuis mesh (cache global, lu une seule fois)
+
+    # 3. Aucun masque manuel → Coastal Manager auto
     try:
         import O4_Coastal_Manager as _COAST
         dico_sea = _get_dico_sea(tile)
@@ -879,20 +922,19 @@ def initialize_local_combined_providers_dict(tile):
             else:
                 new_comb_list.append(rlayer)
         local_combined_providers_dict[provider_code] = new_comb_list
-    # Injecter PATCH provider si dossier JPG-Patch/{+lat-lon}/PATCH_{zl} existe
+    # Injecter PATCH provider si dossier Patches/{+lat-lon}/PATCH_{zl} existe
     try:
         import O4_File_Names as _FN
         _zl = getattr(tile, "default_zl", 17)
         _tile_key = _FN.short_latlon(tile.lat, tile.lon)
-        _patch_dir = os.path.join(_FN.Imagery_dir, "JPG-Patch", _tile_key,
+        _patch_dir = os.path.join(_FN.Patch_dir, _tile_key,
                                   "PATCH_" + str(_zl))
         if os.path.isdir(_patch_dir):
-            _img_dir = os.path.join("JPG-Patch", _tile_key)
             providers_dict["PATCH"] = {
                 "code"        : "PATCH",
                 "request_type": "local_tms",
                 "image_type"  : "jpeg",
-                "imagery_dir" : _img_dir,
+                "imagery_dir" : "patch",
                 "extent"      : "global",
                 "color_filters": "none",
                 "in_GUI"      : False,
@@ -904,6 +946,33 @@ def initialize_local_combined_providers_dict(tile):
                 if not any(l["layer_code"]=="PATCH" for l in local_combined_providers_dict[_pc]):
                     local_combined_providers_dict[_pc] = [_patch_layer] + local_combined_providers_dict[_pc]
             UI.vprint(1, "   [SeaTex] Provider PATCH injecté.")
+            # ── Injecter PATCH pour les providers simples (non-combined) ────────
+            # ESRI, Bing, IGN simple, etc. ne passent pas par combine_textures
+            # sans cette injection → PATCH jamais assemblé pour ces providers.
+            # On crée un combined temporaire [PATCH_fond + provider_source] pour
+            # chaque provider simple présent sur cette tuile.
+            for _pc in list(test_set):
+                if (_pc in providers_dict
+                        and _pc not in local_combined_providers_dict
+                        and _pc != "PATCH"):
+                    try:
+                        _prov_color = providers_dict[_pc].get(
+                            "color_filters", "none")
+                        if isinstance(_prov_color, list):
+                            _prov_color = "none"
+                        _prov_layer = {
+                            "layer_code"  : _pc,
+                            "extent_code" : "global",
+                            "color_code"  : _prov_color,
+                            "priority"    : "medium",
+                        }
+                        local_combined_providers_dict[_pc] = [
+                            _patch_layer, _prov_layer
+                        ]
+                        UI.vprint(1, f"   [SeaTex] PATCH injecté pour provider simple : {_pc}")
+                    except Exception as _sp:
+                        UI.vprint(2, f"   [SeaTex] Injection simple {_pc} : {_sp}")
+            # ────────────────────────────────────────────────────────────────────
     except Exception as _pe:
         UI.vprint(2, f"   [SeaTex] Injection PATCH : {_pe}")
     UI.vprint(2, "     Done.")
@@ -2124,9 +2193,9 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
                 (4096, 4096), Image.BICUBIC
             )
         UI.vprint(2, "Finished imprinting", til_x_left, til_y_top)
-        # ── Composite intelligent : true_im sur fond SEA EOX ─────────────────────
+        # ── Composite intelligent : true_im sur fond JPG-Patch ──────────────────
         # Masque = pixels non-noirs de true_im (seuil 15 → robuste compression JPEG)
-        # Dégradé 32px → jointure douce entre ortho et SEA, pas de rectangle visible
+        # Dégradé 32px → jointure douce entre ortho et fond, pas de rectangle visible
         try:
             _arr_t = numpy.array(true_im.convert("RGB"), dtype=numpy.uint8)
             _has_data = ((_arr_t[:,:,0] > 15) | (_arr_t[:,:,1] > 15) | (_arr_t[:,:,2] > 15))
@@ -2213,6 +2282,27 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
         mask[
             (numpy.sum(true_arr, axis=2) <= 35) * (mask >= 1) * (mask <= 253)
         ] = 0
+        # ── PATCH : comble uniquement les pixels nodata blanc IGN ────────────
+        # Le nodata IGN est blanc (R>240, G>240, B>240) — jamais noir.
+        # ZonePhoto reste prioritaire sur tous ses pixels valides.
+        # Universel : fonctionne quel que soit le provider actif (BI, Esri, ZonePhoto).
+        if rlayer["layer_code"] == "PATCH":
+            try:
+                _big_arr   = numpy.array(big_image.convert("RGB"), dtype=numpy.uint8)
+                _patch_arr = numpy.array(true_im.convert("RGB"),   dtype=numpy.uint8)
+                _nodata    = (_big_arr[:,:,0] > 240) & \
+                             (_big_arr[:,:,1] > 240) & \
+                             (_big_arr[:,:,2] > 240)
+                if _nodata.any():
+                    _big_arr[_nodata] = _patch_arr[_nodata]
+                    big_image = Image.fromarray(_big_arr)
+                    UI.vprint(2, f"   [SeaTex] PATCH appliqué : {_nodata.sum()} px nodata comblés")
+                else:
+                    UI.vprint(2, "   [SeaTex] PATCH : aucun nodata blanc détecté — ignoré")
+            except Exception as _pe:
+                UI.vprint(2, f"   [SeaTex] PATCH composite erreur : {_pe}")
+            continue  # ne pas passer par la mécanique priority
+        # ─────────────────────────────────────────────────────────────────────
         if rlayer["priority"] == "low":
             wasnt_zero = (mask_weight_below + mask) != 0
             mask[wasnt_zero] = (
@@ -2248,7 +2338,6 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
 
             # ① Distance signée à la frontière via distance transform
             # scipy à 1/8 résolution → rapide sur 4096×4096
-            from scipy import ndimage as _ndi
             _step   = 8
             _small  = _mask_strict[::_step, ::_step].astype(numpy.float32)
             # Distance depuis les pixels=1 (source A) vers les pixels=0 (source B)

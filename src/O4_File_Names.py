@@ -383,6 +383,13 @@ def jpeg_file_name_from_attributes(
 def jpeg_file_dir_from_attributes(lat, lon, zoomlevel, provider):
     if not provider:
         file_dir = "."
+    elif provider["imagery_dir"] == "patch":
+        # Mode PATCH : Patches/{tile_key}/PATCH_{zl}/
+        file_dir = os.path.join(
+            Patch_dir,
+            short_latlon(lat, lon),
+            "PATCH_" + str(zoomlevel),
+        )
     elif provider["imagery_dir"] == "normal":
         file_dir = os.path.join(
             Imagery_dir,

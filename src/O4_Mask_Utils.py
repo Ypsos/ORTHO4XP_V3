@@ -791,6 +791,25 @@ def blur_mask(img_array, tile, sea_level):
         # Just a (futile) copy
         b_img_array = numpy.array(img_array)
 
+    # Post-traitement universel — flou asymétrique vers la mer (tous modes)
+    # Corrige le bord rectangulaire côté mer : transition progressive depuis
+    # le bord de la couverture provider vers la mer, sur blur_width pixels.
+    # La limite côté terre reste nette. Aucun halo circulaire dans XP12.
+    # blur_width est calculé depuis tile.masks_width (paramètre utilisateur).
+    try:
+        from scipy.ndimage import distance_transform_edt as _dte
+        _ramp_width = blur_width if not isinstance(blur_width, list) else blur_width[-1]
+        if _ramp_width > 0:
+            _terre = (img_array >= 128)
+            _mer   = ~_terre
+            _dist  = _dte(_mer).astype(numpy.float32)
+            _rampe = numpy.clip(1.0 - _dist / _ramp_width, 0.0, 1.0)
+            b_img_array = b_img_array.astype(numpy.float32)
+            b_img_array[_mer] = _rampe[_mer] * 255
+            b_img_array = b_img_array.astype(numpy.uint8)
+    except Exception:
+        pass
+
     return b_img_array
 ################################################################################
 

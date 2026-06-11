@@ -1,5 +1,4 @@
 # Version validée 30 avril 2026
-# Protection Lot A — Mai 2026 : verrou + sauvegarde automatique intégrés
 import os
 import pickle
 import shutil
@@ -19,26 +18,6 @@ import O4_Overlay_Utils as OVL
 import O4_Mesh_Utils as MESH
 import O4_Bathymetry as BATHY
 
-# ---------------------------------------------------------------------------
-# VERROU DE PROTECTION O4_DSF_Utils — Lot A
-# Sauvegarde automatique horodatée de ce fichier au premier import.
-# La sauvegarde n'est créée qu'une seule fois par session (pas à chaque import).
-# Zéro impact sur les fonctions existantes.
-# ---------------------------------------------------------------------------
-try:
-    from O4_Backup_Manager import backup_file as _backup_file
-    _dsf_self = os.path.abspath(__file__)
-    # On sauvegarde uniquement si aucune sauvegarde n'existe déjà pour cette session
-    # (contrôle via variable module-level, pas de fichier lock)
-    if not globals().get("_dsf_backup_done", False):
-        _bak = _backup_file(_dsf_self, reason="import automatique O4_DSF_Utils")
-        if _bak:
-            UI.lvprint(1, f"[DSF] Sauvegarde automatique : {os.path.basename(_bak)}")
-        globals()["_dsf_backup_done"] = True
-except Exception as _dsf_bak_err:
-    # Non bloquant : si O4_Backup_Manager est absent, on continue normalement
-    pass
-# ---------------------------------------------------------------------------
 
 quad_init_level = 3
 quad_capacity_high = 50000
@@ -53,8 +32,6 @@ def float2qquad(x):
         return "111111111111111111111111"
     return numpy.binary_repr(int(16777216 * x)).zfill(24)  # 2**24 == 16777216
 
-
-################################################################################
 
 ################################################################################
 class QuadTree(dict):

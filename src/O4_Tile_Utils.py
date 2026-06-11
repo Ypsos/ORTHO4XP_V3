@@ -3,7 +3,6 @@ import time
 import shutil
 import queue
 import threading
-import math
 from PIL import Image
 import O4_UI_Utils as UI
 import O4_File_Names as FNAMES
@@ -15,21 +14,285 @@ import O4_DSF_Utils as DSF
 import O4_Overlay_Utils as OVL
 from O4_Parallel_Utils import parallel_launch, parallel_join
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DIALOGUE GESTION JPG-PATCH — V3.2
+# Affiché au lancement du build si des patches existent déjà dans PATCH_{zl}/
+# Permet de conserver les patches corrigés manuellement dans GIMP.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _ask_patch_management(patch_dir, existing_files):
+    """
+    Affiche une fenêtre modale de gestion des JPG-Patch existants.
+    Retourne la liste des fichiers à supprimer.
+
+    3 options :
+      • Tout supprimer  → retourne tous les fichiers
+      • Tout conserver  → retourne liste vide
+      • Sélection       → fenêtre avec liste + aperçu → retourne les non cochés
+    """
+    try:
+        import tkinter as tk
+        from tkinter import ttk
+        from PIL import Image, ImageTk
+        try:
+            from O4_Lang import tr as _tr
+        except Exception:
+            def _tr(k): return k
+
+        # ── Couleurs depuis O4_Theme_Manager (thème actif) ──────────────────
+        # Fallback = valeurs sombre par défaut si theme manager absent
+        try:
+            import O4_Theme_Manager as _TM_P
+            _t = _TM_P.get_theme()
+            BG      = _t.get("patch_bg",      _t.get("bg",          "#0a1a0a"))
+            FG      = _t.get("patch_fg",      _t.get("fg",          "#00cc44"))
+            FG2     = _t.get("patch_fg2",     _t.get("fg_secondary","#88ffaa"))
+            BTN_BG  = _t.get("patch_btn_bg",  _t.get("btn_bg",      "#0d2e0d"))
+            SEL_BG  = _t.get("patch_sel_bg",  _t.get("btn_active",  "#1a4a1a"))
+            PREV_BG = _t.get("patch_prev_bg", _t.get("canvas_bg",   "#050f05"))
+        except Exception:
+            BG      = "#0a1a0a"
+            FG      = "#00cc44"
+            FG2     = "#88ffaa"
+            BTN_BG  = "#0d2e0d"
+            SEL_BG  = "#1a4a1a"
+            PREV_BG = "#050f05"
+        # ────────────────────────────────────────────────────────────────────
+        FONT    = ("TkFixedFont", 11)
+        FONT_T  = ("TkFixedFont", 13)
+
+        result = {"action": None}  # "all" | "none" | list_to_delete
+
+        # ── Fenêtre principale ───────────────────────────────────────────────
+        root_ref = None
+        try:
+            root_ref = tk._default_root
+        except Exception:
+            pass
+
+        win = tk.Toplevel(root_ref) if root_ref else tk.Tk()
+        win.title(_tr("Gestion JPG-Patch — Ortho4XP V3"))
+        win.configure(bg=BG)
+        win.resizable(False, False)
+        win.lift()
+        win.focus_force()
+
+        # Centrer la fenêtre
+        win.update_idletasks()
+        sw = win.winfo_screenwidth()
+        sh = win.winfo_screenheight()
+
+        # ── Titre ────────────────────────────────────────────────────────────
+        tk.Label(win, text=_tr("Gestion des JPG-Patch existants"),
+                 font=FONT_T, bg=BG, fg=FG).pack(pady=(14, 2))
+        tk.Label(win,
+                 text=f"{len(existing_files)} {_tr('patch(es) trouvé(s) dans')} PATCH_{patch_dir.split('PATCH_')[-1]}",
+                 font=FONT, bg=BG, fg=FG2).pack(pady=(0, 10))
+
+        # ── 3 boutons principaux ─────────────────────────────────────────────
+        frm_btn = tk.Frame(win, bg=BG)
+        frm_btn.pack(pady=6, padx=20)
+
+        def _do_all():
+            result["action"] = "all"
+            win.destroy()
+
+        def _do_none():
+            result["action"] = "none"
+            win.destroy()
+
+        def _do_select():
+            result["action"] = "select"
+            win.destroy()
+
+        # ttk.Button : texte toujours lisible sur macOS/Windows/Linux
+        # (Color Check utilise le même pattern)
+        ttk.Button(frm_btn, text=_tr("🗑  Tout supprimer"),  command=_do_all).grid(row=0, column=0, padx=12, pady=8, ipadx=10, ipady=6)
+        ttk.Button(frm_btn, text=_tr("✅  Tout conserver"),  command=_do_none).grid(row=0, column=1, padx=12, pady=8, ipadx=10, ipady=6)
+        ttk.Button(frm_btn, text=_tr("🔍  Sélection patches"), command=_do_select).grid(row=0, column=2, padx=12, pady=8, ipadx=10, ipady=6)
+
+        # Centrer après création
+        win.update_idletasks()
+        ww = win.winfo_reqwidth()
+        wh = win.winfo_reqheight()
+        win.geometry(f"+{(sw-ww)//2}+{(sh-wh)//2}")
+
+        win.wait_window()
+
+        # ── Action = tout supprimer ──────────────────────────────────────────
+        if result["action"] == "all":
+            return list(existing_files)
+
+        # ── Action = tout conserver ──────────────────────────────────────────
+        if result["action"] == "none":
+            return []
+
+        # ── Action = sélection ───────────────────────────────────────────────
+        if result["action"] != "select":
+            return []
+
+        # Fenêtre de sélection avec liste + aperçu
+        sel_result = {"to_delete": list(existing_files)}  # par défaut tout supprimer
+
+        sel = tk.Toplevel(root_ref) if root_ref else tk.Tk()
+        sel.title(_tr("Sélection patches à conserver — Ortho4XP V3"))
+        sel.configure(bg=BG)
+        sel.resizable(True, True)
+        sel.lift()
+        sel.focus_force()
+
+        tk.Label(sel, text=_tr("Cocher les patches à CONSERVER"),
+                 font=FONT_T, bg=BG, fg=FG).pack(pady=(12, 4))
+        tk.Label(sel, text=_tr("(Les patches non cochés seront supprimés)"),
+                 font=FONT, bg=BG, fg="#888888").pack(pady=(0, 8))
+
+        frm_main = tk.Frame(sel, bg=BG)
+        frm_main.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        # ── Liste gauche avec cases à cocher ─────────────────────────────────
+        frm_list = tk.Frame(frm_main, bg=BG)
+        frm_list.pack(side=tk.LEFT, fill=tk.BOTH)
+
+        scrollbar = tk.Scrollbar(frm_list, bg=BG, troughcolor=BG)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        listbox_frame = tk.Frame(frm_list, bg=BG)
+        listbox_frame.pack(fill=tk.BOTH, expand=True)
+
+        check_vars = {}
+        thumb_photos = {}
+
+        canvas_list = tk.Canvas(listbox_frame, bg=BG, width=320,
+                                yscrollcommand=scrollbar.set,
+                                highlightthickness=0)
+        canvas_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=canvas_list.yview)
+
+        inner = tk.Frame(canvas_list, bg=BG)
+        canvas_list.create_window((0, 0), window=inner, anchor="nw")
+
+        sorted_files = sorted(existing_files)
+        for fname in sorted_files:
+            var = tk.BooleanVar(value=False)
+            check_vars[fname] = var
+            row = tk.Frame(inner, bg=BG, cursor="hand2")
+            row.pack(fill=tk.X, pady=1)
+            cb = tk.Checkbutton(row, variable=var, bg=BG,
+                                fg=FG, selectcolor="#1a4a1a",
+                                activebackground=BG, activeforeground=FG)
+            cb.pack(side=tk.LEFT)
+            lbl = tk.Label(row, text=fname, font=("TkFixedFont", 10),
+                           bg=BG, fg=FG2, anchor="w", cursor="hand2")
+            lbl.pack(side=tk.LEFT, fill=tk.X)
+
+            # Clic sur le label → sélectionner + afficher aperçu
+            def _on_click(f=fname, v=var, r=row):
+                v.set(not v.get())
+                _show_preview(f)
+            lbl.bind("<Button-1>", lambda e, f=fname, v=var: (v.set(not v.get()), _show_preview(f)))
+            cb.config(command=lambda f=fname: _show_preview(f))
+
+        inner.update_idletasks()
+        canvas_list.config(scrollregion=canvas_list.bbox("all"))
+
+        # ── Canvas aperçu à droite ────────────────────────────────────────────
+        frm_preview = tk.Frame(frm_main, bg=PREV_BG)
+        frm_preview.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(12, 0))
+
+        lbl_preview_name = tk.Label(frm_preview, text=_tr("← Cliquer sur un patch"),
+                                    font=FONT, bg=PREV_BG, fg="#888888")
+        lbl_preview_name.pack(pady=(4, 2))
+
+        PREV_W, PREV_H = 512, 512
+        canvas_prev = tk.Canvas(frm_preview, width=PREV_W, height=PREV_H,
+                                bg=PREV_BG, highlightthickness=1,
+                                highlightbackground="#1a4a1a")
+        canvas_prev.pack(padx=8, pady=4)
+
+        _current_photo = [None]
+
+        def _show_preview(fname):
+            lbl_preview_name.config(text=fname, fg=FG)
+            fpath = os.path.join(patch_dir, fname)
+            try:
+                img = Image.open(fpath).convert("RGB")
+                img.thumbnail((PREV_W, PREV_H), Image.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                _current_photo[0] = photo
+                canvas_prev.delete("all")
+                # Centrer dans le canvas
+                ox = (PREV_W - img.width)  // 2
+                oy = (PREV_H - img.height) // 2
+                canvas_prev.create_image(ox, oy, anchor=tk.NW, image=photo)
+            except Exception as _pe:
+                canvas_prev.delete("all")
+                canvas_prev.create_text(PREV_W//2, PREV_H//2,
+                    text=f"Erreur : {_pe}", fill="#ff4444", font=FONT)
+
+        # ── Boutons bas ───────────────────────────────────────────────────────
+        frm_bot = tk.Frame(sel, bg=BG)
+        frm_bot.pack(pady=10)
+
+        def _sel_all():
+            for v in check_vars.values(): v.set(True)
+        def _sel_none():
+            for v in check_vars.values(): v.set(False)
+
+        ttk.Button(frm_bot, text=_tr("Tout cocher"),   command=_sel_all).grid(row=0, column=0, padx=6, ipadx=8, ipady=4)
+        ttk.Button(frm_bot, text=_tr("Tout décocher"), command=_sel_none).grid(row=0, column=1, padx=6, ipadx=8, ipady=4)
+
+        def _validate():
+            # Conserver = coché → supprimer = non coché
+            to_delete = [f for f, v in check_vars.items() if not v.get()]
+            sel_result["to_delete"] = to_delete
+            sel.destroy()
+
+        ttk.Button(frm_bot, text="✅  Valider",
+                   command=_validate).grid(row=0, column=2, padx=12, ipadx=16, ipady=6)
+
+        # Afficher le premier patch au démarrage
+        if sorted_files:
+            sel.after(100, lambda: _show_preview(sorted_files[0]))
+
+        sel.update_idletasks()
+        ww2 = max(900, sel.winfo_reqwidth())
+        wh2 = max(600, sel.winfo_reqheight())
+        sel.geometry(f"{ww2}x{wh2}+{(sw-ww2)//2}+{(sh-wh2)//2}")
+        sel.minsize(700, 500)
+
+        sel.wait_window()
+        return sel_result["to_delete"]
+
+    except Exception as _dlg_e:
+        # Fallback silencieux : si Tkinter indisponible → supprimer tout
+        try:
+            import O4_UI_Utils as _UI
+            _UI.vprint(1, f"   [SeaTex] Dialogue patches non disponible ({_dlg_e}) — suppression auto")
+        except Exception:
+            pass
+        return list(existing_files)
+
 max_convert_slots = 4
 skip_downloads = False
 skip_converts = False
-
-# Largeur de la bande côtière vers le large pour EOX si JPG absent
-# Fond marin visible satellite ≈ 2km depuis la côte
-SEA_BAND_KM = 2.0
 
 
 ################################################################################
 def build_sea_texture_set(tile, dico_customzl):
     """
     Lit le mesh et retourne un set de texture_attributes correspondant à des
-    triangles tri_type=2 (mer) situés dans la bande SEA_BAND_KM depuis le bord
-    des JPG source existants, ET sans JPG source disponible.
+    triangles tri_type=2 (mer) DIRECTEMENT ADJACENTS (arête partagée) à un
+    triangle non-mer (terre / eau intérieure) ayant un JPG source disponible.
+
+    Filtre adjacence arêtes — V3.2 Mai 2026 :
+      - Un triangle mer est inclus uniquement si au moins une de ses 3 arêtes
+        est partagée avec un triangle de type != 2 (terre ou eau intérieure).
+      - Les triangles mer entourés uniquement d'autres triangles mer (pleine mer)
+        sont exclus → zéro patch inutile en pleine mer.
+      - Le JPG source doit être absent (sinon le pipeline standard s'en charge).
+
     Appelé dans build_tile() avant les threads — zéro deadlock.
     """
     sea_set = set()
@@ -44,52 +307,63 @@ def build_sea_texture_set(tile, dico_customzl):
 
         has_water = 7 if (mesh_version >= 1.3) else 3
 
-        band_deg_lat = SEA_BAND_KM / 111.12
-        band_deg_lon = SEA_BAND_KM / (
-            111.12 * math.cos(math.radians(tile.lat + 0.5))
-        )
-
-        # Collecter les positions lon/lat des JPG existants
-        # Même logique que build_jpeg_ortho : via layers du combined provider
-        existing_jpg_pos = []
-        for key, tex_attr in dico_customzl.items():
-            (til_x, til_y, zl, provider_code) = tex_attr
-            found = False
-            for rlayer in IMG.local_combined_providers_dict.get(provider_code, []):
-                lc = rlayer.get("layer_code", "")
-                if lc not in IMG.providers_dict:
-                    continue
-                true_x, true_y, true_zl = til_x, til_y, zl
-                if "max_zl" in IMG.providers_dict[lc]:
-                    mzl = int(IMG.providers_dict[lc]["max_zl"])
-                    if mzl < zl:
-                        (latm, lonm) = GEO.gtile_to_wgs84(til_x+8, til_y+8, zl)
-                        (true_x, true_y) = GEO.wgs84_to_orthogrid(latm, lonm, mzl)
-                        true_zl = mzl
-                fdir = FNAMES.jpeg_file_dir_from_attributes(
-                    tile.lat, tile.lon, true_zl, IMG.providers_dict[lc])
-                fname = FNAMES.jpeg_file_name_from_attributes(true_x, true_y, true_zl, lc)
-                if os.path.isfile(os.path.join(fdir, fname)):
-                    found = True
-                    break
-            if found:
-                n = 2 ** zl
-                existing_jpg_pos.append((
-                    math.degrees(math.atan(math.sinh(math.pi*(1-2*til_y/n)))),
-                    til_x / n * 360.0 - 180.0
-                ))
-
-        if not existing_jpg_pos:
-            return sea_set
-
-        # Pour chaque triangle mer sans JPG dans la bande
+        # ── Étape 1 : construire dict arêtes → indices triangles ─────────────
+        # Chaque arête est un frozenset de 2 indices nœuds (unique par paire).
+        # Permet de trouver en O(1) les triangles voisins partageant une arête.
+        UI.vprint(1, "   [SeaTex] Construction arêtes mesh...")
+        edge_to_tris = {}
         for i in range(nbr_tris):
-            t = tri_types[i] & has_water
-            t = t and (2 * (t > 1 or tile.use_masks_for_inland) or 1)
+            n1 = int(tri_idx[3 * i])
+            n2 = int(tri_idx[3 * i + 1])
+            n3 = int(tri_idx[3 * i + 2])
+            for e in (frozenset((n1, n2)),
+                      frozenset((n2, n3)),
+                      frozenset((n1, n3))):
+                edge_to_tris.setdefault(e, []).append(i)
+
+        # ── Étape 2 : identifier les triangles mer adjacents à un non-mer ────
+        # Un triangle est "côtier" si au moins une arête est partagée avec
+        # un triangle de type != 2 (terre, eau intérieure, etc.)
+        sea_adjacent_tris = set()  # indices triangles mer côtiers
+        for i in range(nbr_tris):
+            t = int(tri_types[i]) & has_water
+            # NE PAS utiliser tile.use_masks_for_inland ici —
+            # on veut uniquement la VRAIE mer (type&7 > 1),
+            # pas les zones inland reclassifiées type=2 par use_masks_for_inland.
+            # Sinon marais/vasières vendéens → patches bleus inutiles.
+            t = t and (2 * (t > 1) or 1)
             if t != 2:
                 continue
+            n1 = int(tri_idx[3 * i])
+            n2 = int(tri_idx[3 * i + 1])
+            n3 = int(tri_idx[3 * i + 2])
+            adj = False
+            for e in (frozenset((n1, n2)),
+                      frozenset((n2, n3)),
+                      frozenset((n1, n3))):
+                for j in edge_to_tris.get(e, []):
+                    if j == i:
+                        continue
+                    tj = int(tri_types[j]) & has_water
+                    tj = tj and (2 * (tj > 1) or 1)
+                    if tj != 2:
+                        adj = True
+                        break
+                if adj:
+                    break
+            if adj:
+                sea_adjacent_tris.add(i)
 
-            (n1, n2, n3) = tri_idx[3 * i: 3 * i + 3]
+        UI.vprint(1, f"   [SeaTex] {len(sea_adjacent_tris)} triangle(s) mer côtier(s) détecté(s).")
+
+        if not sea_adjacent_tris:
+            return sea_set
+
+        # ── Étape 3 : convertir tri_idx → tex_attr, filtrer JPG absents ─────
+        for i in sea_adjacent_tris:
+            n1 = int(tri_idx[3 * i])
+            n2 = int(tri_idx[3 * i + 1])
+            n3 = int(tri_idx[3 * i + 2])
             bary_lon = (
                 node_coords[5*n1] + node_coords[5*n2] + node_coords[5*n3]
             ) / 3
@@ -102,6 +376,9 @@ def build_sea_texture_set(tile, dico_customzl):
                 continue
 
             tex_attr = dico_customzl[key]
+            if tex_attr in sea_set:
+                continue  # déjà ajouté via un autre triangle de la même texture
+
             (til_x, til_y, zl, provider_code) = tex_attr
 
             # Vérifier que le JPG est absent — même logique que build_jpeg_ortho
@@ -119,31 +396,137 @@ def build_sea_texture_set(tile, dico_customzl):
                         true_zl = mzl
                 fdir = FNAMES.jpeg_file_dir_from_attributes(
                     tile.lat, tile.lon, true_zl, IMG.providers_dict[lc])
-                fname = FNAMES.jpeg_file_name_from_attributes(true_x, true_y, true_zl, lc)
+                fname = FNAMES.jpeg_file_name_from_attributes(
+                    true_x, true_y, true_zl, lc)
                 if os.path.isfile(os.path.join(fdir, fname)):
                     jpg_exists = True
-                break
+                    break
 
-            if jpg_exists:
-                continue
-
-            # Vérifier que le barycentre est dans la bande 2km
-            in_band = any(
-                abs(bary_lat - lat_j) <= band_deg_lat and
-                abs(bary_lon - lon_j) <= band_deg_lon
-                for (lat_j, lon_j) in existing_jpg_pos
-            )
-
-            if in_band:
-                sea_set.add(tex_attr)
+            # JPG présent ou absent → sea_set dans les deux cas
+            sea_set.add(tex_attr)
 
         UI.vprint(
-            1, f"   [SeaTex] {len(sea_set)} tuile(s) mer dans bande "
-               f"{SEA_BAND_KM}km identifiée(s) via mesh."
+            1, f"   [SeaTex] {len(sea_set)} tuile(s) mer côtière(s) "
+               f"identifiée(s) via adjacence mesh (zéro patch pleine mer)."
         )
     except Exception as e:
-        UI.vprint(2, f"   [SeaTex] build_sea_texture_set erreur : {e}")
+        import traceback
+        UI.vprint(2, f"   [SeaTex] build_sea_texture_set erreur : {e}\n"
+                     f"{traceback.format_exc()}")
     return sea_set
+
+
+################################################################################
+def build_sea_patches(tile):
+    """
+    Step 2.1 — Génération patches bord marin.
+
+    Appelé APRÈS Step 2 (mesh présent) et AVANT Step 3 (build DDS).
+    Peut être lancé depuis un bouton UI ou depuis build_all().
+
+    Pipeline :
+      1. Scan TOUS les dossiers Orthophotos/ (sauf JPG-Patch/) tous ZL
+         → index {(ty,tx): [chemins JPG]} multi-provider multi-ZL
+      2. build_sea_texture_set() → triangles mer côtiers via mesh
+      3. Pour chaque tuile mer : fill_sea_nodata depuis meilleur voisin IGN
+         Si aucun voisin → fallback dégradé couleur mer
+      4. Dialogue gestion patches si patches existants
+
+    Avantages vs Passe 1/2 dans build_tile() :
+      - Tous JPG sources disponibles (Step 1 terminé)
+      - Multi-provider multi-ZL → vraie texture IGN garantie
+      - Patches générés une seule fois, propres, stables
+      - Step 3 les utilise directement — zéro Passe 1/Passe 2
+    """
+    import O4_Sea_Texture as _SEA
+    import O4_DSF_Utils as _DSF
+    import time as _time
+    _timer_21 = _time.time()
+
+    UI.vprint(0,
+        "\nStep 2.1 : Génération patches bord marin pour "
+        + FNAMES.short_latlon(tile.lat, tile.lon)
+        + " :\n--------\n"
+    )
+
+    # Vérifier mesh présent
+    if not os.path.isfile(FNAMES.mesh_file(tile.build_dir, tile.lat, tile.lon)):
+        UI.vprint(0, "   [SeaTex] ERREUR : mesh absent — lancer Step 2 d'abord.")
+        return 0
+
+    # ── Créer dossier JPG-Patch + dialogue gestion patches ───────────────────
+    try:
+        _sign_lat = "+" if tile.lat >= 0 else "-"
+        _sign_lon = "+" if tile.lon >= 0 else "-"
+        _tile_key = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
+        _zl = getattr(tile, "default_zl", 17)
+        _patch_dir = os.path.join(FNAMES.Patch_dir,
+                                  _tile_key, f"PATCH_{_zl}")
+        os.makedirs(_patch_dir, exist_ok=True)
+        _existing = [f for f in os.listdir(_patch_dir) if f.endswith(".jpg")]
+        if _existing:
+            _to_delete = _ask_patch_management(_patch_dir, _existing)
+            for _f in _to_delete:
+                try:
+                    os.remove(os.path.join(_patch_dir, _f))
+                except Exception:
+                    pass
+        UI.vprint(1, f"   [SeaTex] Dossier JPG-Patch : {_patch_dir}")
+    except Exception as _pe:
+        UI.vprint(2, f"   [SeaTex] Dossier JPG-Patch erreur : {_pe}")
+
+    # ── Initialiser providers ─────────────────────────────────────────────────
+    if not IMG.initialize_local_combined_providers_dict(tile):
+        UI.vprint(0, "   [SeaTex] ERREUR : initialisation providers échouée.")
+        return 0
+
+    # ── Identifier tuiles mer côtières via mesh ───────────────────────────────
+    try:
+        dico_customzl = _DSF.zone_list_to_ortho_dico(tile)
+        sea_texture_set = build_sea_texture_set(tile, dico_customzl)
+    except Exception as _ste:
+        import traceback
+        UI.vprint(0, f"   [SeaTex] build_sea_texture_set ERREUR : {_ste}\n"
+                     f"{traceback.format_exc()}")
+        return 0
+
+    if not sea_texture_set:
+        UI.vprint(1, "   [SeaTex] Aucune tuile mer côtière détectée — rien à générer.")
+        return 1
+
+    UI.vprint(1, f"   [SeaTex] Correction nodata pour "
+                 f"{len(sea_texture_set)} tuile(s) mer côtière(s)...")
+
+    # ── Cas 2 : corriger nodata (blanc/noir) dans les JPG existants ──────────
+    # Pour chaque tuile mer côtière dont le JPG existe et contient des zones
+    # nodata (blanc R>240 ou noir R<15) → fill_sea_nodata → patch corrigé
+    # sauvegardé dans JPG-Patch/. Les JPG 100% valides sont ignorés (return None).
+    generated = 0
+    _patches_done = set()
+    _total_sea = len(sea_texture_set)
+    UI.progress_bar(2, 0)
+    for _k, _ta in enumerate(sea_texture_set, 1):
+        (tx, ty, zl, prov) = _ta
+        UI.vprint(1, f"   [SeaTex] Analyse nodata {_k}/{_total_sea}...")
+        UI.progress_bar(2, int(100 * (_k - 1) / _total_sea))
+        if (ty, tx, zl) in _patches_done:
+            continue
+        _prov_dict = IMG.providers_dict.get(prov)
+        if _prov_dict is None:
+            _layers = IMG.local_combined_providers_dict.get(prov, [])
+            _lc = next((rl.get("layer_code", "") for rl in _layers
+                        if rl.get("layer_code", "") in IMG.providers_dict), None)
+            _prov_dict = IMG.providers_dict.get(_lc) if _lc else None
+        _jpg = _SEA.generate_sea_jpg(tile, tx, ty, zl, prov,
+                                     provider_dict=_prov_dict)
+        if _jpg:
+            generated += 1
+            _patches_done.add((ty, tx, zl))
+    UI.progress_bar(2, 100)
+
+    UI.vprint(1, f"   [SeaTex] Step 2.1 terminé — {generated} patch(es) nodata corrigés.")
+    UI.timings_and_bottom_line(_timer_21)
+    return 1
 
 
 ################################################################################
@@ -208,19 +591,6 @@ def build_tile(tile):
 
     tile.write_to_config()
 
-    # V3.2 — Créer dossier JPG-Patch avant initialize (provider PATCH injecté si dossier présent)
-    try:
-        import O4_File_Names as _FN
-        _sign_lat = "+" if tile.lat >= 0 else "-"
-        _sign_lon = "+" if tile.lon >= 0 else "-"
-        _tile_key = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
-        _zl = getattr(tile, "default_zl", 17)
-        _patch_dir = os.path.join(_FN.Imagery_dir, "JPG-Patch", _tile_key, f"PATCH_{_zl}")
-        os.makedirs(_patch_dir, exist_ok=True)
-        UI.vprint(1, f"   [SeaTex] Dossier JPG-Patch créé : {_patch_dir}")
-    except Exception as _e:
-        UI.vprint(2, f"   [SeaTex] Dossier JPG-Patch erreur : {_e}")
-
     if not IMG.initialize_local_combined_providers_dict(tile):
         UI.exit_message_and_bottom_line("")
         return 0
@@ -263,29 +633,33 @@ def build_tile(tile):
         UI.exit_message_and_bottom_line("")
         return 0
 
-    # Construire le set des tuiles mer dans bande 2km — thread principal
+    # Construire sea_texture_set depuis les patches déjà sur disque (Step 2.1)
+    # Pas de parcours mesh — silencieux — juste lire les JPG-Patch présents
+    sea_texture_set = set()
     try:
-        dico_customzl = DSF.zone_list_to_ortho_dico(tile)
-        sea_texture_set = build_sea_texture_set(tile, dico_customzl)
-    except Exception as _ste:
-        import traceback
-        UI.vprint(0, f"   [SeaTex] sea_texture_set ERREUR : {_ste}\n{traceback.format_exc()}")
+        import O4_Geo_Utils as _GEO_st
+        _sign_lat = "+" if tile.lat >= 0 else "-"
+        _sign_lon = "+" if tile.lon >= 0 else "-"
+        _tile_key = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
+        _zl_st = getattr(tile, "default_zl", 17)
+        _patch_dir_st = os.path.join(FNAMES.Patch_dir,
+                                     _tile_key, f"PATCH_{_zl_st}")
+        if os.path.isdir(_patch_dir_st):
+            _prov_st = getattr(tile, "default_website", "ZonePhoto")
+            for _fn_st in os.listdir(_patch_dir_st):
+                if not _fn_st.endswith(".jpg"):
+                    continue
+                _p_st = _fn_st.replace(".jpg", "").split("_")
+                if len(_p_st) < 2:
+                    continue
+                try:
+                    _ty_st = int(_p_st[0])
+                    _tx_st = int(_p_st[1])
+                    sea_texture_set.add((_tx_st, _ty_st, _zl_st, _prov_st))
+                except ValueError:
+                    continue
+    except Exception:
         sea_texture_set = None
-
-    # V3.2 — Pré-générer JPG-Patch AVANT les threads download/convert
-    if sea_texture_set:
-        try:
-            import O4_Sea_Texture as _SEA
-            UI.vprint(1, f"   [SeaTex] Génération JPG-Patch pour {len(sea_texture_set)} tuile(s)...")
-            for _ta in sea_texture_set:
-                (tx, ty, zl, prov) = _ta
-                _jpg = _SEA.generate_sea_jpg(tile, tx, ty, zl, prov,
-                                             dico_customzl=dico_customzl)
-                if _jpg:
-                    UI.vprint(2, f"   [SeaTex] JPG-Patch généré : {os.path.basename(_jpg)}")
-        except Exception as _pre:
-            import traceback
-            UI.vprint(0, f"   [SeaTex] Pré-génération ERREUR : {_pre}\n{traceback.format_exc()}")
 
     download_queue = queue.Queue()
     convert_queue = queue.Queue()
@@ -323,6 +697,8 @@ def build_tile(tile):
     if download_launched:
         download_queue.put("quit")
         download_thread.join()
+
+
         if convert_launched:
             for _ in range(max_convert_slots):
                 convert_queue.put("quit")
@@ -388,6 +764,10 @@ def build_all(tile):
         UI.exit_message_and_bottom_line("")
         return 0
     MESH.build_mesh(tile)
+    if UI.red_flag:
+        UI.exit_message_and_bottom_line("")
+        return 0
+    build_sea_patches(tile)
     if UI.red_flag:
         UI.exit_message_and_bottom_line("")
         return 0
