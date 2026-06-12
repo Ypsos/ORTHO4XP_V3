@@ -67,12 +67,6 @@ T = {
     "Strength:"                         : "Intensité :",
 
     # ── PANNEAU COLOR NORMALIZE ────────────────────────────────────
-    "Saturation:"                       : "Saturation :",
-    "Boost:"                            : "Boost :",
-    "0%=gris  100%=réf.48753JPG  200%=×2"
-                                        : "0%=gris  100%=réf.48753JPG  200%=×2",
-    "100%  (réf.)"                      : "100%  (réf.)",
-
     # ── TIMELINE / BENCHMARK (Phase 3) ────────────────────────────
     "⏱ Timeline"                        : "⏱ Chronologie",
     "⏱ Timeline — Durées du build"      : "⏱ Chronologie — Durées du build",
@@ -361,6 +355,25 @@ T = {
     "🗑  Tout supprimer"                 : "🗑  Tout supprimer",
     "✅  Tout conserver"                 : "✅  Tout conserver",
     "🔍  Sélection patches"             : "🔍  Sélection patches",
+
+    # ── PROVIDERS PERSONNELS ───────────────────────────────────────
+    "Personnel"                             : "Personnel",
+    "personal_provider_window_title"        : "Providers Personnels — Ortho4XP V3",
+    "personal_provider_list_label"          : "Mes providers :",
+    "personal_provider_name_label"          : "Nom du provider (code) :",
+    "personal_provider_url_label"           : "URL des jpg (TMS) :",
+    "personal_provider_url_hint"            : "ex. : https://serveur.com/{zoom}/{x}/{y}.jpg",
+    "personal_provider_save_btn"            : "💾  Enregistrer",
+    "personal_provider_cancel_btn"          : "✖  Annuler",
+    "personal_provider_modify_btn"          : "✏  Modifier",
+    "personal_provider_delete_btn"          : "🗑  Supprimer",
+    "personal_provider_saved_ok"            : "Provider enregistré. Sélectionnez-le dans la liste Imagerie.",
+    "personal_provider_deleted_ok"          : "Provider supprimé.",
+    "personal_provider_err_name"            : "Le nom du provider ne peut pas être vide.",
+    "personal_provider_err_url"             : "L'URL ne peut pas être vide.",
+    "personal_provider_err_name_invalid"    : "Le nom doit être alphanumérique (sans espaces).",
+    "personal_provider_err_reserved"        : "Ce nom est réservé. Veuillez en choisir un autre.",
+    "personal_provider_select_hint"         : "← Sélectionnez un provider pour modifier/supprimer",
 
     # ── COLOR CHECK — boutons et labels dynamiques ─────────────────
     "🗑 Supprimer TOUS DDS ZL"          : "🗑 Supprimer TOUS DDS ZL",

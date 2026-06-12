@@ -217,8 +217,10 @@ class Ortho4XP_GUI(tk.Tk):
 
         tk.Label(self.frame_tile, text=tr("Imagery:"), bg=_BG, fg=_FG, font=("TkFixedFont", fs(11))).grid(row=0, column=4, padx=5, pady=5, sticky=E+W)
         self.default_website = tk.StringVar()
-        self.default_website.trace_add("write", self.update_cfg)
-        self.img_combo = ttk.Combobox(self.frame_tile, values=self.map_list,
+        self.default_website.trace_add("write", self._on_imagery_change)
+        # "Personnel" toujours présent en fin de liste
+        self._full_map_list = self.map_list + [tr("Personnel")]
+        self.img_combo = ttk.Combobox(self.frame_tile, values=self._full_map_list,
             textvariable=self.default_website, state="readonly", width=40)
         self.img_combo.grid(row=0, column=5, padx=5, pady=5, sticky=W)
 
@@ -462,6 +464,16 @@ class Ortho4XP_GUI(tk.Tk):
         except:
             pass
 
+    def _on_imagery_change(self, *args):
+        """Intercepte la sélection 'Personnel' pour ouvrir la fenêtre de gestion.
+        Pour tout autre provider, délègue simplement à update_cfg."""
+        val = self.default_website.get()
+        if val == tr("Personnel"):
+            # Empêche "Personnel" d'être écrit dans le cfg comme provider réel
+            self.after(0, self.open_personal_provider_window)
+        else:
+            self.update_cfg()
+
     # ── Color Normalize ────────────────────────────────────────────────
     def toggle_cnorm(self):
         CNORM.color_normalization_enabled = bool(self.cnorm_enabled.get())
@@ -560,6 +572,40 @@ class Ortho4XP_GUI(tk.Tk):
             self._sim_win = Ortho4XP_Simulator(self, lat, lon, custom)
         except Exception as e:
             messagebox.showinfo("Simulateur", f"Erreur : {e}")
+
+    # ── Providers Personnels ──────────────────────────────────────────
+    def _reload_personal_providers(self):
+        """Recharge les providers depuis le disque et met à jour img_combo."""
+        try:
+            IMG.initialize_providers_dict()
+            IMG.initialize_combined_providers_dict()
+        except Exception:
+            pass
+        try:
+            def _in_gui(p):
+                if isinstance(p, dict): return p.get("in_GUI", True)
+                return getattr(p, "in_GUI", True)
+            full = sorted([
+                c for c in set(IMG.providers_dict)
+                if _in_gui(IMG.providers_dict[c])
+            ] + sorted(set(IMG.combined_providers_dict)))
+            for rm in ("OSM", "SEA"):
+                try: full.remove(rm)
+                except: pass
+            self.map_list = full if full else ["BI","GO2","ARC","IGN","SWISSTOPO","ZonePhoto"]
+        except:
+            pass
+        self._full_map_list = self.map_list + [tr("Personnel")]
+        self.img_combo.config(values=self._full_map_list)
+
+    def open_personal_provider_window(self):
+        """Ouvre la fenêtre de gestion des providers personnels."""
+        # Ne pas ouvrir plusieurs instances
+        if hasattr(self, "_personal_win") and self._personal_win and                 self._personal_win.winfo_exists():
+            self._personal_win.lift()
+            self._personal_win.focus_force()
+            return
+        self._personal_win = Ortho4XP_PersonalProvider(self)
 
     def open_config_window(self):
         # Ne pas ouvrir plusieurs fois la même fenêtre
@@ -709,6 +755,307 @@ class Ortho4XP_GUI(tk.Tk):
 
 if __name__ == "__main__":
     Ortho4XP_GUI().mainloop()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+class Ortho4XP_PersonalProvider(tk.Toplevel):
+    """Fenêtre de gestion des providers personnels (TMS).
+    Crée / modifie / supprime des fichiers .lay dans Providers/Personnel/.
+    Après chaque opération, recharge la liste img_combo de la fenêtre parent.
+    """
+
+    # Noms réservés — ne peuvent pas être utilisés comme code provider
+    _RESERVED = {"OSM", "SEA", "PATCH", "ZonePhoto", "Personnel", "Custom"}
+
+    def __init__(self, parent):
+        _reload_theme()
+        self.parent_gui = parent
+        tk.Toplevel.__init__(self, parent)
+        self.configure(bg=_BG)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.title(tr("personal_provider_window_title"))
+        # Largeur fixe, hauteur extensible — update_idletasks force le rendu
+        self.resizable(False, True)
+        self.geometry("760x500")
+        self.update_idletasks()
+        self.minsize(760, 460)
+
+        # ── Dossier de stockage ──────────────────────────────────
+        self._provider_dir = os.path.join(FNAMES.Provider_dir, "Personnel")
+        os.makedirs(self._provider_dir, exist_ok=True)
+
+        self._build_ui()
+        self._refresh_list()
+
+        # ── Application du thème (après _build_ui pour couvrir tous les widgets)
+        try:
+            import O4_Theme_Manager as _TM
+            _TM.apply_to_root(self)
+        except Exception:
+            pass  # thème absent → couleurs par défaut conservées
+
+    # ── Construction UI ──────────────────────────────────────────
+    def _build_ui(self):
+        """Layout pack — labels en largeur fixe, champs extensibles."""
+        PAD  = dict(padx=10, pady=4)
+        LPAD = dict(padx=10, pady=2)
+        # Largeur fixe des labels colonne gauche (en pixels)
+        LBL_W = 200
+
+        # ── Titre liste ───────────────────────────────────────────
+        tk.Label(self, text=tr("personal_provider_list_label"),
+                 bg=_BG, fg=_FG, font=("TkFixedFont", 11, "bold"),
+                 anchor="w").pack(fill="x", **LPAD)
+
+        # ── Listbox + scrollbar ──────────────────────────────────
+        frm_list = tk.Frame(self, bg=_BG)
+        frm_list.pack(fill="x", padx=10, pady=2)
+        sb = tk.Scrollbar(frm_list, orient="vertical")
+        self._listbox = tk.Listbox(frm_list, bg="#1a2e25", fg=_FG,
+                                   selectbackground=_ACCENT,
+                                   selectforeground="#1e3028",
+                                   font=("TkFixedFont", 11),
+                                   height=4, activestyle="none",
+                                   yscrollcommand=sb.set)
+        sb.config(command=self._listbox.yview)
+        self._listbox.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        self._listbox.bind("<<ListboxSelect>>", self._on_select)
+
+        # ── Hint sélection ───────────────────────────────────────
+        self._hint_lbl = tk.Label(self,
+                                  text=tr("personal_provider_select_hint"),
+                                  bg=_BG, fg="#888888",
+                                  font=("TkFixedFont", 10, "italic"),
+                                  anchor="w")
+        self._hint_lbl.pack(fill="x", padx=12, pady=2)
+
+        # ── Séparateur visuel ────────────────────────────────────
+        tk.Frame(self, bg=_BTN_BG, height=1).pack(
+            fill="x", padx=10, pady=4)
+
+        # ── Ligne Nom provider ───────────────────────────────────
+        frm_name = tk.Frame(self, bg=_BG)
+        frm_name.pack(fill="x", **PAD)
+        tk.Label(frm_name, text=tr("personal_provider_name_label"),
+                 bg=_BG, fg=_FG, font=("TkFixedFont", 11),
+                 width=26, anchor="e").pack(side="left")
+        self._name_var = tk.StringVar()
+        self._name_entry = tk.Entry(frm_name, textvariable=self._name_var,
+                                    bg="#f0f4f2", fg="#1e3028",
+                                    font=("TkFixedFont", 11))
+        self._name_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
+
+        # ── Ligne URL jpg ────────────────────────────────────────
+        frm_url_row = tk.Frame(self, bg=_BG)
+        frm_url_row.pack(fill="x", **PAD)
+        tk.Label(frm_url_row, text=tr("personal_provider_url_label"),
+                 bg=_BG, fg=_FG, font=("TkFixedFont", 11),
+                 width=26, anchor="ne").pack(side="left")
+        frm_url_right = tk.Frame(frm_url_row, bg=_BG)
+        frm_url_right.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        self._url_entry = tk.Text(frm_url_right, height=3,
+                                  bg="#f0f4f2", fg="#1e3028",
+                                  font=("TkFixedFont", 10), wrap="word")
+        self._url_entry.pack(fill="x")
+        tk.Label(frm_url_right, text=tr("personal_provider_url_hint"),
+                 bg=_BG, fg="#888888",
+                 font=("TkFixedFont", 9, "italic"),
+                 anchor="w").pack(fill="x")
+
+        # ── Statut ───────────────────────────────────────────────
+        self._status_var = tk.StringVar(value="")
+        self._status_lbl = tk.Label(self, textvariable=self._status_var,
+                                    bg=_BG, fg=_FG2,
+                                    font=("TkFixedFont", 10, "italic"),
+                                    wraplength=720, anchor="w")
+        self._status_lbl.pack(fill="x", padx=12, pady=(6, 2))
+
+        # ── Boutons ───────────────────────────────────────────────
+        frm_btn = tk.Frame(self, bg=_BG)
+        frm_btn.pack(fill="x", padx=10, pady=8)
+        for i in range(4):
+            frm_btn.columnconfigure(i, weight=1)
+        ttk.Button(frm_btn, text=tr("personal_provider_save_btn"),
+                   command=self._save).grid(
+                   row=0, column=0, sticky="ew", padx=4)
+        ttk.Button(frm_btn, text=tr("personal_provider_modify_btn"),
+                   command=self._modify).grid(
+                   row=0, column=1, sticky="ew", padx=4)
+        ttk.Button(frm_btn, text=tr("personal_provider_delete_btn"),
+                   command=self._delete).grid(
+                   row=0, column=2, sticky="ew", padx=4)
+        ttk.Button(frm_btn, text=tr("personal_provider_cancel_btn"),
+                   command=self._on_close).grid(
+                   row=0, column=3, sticky="ew", padx=4)
+
+    # ── Helpers internes ─────────────────────────────────────────
+    def _lay_path(self, code):
+        return os.path.join(self._provider_dir, code + ".lay")
+
+    def _list_personal_providers(self):
+        """Retourne la liste triée des codes providers présents dans Personnel/."""
+        try:
+            return sorted(
+                f[:-4] for f in os.listdir(self._provider_dir)
+                if f.endswith(".lay")
+            )
+        except Exception:
+            return []
+
+    def _refresh_list(self):
+        """Recharge la Listbox depuis le dossier Personnel/."""
+        self._listbox.delete(0, "end")
+        for code in self._list_personal_providers():
+            self._listbox.insert("end", code)
+
+    def _get_url_from_entry(self):
+        return self._url_entry.get("1.0", "end").strip()
+
+    def _set_url_entry(self, url):
+        self._url_entry.delete("1.0", "end")
+        self._url_entry.insert("1.0", url)
+
+    def _read_url_from_lay(self, code):
+        """Lit l'url_template d'un fichier .lay existant."""
+        try:
+            path = self._lay_path(code)
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("url_template"):
+                        parts = line.split("=", 1)
+                        if len(parts) == 2:
+                            return parts[1].strip()
+        except Exception:
+            pass
+        return ""
+
+    def _write_lay(self, code, url):
+        """Ecrit le fichier .lay TMS pour le provider personnel."""
+        path = self._lay_path(code)
+        content = (
+            "request_type = tms\n"
+            "grid_type = webmercator\n"
+            "url_template = " + url + "\n"
+            "in_GUI = True\n"
+        )
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+
+    def _validate_inputs(self, code, url):
+        """Valide le code et l'URL. Retourne (True, "") ou (False, message)."""
+        if not code:
+            return False, tr("personal_provider_err_name")
+        if not code.replace("_", "").replace("-", "").isalnum():
+            return False, tr("personal_provider_err_name_invalid")
+        if code.upper() in {r.upper() for r in self._RESERVED}:
+            return False, tr("personal_provider_err_reserved")
+        if not url:
+            return False, tr("personal_provider_err_url")
+        return True, ""
+
+    def _set_status(self, msg, ok=True):
+        self._status_var.set(msg)
+        self._status_lbl.config(fg=_FG2 if ok else "#ff6b6b")
+
+    # ── Actions boutons ──────────────────────────────────────────
+    def _on_select(self, event=None):
+        """Pré-remplit le formulaire avec le provider sélectionné."""
+        sel = self._listbox.curselection()
+        if not sel:
+            return
+        code = self._listbox.get(sel[0])
+        url  = self._read_url_from_lay(code)
+        self._name_var.set(code)
+        self._set_url_entry(url)
+        self._status_var.set("")
+
+    def _save(self):
+        """Crée un nouveau provider (nom non existant) ou confirme la sauvegarde."""
+        code = self._name_var.get().strip()
+        url  = self._get_url_from_entry()
+        ok, msg = self._validate_inputs(code, url)
+        if not ok:
+            self._set_status(msg, ok=False)
+            return
+        self._write_lay(code, url)
+        self._refresh_list()
+        self.parent_gui.after(0, self._apply_and_select, code)
+        self._set_status(tr("personal_provider_saved_ok"), ok=True)
+
+    def _modify(self):
+        """Modifie le provider sélectionné dans la liste (url ou nom = identique)."""
+        sel = self._listbox.curselection()
+        if not sel:
+            self._set_status(tr("personal_provider_select_hint"), ok=False)
+            return
+        old_code = self._listbox.get(sel[0])
+        new_code = self._name_var.get().strip()
+        url = self._get_url_from_entry()
+        ok, msg = self._validate_inputs(new_code, url)
+        if not ok:
+            self._set_status(msg, ok=False)
+            return
+        # Supprimer l'ancien fichier si le code a changé
+        if old_code != new_code:
+            try:
+                os.remove(self._lay_path(old_code))
+            except Exception:
+                pass
+        self._write_lay(new_code, url)
+        self._refresh_list()
+        self.parent_gui.after(0, self._apply_and_select, new_code)
+        self._set_status(tr("personal_provider_saved_ok"), ok=True)
+
+    def _delete(self):
+        """Supprime le provider sélectionné dans la liste."""
+        sel = self._listbox.curselection()
+        if not sel:
+            self._set_status(tr("personal_provider_select_hint"), ok=False)
+            return
+        code = self._listbox.get(sel[0])
+        try:
+            os.remove(self._lay_path(code))
+        except Exception:
+            pass
+        self._name_var.set("")
+        self._set_url_entry("")
+        self._refresh_list()
+        self.parent_gui.after(0, self._apply_reload_only)
+        self._set_status(tr("personal_provider_deleted_ok"), ok=True)
+
+    def _apply_and_select(self, code):
+        """Recharge les providers et sélectionne le nouveau code dans img_combo."""
+        self.parent_gui._reload_personal_providers()
+        # Sélectionne le provider dans le combobox principal
+        current = self.parent_gui.default_website.get()
+        if code in self.parent_gui._full_map_list:
+            # Bloque temporairement _on_imagery_change pour éviter la boucle
+            self.parent_gui.default_website.set(code)
+        # Sinon on laisse l'ancienne sélection
+
+    def _apply_reload_only(self):
+        """Recharge uniquement la liste sans changer la sélection courante."""
+        current = self.parent_gui.default_website.get()
+        self.parent_gui._reload_personal_providers()
+        # Rétablit la sélection si elle existe encore
+        if current in self.parent_gui._full_map_list:
+            self.parent_gui.default_website.set(current)
+        elif self.parent_gui._full_map_list:
+            self.parent_gui.default_website.set(
+                self.parent_gui._full_map_list[0])
+
+    def _on_close(self):
+        """Ferme la fenêtre et restaure une sélection valide dans img_combo."""
+        current = self.parent_gui.default_website.get()
+        # Si "Personnel" est encore sélectionné, revenir au dernier provider réel
+        if current == tr("Personnel"):
+            lst = [x for x in self.parent_gui._full_map_list
+                   if x != tr("Personnel")]
+            if lst:
+                self.parent_gui.default_website.set(lst[0])
+        self.destroy()
+
 
 class Ortho4XP_Custom_ZL(tk.Toplevel):
 

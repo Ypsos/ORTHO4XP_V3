@@ -406,7 +406,7 @@ def build_sea_texture_set(tile, dico_customzl):
             sea_set.add(tex_attr)
 
         UI.vprint(
-            1, f"   [SeaTex] {len(sea_set)} tuile(s) mer côtière(s) "
+            1, f"   [SeaTex] {len(sea_set)} jpg(s) mer côtière(s) "
                f"identifiée(s) via adjacence mesh (zéro patch pleine mer)."
         )
     except Exception as e:
@@ -495,7 +495,7 @@ def build_sea_patches(tile):
         return 1
 
     UI.vprint(1, f"   [SeaTex] Correction nodata pour "
-                 f"{len(sea_texture_set)} tuile(s) mer côtière(s)...")
+                 f"{len(sea_texture_set)} jpg(s) mer côtière(s)...")
 
     # ── Cas 2 : corriger nodata (blanc/noir) dans les JPG existants ──────────
     # Pour chaque tuile mer côtière dont le JPG existe et contient des zones

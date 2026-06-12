@@ -70,11 +70,6 @@ T = {
     "RGB adjustments, sharpness, saturation"
                                         : "RGB adjustments, sharpness, saturation",
     "Réf: "                             : "Ref: ",
-    "Saturation:"                       : "Saturation:",
-    "Boost:"                            : "Boost:",
-    "0%=gris  100%=réf.48753JPG  200%=×2"
-                                        : "0%=grey  100%=ref.48753JPG  200%=×2",
-    "100%  (réf.)"                      : "100%  (ref.)",
 
     # ── TIMELINE / BENCHMARK (Phase 3) ────────────────────────────
     "⏱ Timeline"                        : "⏱ Timeline",
@@ -359,6 +354,25 @@ T = {
     "🗑  Tout supprimer"                 : "🗑  Delete all",
     "✅  Tout conserver"                 : "✅  Keep all",
     "🔍  Sélection patches"             : "🔍  Select patches",
+
+    # ── PROVIDERS PERSONNELS ───────────────────────────────────────
+    "Personnel"                             : "Custom",
+    "personal_provider_window_title"        : "Custom Providers — Ortho4XP V3",
+    "personal_provider_list_label"          : "My providers:",
+    "personal_provider_name_label"          : "Provider name (code):",
+    "personal_provider_url_label"           : "jpg URL (TMS):",
+    "personal_provider_url_hint"            : "e.g. https://server.com/{zoom}/{x}/{y}.jpg",
+    "personal_provider_save_btn"            : "💾  Save",
+    "personal_provider_cancel_btn"          : "✖  Cancel",
+    "personal_provider_modify_btn"          : "✏  Modify",
+    "personal_provider_delete_btn"          : "🗑  Delete",
+    "personal_provider_saved_ok"            : "Provider saved. Select it in the Imagery list.",
+    "personal_provider_deleted_ok"          : "Provider deleted.",
+    "personal_provider_err_name"            : "Provider name cannot be empty.",
+    "personal_provider_err_url"             : "URL cannot be empty.",
+    "personal_provider_err_name_invalid"    : "Name must be alphanumeric (no spaces).",
+    "personal_provider_err_reserved"        : "This name is reserved. Please choose another.",
+    "personal_provider_select_hint"         : "← Select a provider to modify/delete",
 
     # ── COLOR CHECK — boutons et labels dynamiques ─────────────────
     "🗑 Supprimer TOUS DDS ZL"          : "🗑 Delete ALL ZL DDS",
