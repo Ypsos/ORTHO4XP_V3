@@ -406,12 +406,12 @@ def download_sea_neighbor_row(tile, til_x_left, til_y_top, zoomlevel,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BUILD SEA TEXTURE SET — Identifie les jpg mer côtières via mesh
+# BUILD SEA TEXTURE SET — Identifie les tuiles mer côtières via mesh
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_sea_texture_set(tile, dico_customzl):
     """
-    Identifie les jpg texture mer côtières via adjacence mesh.
+    Identifie les tuiles texture mer côtières via adjacence mesh.
 
     Filtre adjacence arêtes — V3.2 Mai 2026 :
       - Un triangle mer est inclus uniquement si au moins une de ses 3 arêtes
@@ -528,7 +528,7 @@ def build_sea_texture_set(tile, dico_customzl):
             sea_set.add(tex_attr)
 
         UI.vprint(
-            1, f"   [SeaTex] {len(sea_set)} jpg(s) mer côtière(s) "
+            1, f"   [SeaTex] {len(sea_set)} tuile(s) mer côtière(s) "
                f"identifiée(s) via adjacence mesh (zéro patch pleine mer)."
         )
     except Exception as e:

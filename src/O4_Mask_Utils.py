@@ -184,27 +184,14 @@ def build_masks(tile, for_imagery=False):
             _mask_png_path = os.path.join(dest_dir, FNAMES.legacy_mask(til_x, til_y))
             mask_im.save(_mask_png_path)
             del blured_mask
-
-            # Distance masks for bathymetry cut-off
-            if (tile.distance_masks_too):
-                pre_mask = (pre_mask > 0).astype(float) * 2 - 1
-                band = 255 / 2**(16 - tile.mask_zl)
-                dist_array = skfmm.distance(pre_mask, narrow = band)
-                if (isinstance(dist_array, numpy.ma.core.MaskedArray)):
-                    dist_array = dist_array.filled(-99999)
-                dist_array[pre_mask > 0] = 0
-                del(pre_mask)
-                dist_array = dist_array[1024 : 4096 + 1024, 1024 : 4096 + 1024]
-                dist_array = dist_array * (2**(16 - tile.mask_zl))
-                dist_array = numpy.minimum(-numpy.minimum(dist_array, 0), 255)
-                dist_array = dist_array.astype(numpy.uint8)
-                masks_im = Image.fromarray(dist_array)
-                masks_im.save(os.path.join(
-                    dest_dir, FNAMES.distance_mask(til_x, til_y)))
-                UI.vprint(1, "   Created", FNAMES.legacy_mask(til_x, til_y),
-                "and", FNAMES.distance_mask(til_x, til_y))
-            else:
-                UI.vprint(1, "   Created", FNAMES.legacy_mask(til_x, til_y))
+            # Fusion legacy+Coastal Manager : bord naturel intégré directement dans le PNG
+            # post_process_coastal_mask lit, améliore et réécrit le même PNG
+            try:
+                import O4_Coastal_Manager as COAST
+                COAST.post_process_coastal_mask(_mask_png_path, tile)
+            except Exception:
+                pass
+            UI.vprint(1, "   Created", FNAMES.legacy_mask(til_x, til_y))
         return 1
     #################################
 
@@ -317,10 +304,6 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
 
     del mask_draw
     img_array = numpy.array(mask_im, dtype=numpy.uint8)
-
-    # Correction du bug : si c'est presque tout de la mer, on force tout en noir
-    if (img_array < 50).sum() > 0.85 * img_array.size:
-        img_array[:] = 0
 
     return img_array
 

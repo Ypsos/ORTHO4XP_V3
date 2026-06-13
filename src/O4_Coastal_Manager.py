@@ -53,10 +53,10 @@ from O4_Lang import tr
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Largeur de la bande d'écume en pixels (masque ZL15 ≈ 4m/px → 30px ≈ 120m)
-ECUME_WIDTH_PX = 0
+ECUME_WIDTH_PX = 30
 
 # Amplitude maximale du bruit en pixels (irrégularité du bord côtier)
-NOISE_AMPLITUDE_PX = 0
+NOISE_AMPLITUDE_PX = 20
 
 # Octaves du bruit fractal : (fréquence_spatiale, poids_relatif)
 NOISE_OCTAVES = [
@@ -157,6 +157,24 @@ def post_process_coastal_mask(mask_path, tile=None):
         attn = np.clip(1.0 - np.abs(dist_signed) / influence, 0.0, 1.0)
         dist_noisy = dist_signed + noise * attn
 
+        # Largeur de transition proportionnelle à masks_width du tile
+        # Sur un PNG 4096px, ECUME_WIDTH_PX=30 = 1% seulement → invisible
+        # On utilise masks_width converti en pixels pour une bande visible
+        if tile is not None:
+            try:
+                import O4_Geo_Utils as _GEO
+                _pxscal = _GEO.webmercator_pixel_size(
+                    getattr(tile, "lat", 46) + 0.5,
+                    int(getattr(tile, "mask_zl", 17))
+                )
+                _mw = getattr(tile, "masks_width", 6144)
+                _mw = float(_mw[0] if isinstance(_mw, (list,tuple)) else _mw)
+                ecume_px = int(_mw / _pxscal / 2)
+            except Exception:
+                ecume_px = max(ECUME_WIDTH_PX, 300)
+        else:
+            ecume_px = max(ECUME_WIDTH_PX, 300)
+
         # Niveau de transparence "eau peu profonde" (sea_level de Jojo)
         sea_level = 100
         if tile is not None:
@@ -167,18 +185,19 @@ def post_process_coastal_mask(mask_path, tile=None):
                 pass
 
         # Profil sigmoïde : dist_noisy → valeur 0..255
-        k = math.log(19.0) / max(ECUME_WIDTH_PX, 1)
+        k = math.log(19.0) / max(ecume_px, 1)
         prob_land = (1.0 / (1.0 + np.exp(-k * dist_noisy))).astype(np.float32)
         new_val = (prob_land * 255).astype(np.float32)
 
         # Bande d'écume côté mer : valeur = sea_level (semi-transparent)
-        ecume = (dist_noisy >= -ECUME_WIDTH_PX) & (dist_noisy < 0)
+        ecume = (dist_noisy >= -ecume_px) & (dist_noisy < 0)
         if ecume.sum() > 10:
-            ratio_e = np.clip((dist_noisy + ECUME_WIDTH_PX) / max(ECUME_WIDTH_PX, 1),
+            ratio_e = np.clip((dist_noisy + ecume_px) / max(ecume_px, 1),
                               0.0, 1.0)
             new_val[ecume] = (ratio_e * sea_level).astype(np.float32)[ecume]
 
         # Appliquer uniquement dans la zone d'influence
+        influence = float(NOISE_AMPLITUDE_PX + ecume_px + 20)
         in_zone = np.abs(dist_signed) < influence
         new_arr = arr.copy()
         new_arr[in_zone] = new_val[in_zone]
@@ -188,9 +207,8 @@ def post_process_coastal_mask(mask_path, tile=None):
         new_arr[dist_signed < -influence] = 0
         new_arr = np.clip(new_arr, 0, 255).astype(np.uint8)
 
-        # Lissage final doux (élimine les artefacts pixel sans effacer les ondulations)
-        mask_zl = int(getattr(tile, "mask_zl", 15)) if tile else 15
-        sr = max(1, int(2 ** (mask_zl - 14)))
+        # Lissage final doux proportionnel à la bande côtière
+        sr = max(8, ecume_px // 10)
         final = np.array(
             Image.fromarray(new_arr, "L").filter(ImageFilter.GaussianBlur(sr)),
             dtype=np.uint8
@@ -201,7 +219,7 @@ def post_process_coastal_mask(mask_path, tile=None):
 
         try:
             import O4_UI_Utils as UI
-            UI.vprint(1, f"   [Coastal] bord de côtes et d'iles : dégradé automatique.: {os.path.basename(mask_path)}")
+            UI.vprint(1, f"   [Coastal] Transition côtière adoucie : {os.path.basename(mask_path)}")
         except Exception:
             pass
         return True
