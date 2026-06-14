@@ -982,7 +982,7 @@ if __name__ == "__main__":
     mask_width = int(int(sys.argv[4]) / pixel_size)
     pixel_size = (
         pixel_size / 111120 if epsg_code == "4326" else pixel_size
-    )
+    )  # assuming meters if not degrees
     vector_map = VECT.Vector_Map()
     osm_layer = OSM.OSM_layer()
     if not os.path.exists(cached_file_name):
@@ -1044,8 +1044,14 @@ if __name__ == "__main__":
     buffer += "# Created with : " + " ".join(sys.argv) + "\n"
     buffer += (
         "mask_bounds="
-        + str(xmin) + "," + str(ymin) + ","
-        + str(xmax) + "," + str(ymax) + "\n"
+        + str(xmin)
+        + ","
+        + str(ymin)
+        + ","
+        + str(xmax)
+        + ","
+        + str(ymax)
+        + "\n"
     )
     f = open(name + ".ext", "w")
     f.write(buffer)
@@ -1056,11 +1062,17 @@ if __name__ == "__main__":
         if buffer_width > 0:
             mask_im = Image.fromarray(
                 (numpy.array(mask_im, dtype=numpy.uint8) > 0).astype(
-                    numpy.uint8) * 255)
-        else:
+                    numpy.uint8
+                )
+                * 255
+            )
+        else:  # buffer width can be negative
             mask_im = Image.fromarray(
                 (numpy.array(mask_im, dtype=numpy.uint8) == 255).astype(
-                    numpy.uint8) * 255)
+                    numpy.uint8
+                )
+                * 255
+            )
     if mask_width:
         mask_width += 1
         UI.vprint(1, "Blur of the mask...")
@@ -1080,10 +1092,15 @@ if __name__ == "__main__":
         img_array = numpy.array(img_array, dtype=numpy.uint8)
         mask_im = Image.fromarray(img_array)
     mask_im.save(name + ".png")
-    for f in [name + ".poly", name + ".node",
-              name + ".1.node", name + ".1.ele"]:
+    for f in [
+        name + ".poly",
+        name + ".node",
+        name + ".1.node",
+        name + ".1.ele",
+    ]:
         try:
             os.remove(f)
         except:
             pass
     print("Done!")
+################################################################################
