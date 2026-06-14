@@ -930,3 +930,160 @@ def build_mask_from_triangulation(
             pass
     print("Done!")
 ################################################################################
+
+if __name__ == "__main__":
+    UI.log = False
+    UI.verbosity = 2
+    Syntax = (
+        'Syntax :\n',
+        '--------\n',
+        '(PYTHON) extent_code  pixel_size buffer_size blur_size [OSM query] [EPSG code] [bbox_or_grid_size]\n',
+        'All three sizes in meters, buffer_size can be negative too.\n',
+        'If OSM query is not used, data must be cached in an ',
+        'extent_code.osm.bz2 file. EPSG code defaults to 4326, if it is used ',
+        'the OSM query needs to be used too.\n\n',
+        'Example :(from a subdirectory of Extents)\n',
+        '---------\n',
+        'python3 ../../src/O4_Mask_Utils.py Suisse  20 0 400 rel["admin_level"="2"]["name:fr"="Suisse"]'
+    )
+    nargs = len(sys.argv)
+    if not nargs in (5, 6, 7, 8):
+        print(Syntax)
+        sys.exit(1)
+    name = sys.argv[1]
+    cached_file_name = name + ".osm.bz2"
+    if nargs == 5 and not os.path.exists(cached_file_name):
+        print(Syntax)
+        sys.exit(1)
+    if nargs in (6, 7, 8):
+        query_tmp = sys.argv[5]
+        query = ""
+        for char in query_tmp:
+            if char == "[":
+                query += '["'
+            elif char == "]":
+                query += '"]'
+            elif char in ["=", "~"]:
+                query += '"' + char + '"'
+            else:
+                query += char
+    else:
+        query = None
+    if nargs in (7, 8):
+        epsg_code = sys.argv[6]
+    else:
+        epsg_code = "4326"
+    if nargs == 8:
+        grid_size_or_bbox = eval(sys.argv[7])
+    else:
+        grid_size_or_bbox = 0.02 if epsg_code == "4326" else 2000
+    pixel_size = float(sys.argv[2])
+    buffer_width = float(sys.argv[3]) / pixel_size
+    mask_width = int(int(sys.argv[4]) / pixel_size)
+    pixel_size = (
+        pixel_size / 111120 if epsg_code == "4326" else pixel_size
+    )
+    vector_map = VECT.Vector_Map()
+    osm_layer = OSM.OSM_layer()
+    if not os.path.exists(cached_file_name):
+        print("OSM query...")
+        if not OSM.OSM_query_to_OSM_layer(
+            query, "", osm_layer, "all", cached_file_name=cached_file_name
+        ):
+            print("OSM query failed. Exiting.")
+            del vector_map
+            time.sleep(1)
+            sys.exit(0)
+    else:
+        print("Recycling OSM file...")
+        osm_layer.update_dicosm(cached_file_name, None)
+    print("Transform to multipolygon...")
+    multipolygon_area = OSM.OSM_to_MultiPolygon(osm_layer, 0, 0)
+    del osm_layer
+    if not multipolygon_area.area:
+        print(
+            "Humm... an empty response. ",
+            "Are you sure about the exact OSM tag for your region ?"
+        )
+        print("Exiting with no extent created.")
+        del vector_map
+        time.sleep(1)
+        sys.exit(0)
+    if epsg_code != "4326":
+        name += "_" + epsg_code
+        print("Changing coordinates to match EPSG code")
+        import shapely.ops
+        reprojection = GEO.transformer(4326, int(epsg_code))
+        multipolygon_area = shapely.ops.transform(
+            reprojection, multipolygon_area
+        )
+    vector_map.encode_MultiPolygon(
+        multipolygon_area, VECT.dummy_alt, "WATER", check=True, cut=False
+    )
+    vector_map.write_node_file(name + ".node")
+    vector_map.write_poly_file(name + ".poly")
+    print("Triangulate...")
+    MESH.triangulate(name, os.path.join(os.path.dirname(sys.argv[0]), ".."))
+    ((xmin, ymin, xmax, ymax), mask_im) = triangulation_to_image(
+        name, pixel_size, grid_size_or_bbox
+    )
+    print("Mask size : ", mask_im.size, "pixels.")
+    buffer = ""
+    try:
+        f = open(name + ".ext", "r")
+        for line in f.readlines():
+            if ("#" not in line) or query:
+                continue
+            if "Initially" not in line:
+                buffer += "# Initially c" + line[3:]
+            else:
+                buffer += line
+        f.close()
+    except:
+        pass
+    buffer += "# Created with : " + " ".join(sys.argv) + "\n"
+    buffer += (
+        "mask_bounds="
+        + str(xmin) + "," + str(ymin) + ","
+        + str(xmax) + "," + str(ymax) + "\n"
+    )
+    f = open(name + ".ext", "w")
+    f.write(buffer)
+    f.close()
+    if buffer_width:
+        UI.vprint(1, "Buffer of the mask...")
+        mask_im = mask_im.filter(ImageFilter.GaussianBlur(buffer_width / 4))
+        if buffer_width > 0:
+            mask_im = Image.fromarray(
+                (numpy.array(mask_im, dtype=numpy.uint8) > 0).astype(
+                    numpy.uint8) * 255)
+        else:
+            mask_im = Image.fromarray(
+                (numpy.array(mask_im, dtype=numpy.uint8) == 255).astype(
+                    numpy.uint8) * 255)
+    if mask_width:
+        mask_width += 1
+        UI.vprint(1, "Blur of the mask...")
+        img_array = numpy.array(mask_im, dtype=numpy.uint8)
+        kernel = numpy.ones(int(mask_width)) / int(mask_width)
+        kernel = numpy.array(range(1, 2 * mask_width))
+        kernel[mask_width:] = range(mask_width - 1, 0, -1)
+        kernel = kernel / mask_width ** 2
+        for i in range(0, len(img_array)):
+            img_array[i] = numpy.convolve(img_array[i], kernel, "same")
+        img_array = img_array.transpose()
+        for i in range(0, len(img_array)):
+            img_array[i] = numpy.convolve(img_array[i], kernel, "same")
+        img_array = img_array.transpose()
+        img_array[img_array >= 128] = 255
+        img_array[img_array < 128] *= 2
+        img_array = numpy.array(img_array, dtype=numpy.uint8)
+        mask_im = Image.fromarray(img_array)
+    mask_im.save(name + ".png")
+    for f in [name + ".poly", name + ".node",
+              name + ".1.node", name + ".1.ele"]:
+        try:
+            os.remove(f)
+        except:
+            pass
+    print("Done!")
