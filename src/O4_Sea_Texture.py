@@ -397,12 +397,14 @@ def _get_sea_tile(til_x_left, til_y_top, zoomlevel):
 
 
 def generate_sea_jpg_missing(tile, til_x_left, til_y_top, zoomlevel,
-                              source_patch_path):
+                              source_paths):
     """
     Cas 2 — JPG absent en pleine mer.
-    Génère un patch uniforme portant le numéro du JPG manquant.
-    Couleur extraite par médiane sur le patch source (patch côtier voisin).
-    Le patch porte le numéro (til_x_left, til_y_top) du JPG absent — pas du voisin.
+    Génère un patch texture mer depuis les JPG côtiers sources (1 ou 2).
+    Extraction zone mer uniquement (pixels non-blancs, non-noirs, non-terre)
+    via filtre colorimétrique mer (teinte bleu-vert dominante).
+    Moyenne des zones mer des sources → patch 4096×4096 avec texture réelle.
+    Le patch porte le numéro (til_x_left, til_y_top) du JPG absent.
     """
     try:
         patch_dir = os.path.join(
@@ -414,19 +416,82 @@ def generate_sea_jpg_missing(tile, til_x_left, til_y_top, zoomlevel,
         if os.path.isfile(jpg_path):
             return jpg_path  # déjà généré — skip
 
-        # Extraire couleur mer depuis le patch source (médiane pleine image)
-        src_arr = numpy.array(
-            Image.open(source_patch_path).convert("RGB"), dtype=numpy.uint8)
-        median_color = tuple(int(numpy.median(src_arr[:, :, ch])) for ch in range(3))
+        if isinstance(source_paths, str):
+            source_paths = [source_paths]
 
-        # Générer image 4096×4096 uniforme
-        out_arr = numpy.full((4096, 4096, 3), median_color, dtype=numpy.uint8)
+        # Extraire la zone mer de chaque source
+        # Filtre mer : pixels où le bleu+vert domine sur le rouge
+        # et pas trop clairs (pas de ciel/nuage) ni trop sombres (nodata)
+        _sea_arrays = []
+        for _sp in source_paths[:2]:
+            try:
+                _arr = numpy.array(Image.open(_sp).convert("RGB"), dtype=numpy.float32)
+                _R, _G, _B = _arr[:,:,0], _arr[:,:,1], _arr[:,:,2]
+                # Masque mer : bleu+vert dominants, luminosité correcte
+                _lum = (_R * 0.299 + _G * 0.587 + _B * 0.114)
+                _sea_mask = (
+                    (_B + _G > _R * 1.3) &  # bleu-vert dominant
+                    (_lum > 20) &            # pas nodata noir
+                    (_lum < 230)             # pas surexposé
+                )
+                if _sea_mask.sum() > 1000:
+                    _sea_arrays.append((_arr, _sea_mask))
+            except Exception:
+                pass
+
+        if not _sea_arrays:
+            # Fallback : médiane globale du premier source
+            _arr0 = numpy.array(Image.open(source_paths[0]).convert("RGB"), dtype=numpy.uint8)
+            _med = tuple(int(numpy.median(_arr0[:,:,ch])) for ch in range(3))
+            out_arr = numpy.full((4096, 4096, 3), _med, dtype=numpy.uint8)
+            Image.fromarray(out_arr).save(jpg_path, quality=85)
+            UI.vprint(1, f"   [SeaTex] Patch mer créé (fallback) : {jpg_name} RGB{_med}")
+            return jpg_path
+
+        # Calculer la texture mer moyenne depuis les sources
+        # Redimensionner chaque zone mer extraite à 4096×4096
+        _out_float = numpy.zeros((4096, 4096, 3), dtype=numpy.float64)
+        _weight_total = numpy.zeros((4096, 4096), dtype=numpy.float64)
+
+        for (_arr, _mask) in _sea_arrays:
+            # Inpainting simple : remplir pixels non-mer avec la médiane mer
+            _arr_filled = _arr.copy()
+            for ch in range(3):
+                _med_ch = float(numpy.median(_arr[_mask, ch]))
+                _arr_filled[~_mask, ch] = _med_ch
+            # Redimensionner à 4096×4096
+            _img_resized = numpy.array(
+                Image.fromarray(_arr_filled.astype(numpy.uint8)).resize(
+                    (4096, 4096), Image.BILINEAR), dtype=numpy.float64)
+            _mask_resized = numpy.array(
+                Image.fromarray(_mask.astype(numpy.uint8) * 255).resize(
+                    (4096, 4096), Image.NEAREST), dtype=numpy.float64) / 255.0
+            for ch in range(3):
+                _out_float[:,:,ch] += _img_resized[:,:,ch] * _mask_resized
+            _weight_total += _mask_resized
+
+        # Normaliser
+        _weight_safe = numpy.maximum(_weight_total, 1.0)
+        for ch in range(3):
+            _out_float[:,:,ch] /= _weight_safe
+
+        # Zones sans poids → médiane globale
+        _no_weight = (_weight_total < 0.01)
+        if _no_weight.any():
+            _arr0 = numpy.array(Image.open(source_paths[0]).convert("RGB"), dtype=numpy.uint8)
+            for ch in range(3):
+                _out_float[_no_weight, ch] = float(numpy.median(_arr0[:,:,ch]))
+
+        out_arr = numpy.clip(_out_float, 0, 255).astype(numpy.uint8)
         Image.fromarray(out_arr).save(jpg_path, quality=85)
-        UI.vprint(1, f"   [SeaTex] Patch mer créé : {jpg_name} RGB{median_color}")
+        UI.vprint(1, f"   [SeaTex] Patch mer créé : {jpg_name} "
+                     f"({len(_sea_arrays)} source(s))")
         return jpg_path
 
     except Exception as e:
-        UI.vprint(2, f"   [SeaTex] generate_sea_jpg_missing erreur : {e}")
+        import traceback
+        UI.vprint(2, f"   [SeaTex] generate_sea_jpg_missing erreur : {e} "
+                     f"| {traceback.format_exc()}")
         return None
 
 
@@ -567,36 +632,26 @@ def build_sea_texture_set(tile, dico_customzl):
                f"identifiée(s) via adjacence mesh (zéro patch pleine mer)."
         )
 
-        # ── Étape 4 : identifier TOUS les JPG mer absents (pleine mer) ───────
-        # Parcourir tous les triangles mer du mesh — pas seulement les côtiers.
-        # Pour chaque position sans JPG provider → sea_set_missing
-        for i in range(nbr_tris):
-            t = int(tri_types[i]) & has_water
-            t = t and (2 * (t > 1) or 1)
-            if t != 2:
-                continue
-            n1 = int(tri_idx[3 * i])
-            n2 = int(tri_idx[3 * i + 1])
-            n3 = int(tri_idx[3 * i + 2])
-            bary_lon = (
-                node_coords[5*n1] + node_coords[5*n2] + node_coords[5*n3]
-            ) / 3
-            bary_lat = (
-                node_coords[5*n1+1] + node_coords[5*n2+1] + node_coords[5*n3+1]
-            ) / 3
-            key = GEO.wgs84_to_orthogrid(bary_lat, bary_lon, tile.mesh_zl)
-            if key not in dico_customzl:
-                continue
-            tex_attr = dico_customzl[key]
-            if tex_attr in sea_set or tex_attr in sea_set_missing:
-                continue
-            (til_x_m, til_y_m, zl_m, prov_m) = tex_attr
-            # Toutes les positions mer hors sea_set côtier → sea_set_missing
-            # Le DSF décidera si un patch est nécessaire via O4_DSF_Utils
-            sea_set_missing.add(tex_attr)
+        # ── Étape 4 : BFS vague 1 uniquement ────────────────────────────────
+        # Uniquement les positions directement adjacentes (±16px) aux JPG côtiers.
+        # Une seule rangée de patches suffit pour éliminer la jointure visible.
+        # XP12 gère le reste en eau native.
+        INC = 16
+        for (tx_c, ty_c, zl_c, prov_c) in sea_set:
+            for (dy, dx) in [(-INC,0),(INC,0),(0,-INC),(0,INC)]:
+                _key_v = GEO.wgs84_to_orthogrid(
+                    *GEO.gtile_to_wgs84(tx_c + dx//2 + 8 + dx,
+                                        ty_c + dy//2 + 8 + dy, zl_c), zl_c)
+                # Construire tex_attr voisin directement
+                _tx_v = tx_c + dx
+                _ty_v = ty_c + dy
+                _ta_v = (_tx_v, _ty_v, zl_c, prov_c)
+                if _ta_v in sea_set or _ta_v in sea_set_missing:
+                    continue
+                sea_set_missing.add(_ta_v)
 
         UI.vprint(1, f"   [SeaTex] {len(sea_set_missing)} jpg(s) manquant(s) "
-                     f"en pleine mer identifié(s).")
+                     f"en pleine mer identifié(s) (vague 1 BFS).")
 
     except Exception as e:
         import traceback

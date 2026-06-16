@@ -577,15 +577,39 @@ def build_sea_patches(tile):
                 _global_color = tuple(int(_np2.median(_combined2[:, ch])) for ch in range(3))
                 UI.vprint(1, f"   [SeaTex] Couleur mer globale : RGB{_global_color}")
 
-                # Source = premier JPG côtier (chemin fichier attendu par generate_sea_jpg_missing)
-                _src_path = _coastal_jpgs[0]
+                # Construire index (tx, ty) → chemin JPG pour les côtiers
+                _coastal_index = {}
+                for _ta_c2 in sea_texture_set:
+                    (tx_c2, ty_c2, zl_c2, prov_c2) = _ta_c2
+                    _layers_c2 = IMG.local_combined_providers_dict.get(prov_c2, [])
+                    _lc_c2 = next((rl.get("layer_code", "") for rl in _layers_c2
+                                   if rl.get("layer_code", "") in IMG.providers_dict
+                                   and rl.get("layer_code", "") != "PATCH"), None)
+                    if _lc_c2 is None:
+                        continue
+                    _lpd_c2 = IMG.providers_dict.get(_lc_c2)
+                    if _lpd_c2 is None:
+                        continue
+                    _fd_c2 = FNAMES.jpeg_file_dir_from_attributes(
+                        tile.lat, tile.lon, zl_c2, _lpd_c2)
+                    _fn_c2 = FNAMES.jpeg_file_name_from_attributes(tx_c2, ty_c2, zl_c2, _lc_c2)
+                    _fp_c2 = os.path.join(_fd_c2, _fn_c2)
+                    if os.path.isfile(_fp_c2):
+                        _coastal_index[(tx_c2, ty_c2)] = _fp_c2
+
                 for _k2, _ta2 in enumerate(sea_set_missing, 1):
                     (tx2, ty2, zl2, prov2) = _ta2
                     UI.vprint(1, f"   [SeaTex] Patch manquant {_k2}/{_total2} : {ty2}_{tx2}_PATCH{zl2}...")
                     if (ty2, tx2, zl2) in _patches_done:
                         continue
+                    # Trouver les 2 JPG côtiers les plus proches géographiquement
+                    _sorted = sorted(_coastal_index.items(),
+                                     key=lambda kv: abs(kv[0][0]-tx2) + abs(kv[0][1]-ty2))
+                    _src_paths2 = [v for _, v in _sorted[:2]]
+                    if not _src_paths2:
+                        continue
                     _jpg2 = _SEA.generate_sea_jpg_missing(
-                        tile, tx2, ty2, zl2, _src_path)
+                        tile, tx2, ty2, zl2, _src_paths2)
                     if _jpg2:
                         _gen2 += 1
                         _patches_done.add((ty2, tx2, zl2))

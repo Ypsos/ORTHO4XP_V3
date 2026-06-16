@@ -2615,19 +2615,7 @@ def convert_texture(
                 except:
                     pass
             dxt5 = True
-        else:
-            if tile.imprint_masks_to_dds:
-                _sea_mask_path, _sea_crop = _find_sea_mask(
-                    tile, til_x_left, til_y_top, zoomlevel, provider_code)
-                if _sea_mask_path:
-                    try:
-                        _coast_alpha = _load_coastal_alpha(_sea_mask_path, _sea_crop)
-                        big_image = big_image.convert("RGBA")
-                        big_image.putalpha(_coast_alpha)
-                        dxt5 = True
-                        UI.vprint(2, "      [Coastal] Canal alpha injecté → BC3 (eau XP12 transparente).")
-                    except Exception as _ce:
-                        UI.vprint(2, f"      [Coastal] Erreur injection alpha : {_ce}")
+
         file_to_convert = os.path.join(UI.Ortho4XP_dir, "tmp", png_file_name)
         erase_tmp_png = True
         big_image.save(file_to_convert)
@@ -2660,19 +2648,7 @@ def convert_texture(
                 except:
                     pass
             dxt5 = True
-        else:
-            if tile.imprint_masks_to_dds:
-                _sea_mask_path, _sea_crop = _find_sea_mask(
-                    tile, til_x_left, til_y_top, zoomlevel, provider_code)
-                if _sea_mask_path:
-                    try:
-                        _coast_alpha = _load_coastal_alpha(_sea_mask_path, _sea_crop)
-                        big_image = big_image.convert("RGBA")
-                        big_image.putalpha(_coast_alpha)
-                        dxt5 = True
-                        UI.vprint(2, "      [Coastal] Canal alpha injecté → BC3 (eau XP12 transparente).")
-                    except Exception as _ce:
-                        UI.vprint(2, f"      [Coastal] Erreur injection alpha : {_ce}")
+
         file_to_convert = os.path.join(UI.Ortho4XP_dir, "tmp", png_file_name)
         erase_tmp_png = True
         big_image.save(file_to_convert)
@@ -2686,18 +2662,7 @@ def convert_texture(
         # ---- COLOR CHECK CORRECTIONS (2e : corrige le résidu) ----
         big_image = CAPPLY.apply_ccorr(big_image, out_file_name, os.path.join(tile.build_dir, "textures"))
         # -----------------------------
-        if tile.imprint_masks_to_dds:
-            _sea_mask_path, _sea_crop = _find_sea_mask(
-                tile, til_x_left, til_y_top, zoomlevel, provider_code)
-            if _sea_mask_path:
-                try:
-                    _coast_alpha = _load_coastal_alpha(_sea_mask_path, _sea_crop)
-                    big_image = big_image.convert("RGBA")
-                    big_image.putalpha(_coast_alpha)
-                    dxt5 = True
-                    UI.vprint(2, "      [Coastal] Canal alpha injecté → BC3 (eau XP12 transparente).")
-                except Exception as _ce:
-                    UI.vprint(2, f"      [Coastal] Erreur injection alpha : {_ce}")
+
         if CNORM.color_normalization_enabled or dxt5:
             file_to_convert = os.path.join(UI.Ortho4XP_dir, "tmp", png_file_name)
             erase_tmp_png = True
