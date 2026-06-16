@@ -483,7 +483,7 @@ def build_sea_patches(tile):
     # ── Identifier tuiles mer côtières via mesh ───────────────────────────────
     try:
         dico_customzl = _DSF.zone_list_to_ortho_dico(tile)
-        sea_texture_set = build_sea_texture_set(tile, dico_customzl)
+        sea_texture_set, sea_set_missing = _SEA.build_sea_texture_set(tile, dico_customzl)
     except Exception as _ste:
         import traceback
         UI.vprint(0, f"   [SeaTex] build_sea_texture_set ERREUR : {_ste}\n"
@@ -524,7 +524,74 @@ def build_sea_patches(tile):
             _patches_done.add((ty, tx, zl))
     UI.progress_bar(2, 100)
 
-    UI.vprint(1, f"   [SeaTex] Step 2.1 terminé — {generated} patch(es) nodata corrigés.")
+    UI.vprint(1, f"   [SeaTex] Cas 1 terminé — {generated} patch(es) nodata corrigés.")
+
+    # ── Cas 2 : JPG absents en pleine mer → patch couleur mer depuis patch côtier ──
+    # Pour chaque position pleine mer sans JPG provider :
+    # Trouver le patch côtier existant le plus proche → extraire couleur mer
+    # → générer patch uniforme portant le numéro du JPG manquant
+    if sea_set_missing:
+        UI.vprint(1, f"   [SeaTex] Cas 2 : {len(sea_set_missing)} JPG manquants vers le large...")
+        _gen2 = 0
+        _total2 = len(sea_set_missing)
+
+        # Construire index des JPG provider côtiers existants sur disque
+        # Même logique que Cas 1 pour trouver _prov_dict et le chemin JPG
+        # Trouver les JPG côtiers sur disque et calculer couleur mer globale
+        _coastal_jpgs = []
+        for _ta_c in sea_texture_set:
+            (tx_c, ty_c, zl_c, prov_c) = _ta_c
+            _layers_c = IMG.local_combined_providers_dict.get(prov_c, [])
+            _lc_c = next((rl.get("layer_code", "") for rl in _layers_c
+                          if rl.get("layer_code", "") in IMG.providers_dict
+                          and rl.get("layer_code", "") != "PATCH"), None)
+            if _lc_c is None:
+                continue
+            _prov_dict_c = IMG.providers_dict.get(_lc_c)
+            if _prov_dict_c is None:
+                continue
+            _fd_c = FNAMES.jpeg_file_dir_from_attributes(
+                tile.lat, tile.lon, zl_c, _prov_dict_c)
+            _fn_c = FNAMES.jpeg_file_name_from_attributes(tx_c, ty_c, zl_c, _lc_c)
+            _fp_c = os.path.join(_fd_c, _fn_c)
+            if os.path.isfile(_fp_c):
+                _coastal_jpgs.append(_fp_c)
+
+        if not _coastal_jpgs:
+            UI.vprint(1, "   [SeaTex] Cas 2 : aucun JPG côtier source — ignoré.")
+        else:
+            # Couleur mer globale — médiane sur tous les JPG côtiers
+            import numpy as _np2
+            from PIL import Image as _IMG2
+            _all_px2 = []
+            for _fp2 in _coastal_jpgs:
+                try:
+                    _a2 = _np2.array(_IMG2.open(_fp2).convert("RGB"), dtype=_np2.uint8)
+                    _all_px2.append(_a2.reshape(-1, 3))
+                except Exception:
+                    pass
+            if not _all_px2:
+                UI.vprint(1, "   [SeaTex] Cas 2 : impossible d'extraire couleur mer.")
+            else:
+                _combined2 = _np2.concatenate(_all_px2, axis=0)
+                _global_color = tuple(int(_np2.median(_combined2[:, ch])) for ch in range(3))
+                UI.vprint(1, f"   [SeaTex] Couleur mer globale : RGB{_global_color}")
+
+                # Source = premier JPG côtier (chemin fichier attendu par generate_sea_jpg_missing)
+                _src_path = _coastal_jpgs[0]
+                for _k2, _ta2 in enumerate(sea_set_missing, 1):
+                    (tx2, ty2, zl2, prov2) = _ta2
+                    UI.vprint(1, f"   [SeaTex] Patch manquant {_k2}/{_total2} : {ty2}_{tx2}_PATCH{zl2}...")
+                    if (ty2, tx2, zl2) in _patches_done:
+                        continue
+                    _jpg2 = _SEA.generate_sea_jpg_missing(
+                        tile, tx2, ty2, zl2, _src_path)
+                    if _jpg2:
+                        _gen2 += 1
+                        _patches_done.add((ty2, tx2, zl2))
+        UI.vprint(1, f"   [SeaTex] Cas 2 terminé — {_gen2} patch(es) pleine mer générés.")
+
+    UI.vprint(1, f"   [SeaTex] Step 2.1 terminé.")
     UI.timings_and_bottom_line(_timer_21)
     return 1
 

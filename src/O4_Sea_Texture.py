@@ -396,6 +396,40 @@ def _get_sea_tile(til_x_left, til_y_top, zoomlevel):
     return None
 
 
+def generate_sea_jpg_missing(tile, til_x_left, til_y_top, zoomlevel,
+                              source_patch_path):
+    """
+    Cas 2 — JPG absent en pleine mer.
+    Génère un patch uniforme portant le numéro du JPG manquant.
+    Couleur extraite par médiane sur le patch source (patch côtier voisin).
+    Le patch porte le numéro (til_x_left, til_y_top) du JPG absent — pas du voisin.
+    """
+    try:
+        patch_dir = os.path.join(
+            FNAMES.Patch_dir,
+            _tile_folder(tile), f"PATCH_{int(zoomlevel)}")
+        os.makedirs(patch_dir, exist_ok=True)
+        jpg_name = f"{int(til_y_top)}_{int(til_x_left)}_PATCH{int(zoomlevel)}.jpg"
+        jpg_path = os.path.join(patch_dir, jpg_name)
+        if os.path.isfile(jpg_path):
+            return jpg_path  # déjà généré — skip
+
+        # Extraire couleur mer depuis le patch source (médiane pleine image)
+        src_arr = numpy.array(
+            Image.open(source_patch_path).convert("RGB"), dtype=numpy.uint8)
+        median_color = tuple(int(numpy.median(src_arr[:, :, ch])) for ch in range(3))
+
+        # Générer image 4096×4096 uniforme
+        out_arr = numpy.full((4096, 4096, 3), median_color, dtype=numpy.uint8)
+        Image.fromarray(out_arr).save(jpg_path, quality=85)
+        UI.vprint(1, f"   [SeaTex] Patch mer créé : {jpg_name} RGB{median_color}")
+        return jpg_path
+
+    except Exception as e:
+        UI.vprint(2, f"   [SeaTex] generate_sea_jpg_missing erreur : {e}")
+        return None
+
+
 def download_sea_neighbor_row(tile, til_x_left, til_y_top, zoomlevel,
                                provider_code):
     """
@@ -423,6 +457,7 @@ def build_sea_texture_set(tile, dico_customzl):
     Appelé dans build_tile() avant les threads — zéro deadlock.
     """
     sea_set = set()
+    sea_set_missing = set()
     try:
         import O4_Geo_Utils as GEO
         mesh_file = FNAMES.mesh_file(tile.build_dir, tile.lat, tile.lon)
@@ -528,11 +563,43 @@ def build_sea_texture_set(tile, dico_customzl):
             sea_set.add(tex_attr)
 
         UI.vprint(
-            1, f"   [SeaTex] {len(sea_set)} tuile(s) mer côtière(s) "
+            1, f"   [SeaTex] {len(sea_set)} jpg(s) mer côtière(s) "
                f"identifiée(s) via adjacence mesh (zéro patch pleine mer)."
         )
+
+        # ── Étape 4 : identifier TOUS les JPG mer absents (pleine mer) ───────
+        # Parcourir tous les triangles mer du mesh — pas seulement les côtiers.
+        # Pour chaque position sans JPG provider → sea_set_missing
+        for i in range(nbr_tris):
+            t = int(tri_types[i]) & has_water
+            t = t and (2 * (t > 1) or 1)
+            if t != 2:
+                continue
+            n1 = int(tri_idx[3 * i])
+            n2 = int(tri_idx[3 * i + 1])
+            n3 = int(tri_idx[3 * i + 2])
+            bary_lon = (
+                node_coords[5*n1] + node_coords[5*n2] + node_coords[5*n3]
+            ) / 3
+            bary_lat = (
+                node_coords[5*n1+1] + node_coords[5*n2+1] + node_coords[5*n3+1]
+            ) / 3
+            key = GEO.wgs84_to_orthogrid(bary_lat, bary_lon, tile.mesh_zl)
+            if key not in dico_customzl:
+                continue
+            tex_attr = dico_customzl[key]
+            if tex_attr in sea_set or tex_attr in sea_set_missing:
+                continue
+            (til_x_m, til_y_m, zl_m, prov_m) = tex_attr
+            # Toutes les positions mer hors sea_set côtier → sea_set_missing
+            # Le DSF décidera si un patch est nécessaire via O4_DSF_Utils
+            sea_set_missing.add(tex_attr)
+
+        UI.vprint(1, f"   [SeaTex] {len(sea_set_missing)} jpg(s) manquant(s) "
+                     f"en pleine mer identifié(s).")
+
     except Exception as e:
         import traceback
         UI.vprint(2, f"   [SeaTex] build_sea_texture_set erreur : {e}\n"
                      f"{traceback.format_exc()}")
-    return sea_set
+    return sea_set, sea_set_missing

@@ -205,120 +205,120 @@ def build_masks(tile, for_imagery=False):
 
     UI.progress_bar(1, 100)
 
-    # ── Génération PNG extent mer-sans-JPG + .ext dans Extents/<serie>/<tuile>/ ──
-    # PNG : noir = tuiles mer où aucun JPG provider n'existe
-    #        blanc = terre ou tuiles mer avec JPG provider
-    # .ext : mask_bounds=lon,lat,lon+1,lat+1  (format identique V1.40)
-    # Sécurité : si PNG ET .ext déjà présents → ne pas écraser
-    try:
-        import math as _math
-
-        # ── Calcul chemins ────────────────────────────────────────────────────
-        _sign_lat  = "+" if tile.lat >= 0 else "-"
-        _sign_lon  = "+" if tile.lon >= 0 else "-"
-        _serie_lat = _math.floor(tile.lat / 10) * 10
-        _serie_lon = _math.floor(tile.lon / 10) * 10
-        _sign_slat = "+" if _serie_lat >= 0 else "-"
-        _sign_slon = "+" if _serie_lon >= 0 else "-"
-        _serie_dir = f"{_sign_slat}{abs(_serie_lat):02d}{_sign_slon}{abs(_serie_lon):03d}"
-        _tile_dir  = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
-        _extent_tile_dir = os.path.join(FNAMES.Extent_dir, _serie_dir, _tile_dir)
-        os.makedirs(_extent_tile_dir, exist_ok=True)
-
-        _ext_png  = os.path.join(_extent_tile_dir, _tile_dir + ".png")
-        _ext_file = os.path.join(_extent_tile_dir, _tile_dir + ".ext")
-
-        # Sécurité : ne jamais écraser si déjà présents
-        if os.path.isfile(_ext_png) and os.path.isfile(_ext_file):
-            UI.vprint(1, f"   [Extents] Déjà présent, conservé : {_ext_png}")
-        else:
-            # ── Construire PNG 4096x4096 : blanc par défaut ───────────────────
-            _W = _H = 4096
-            _lon0 = float(tile.lon)
-            _lat1 = float(tile.lat) + 1.0
-            _mask_arr = numpy.ones((_H, _W), dtype=numpy.uint8) * 255
-            _mask_img = Image.fromarray(_mask_arr, mode="L")
-            _draw = ImageDraw.Draw(_mask_img)
-
-            # ── Pour chaque tuile mer dans dico_sea ───────────────────────────
-            # Vérifier si un JPG provider existe dans Orthophotos/
-            # Si AUCUN JPG → peindre les triangles en noir (mer sans JPG)
-            # Si JPG présent → laisser blanc (le provider s'en charge)
-            _zl = getattr(tile, "default_zl", 17)
-
-            # Grouper les triangles par clé de tuile texture
-            _dico_sea_keys = set(dico_sea.keys())
-            for (_tx_key, _ty_key) in _dico_sea_keys:
-                # Chercher JPG pour cette clé dans tous les providers actifs
-                _jpg_found = False
-                try:
-                    for _pc, _layers in IMG.local_combined_providers_dict.items():
-                        if _jpg_found:
-                            break
-                        for _rl in _layers:
-                            _lc = _rl.get("layer_code", "")
-                            if _lc not in IMG.providers_dict:
-                                continue
-                            _fdir = FNAMES.jpeg_file_dir_from_attributes(
-                                tile.lat, tile.lon, _zl,
-                                IMG.providers_dict[_lc]
-                            )
-                            _fname = FNAMES.jpeg_file_name_from_attributes(
-                                _tx_key, _ty_key, _zl, _lc
-                            )
-                            if os.path.isfile(os.path.join(_fdir, _fname)):
-                                _jpg_found = True
-                                break
-                except Exception:
-                    pass
-
-                if not _jpg_found:
-                    # Peindre tous les triangles de cette tuile en noir
-                    for (la1, lo1, la2, lo2, la3, lo3) in dico_sea[(_tx_key, _ty_key)]:
-                        px1 = int((lo1 - _lon0) * _W)
-                        py1 = int((_lat1 - la1) * _H)
-                        px2 = int((lo2 - _lon0) * _W)
-                        py2 = int((_lat1 - la2) * _H)
-                        px3 = int((lo3 - _lon0) * _W)
-                        py3 = int((_lat1 - la3) * _H)
-                        _draw.polygon(
-                            [(px1, py1), (px2, py2), (px3, py3)], fill=0
-                        )
-            del _draw
-            _mask_img.save(_ext_png)
-
-            # ── Écrire .ext format V1.40 ──────────────────────────────────────
-            with open(_ext_file, "w", encoding="utf-8") as _f:
-                _f.write("# Généré automatiquement par Ortho4XP V3 — Step 2.5\n")
-                _f.write(
-                    f"mask_bounds={float(tile.lon)},{float(tile.lat)},"
-                    f"{float(tile.lon)+1.0},{float(tile.lat)+1.0}\n"
-                )
-            UI.vprint(1, f"   [Extents] PNG + .ext générés : {_ext_png}")
-
-    except Exception as _e:
-        UI.vprint(1, f"   [Extents] Erreur génération extent : {_e}")
-
-    # ── Création dossiers Extents/<serie>/<tuile>/ ────────────────────────────
-    # Structure : Extents/+40-010/+46-003/  (série lon négative)
-    #             Extents/+40+000/+46+003/  (série lon positive)
-    # Universel — aucun nom de provider hardcodé — uniquement la structure.
-    try:
-        import math as _math
-        _sign_lat  = "+" if tile.lat >= 0 else "-"
-        _sign_lon  = "+" if tile.lon >= 0 else "-"
-        _serie_lat = _math.floor(tile.lat / 10) * 10
-        _serie_lon = _math.floor(tile.lon / 10) * 10
-        _sign_slat = "+" if _serie_lat >= 0 else "-"
-        _sign_slon = "+" if _serie_lon >= 0 else "-"
-        _serie_dir = f"{_sign_slat}{abs(_serie_lat):02d}{_sign_slon}{abs(_serie_lon):03d}"
-        _tile_dir  = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
-        _extent_tile_dir = os.path.join(FNAMES.Extent_dir, _serie_dir, _tile_dir)
-        os.makedirs(_extent_tile_dir, exist_ok=True)
-        UI.vprint(1, f"   [Extents] Dossier créé : {_extent_tile_dir}")
-    except Exception as _e:
-        UI.vprint(1, f"   [Extents] Erreur création dossier : {_e}")
-
+#DESACTIVE#     # ── Génération PNG extent mer-sans-JPG + .ext dans Extents/<serie>/<tuile>/ ──
+#DESACTIVE#     # PNG : noir = tuiles mer où aucun JPG provider n'existe
+#DESACTIVE#     #        blanc = terre ou tuiles mer avec JPG provider
+#DESACTIVE#     # .ext : mask_bounds=lon,lat,lon+1,lat+1  (format identique V1.40)
+#DESACTIVE#     # Sécurité : si PNG ET .ext déjà présents → ne pas écraser
+#DESACTIVE#     try:
+#DESACTIVE#         import math as _math
+#DESACTIVE# 
+#DESACTIVE#         # ── Calcul chemins ────────────────────────────────────────────────────
+#DESACTIVE#         _sign_lat  = "+" if tile.lat >= 0 else "-"
+#DESACTIVE#         _sign_lon  = "+" if tile.lon >= 0 else "-"
+#DESACTIVE#         _serie_lat = _math.floor(tile.lat / 10) * 10
+#DESACTIVE#         _serie_lon = _math.floor(tile.lon / 10) * 10
+#DESACTIVE#         _sign_slat = "+" if _serie_lat >= 0 else "-"
+#DESACTIVE#         _sign_slon = "+" if _serie_lon >= 0 else "-"
+#DESACTIVE#         _serie_dir = f"{_sign_slat}{abs(_serie_lat):02d}{_sign_slon}{abs(_serie_lon):03d}"
+#DESACTIVE#         _tile_dir  = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
+#DESACTIVE#         _extent_tile_dir = os.path.join(FNAMES.Extent_dir, _serie_dir, _tile_dir)
+#DESACTIVE#         os.makedirs(_extent_tile_dir, exist_ok=True)
+#DESACTIVE# 
+#DESACTIVE#         _ext_png  = os.path.join(_extent_tile_dir, _tile_dir + ".png")
+#DESACTIVE#         _ext_file = os.path.join(_extent_tile_dir, _tile_dir + ".ext")
+#DESACTIVE# 
+#DESACTIVE#         # Sécurité : ne jamais écraser si déjà présents
+#DESACTIVE#         if os.path.isfile(_ext_png) and os.path.isfile(_ext_file):
+#DESACTIVE#             UI.vprint(1, f"   [Extents] Déjà présent, conservé : {_ext_png}")
+#DESACTIVE#         else:
+#DESACTIVE#             # ── Construire PNG 4096x4096 : blanc par défaut ───────────────────
+#DESACTIVE#             _W = _H = 4096
+#DESACTIVE#             _lon0 = float(tile.lon)
+#DESACTIVE#             _lat1 = float(tile.lat) + 1.0
+#DESACTIVE#             _mask_arr = numpy.ones((_H, _W), dtype=numpy.uint8) * 255
+#DESACTIVE#             _mask_img = Image.fromarray(_mask_arr, mode="L")
+#DESACTIVE#             _draw = ImageDraw.Draw(_mask_img)
+#DESACTIVE# 
+#DESACTIVE#             # ── Pour chaque tuile mer dans dico_sea ───────────────────────────
+#DESACTIVE#             # Vérifier si un JPG provider existe dans Orthophotos/
+#DESACTIVE#             # Si AUCUN JPG → peindre les triangles en noir (mer sans JPG)
+#DESACTIVE#             # Si JPG présent → laisser blanc (le provider s'en charge)
+#DESACTIVE#             _zl = getattr(tile, "default_zl", 17)
+#DESACTIVE# 
+#DESACTIVE#             # Grouper les triangles par clé de tuile texture
+#DESACTIVE#             _dico_sea_keys = set(dico_sea.keys())
+#DESACTIVE#             for (_tx_key, _ty_key) in _dico_sea_keys:
+#DESACTIVE#                 # Chercher JPG pour cette clé dans tous les providers actifs
+#DESACTIVE#                 _jpg_found = False
+#DESACTIVE#                 try:
+#DESACTIVE#                     for _pc, _layers in IMG.local_combined_providers_dict.items():
+#DESACTIVE#                         if _jpg_found:
+#DESACTIVE#                             break
+#DESACTIVE#                         for _rl in _layers:
+#DESACTIVE#                             _lc = _rl.get("layer_code", "")
+#DESACTIVE#                             if _lc not in IMG.providers_dict:
+#DESACTIVE#                                 continue
+#DESACTIVE#                             _fdir = FNAMES.jpeg_file_dir_from_attributes(
+#DESACTIVE#                                 tile.lat, tile.lon, _zl,
+#DESACTIVE#                                 IMG.providers_dict[_lc]
+#DESACTIVE#                             )
+#DESACTIVE#                             _fname = FNAMES.jpeg_file_name_from_attributes(
+#DESACTIVE#                                 _tx_key, _ty_key, _zl, _lc
+#DESACTIVE#                             )
+#DESACTIVE#                             if os.path.isfile(os.path.join(_fdir, _fname)):
+#DESACTIVE#                                 _jpg_found = True
+#DESACTIVE#                                 break
+#DESACTIVE#                 except Exception:
+#DESACTIVE#                     pass
+#DESACTIVE# 
+#DESACTIVE#                 if not _jpg_found:
+#DESACTIVE#                     # Peindre tous les triangles de cette tuile en noir
+#DESACTIVE#                     for (la1, lo1, la2, lo2, la3, lo3) in dico_sea[(_tx_key, _ty_key)]:
+#DESACTIVE#                         px1 = int((lo1 - _lon0) * _W)
+#DESACTIVE#                         py1 = int((_lat1 - la1) * _H)
+#DESACTIVE#                         px2 = int((lo2 - _lon0) * _W)
+#DESACTIVE#                         py2 = int((_lat1 - la2) * _H)
+#DESACTIVE#                         px3 = int((lo3 - _lon0) * _W)
+#DESACTIVE#                         py3 = int((_lat1 - la3) * _H)
+#DESACTIVE#                         _draw.polygon(
+#DESACTIVE#                             [(px1, py1), (px2, py2), (px3, py3)], fill=0
+#DESACTIVE#                         )
+#DESACTIVE#             del _draw
+#DESACTIVE#             _mask_img.save(_ext_png)
+#DESACTIVE# 
+#DESACTIVE#             # ── Écrire .ext format V1.40 ──────────────────────────────────────
+#DESACTIVE#             with open(_ext_file, "w", encoding="utf-8") as _f:
+#DESACTIVE#                 _f.write("# Généré automatiquement par Ortho4XP V3 — Step 2.5\n")
+#DESACTIVE#                 _f.write(
+#DESACTIVE#                     f"mask_bounds={float(tile.lon)},{float(tile.lat)},"
+#DESACTIVE#                     f"{float(tile.lon)+1.0},{float(tile.lat)+1.0}\n"
+#DESACTIVE#                 )
+#DESACTIVE#             UI.vprint(1, f"   [Extents] PNG + .ext générés : {_ext_png}")
+#DESACTIVE# 
+#DESACTIVE#     except Exception as _e:
+#DESACTIVE#         UI.vprint(1, f"   [Extents] Erreur génération extent : {_e}")
+#DESACTIVE# 
+#DESACTIVE#     # ── Création dossiers Extents/<serie>/<tuile>/ ────────────────────────────
+#DESACTIVE#     # Structure : Extents/+40-010/+46-003/  (série lon négative)
+#DESACTIVE#     #             Extents/+40+000/+46+003/  (série lon positive)
+#DESACTIVE#     # Universel — aucun nom de provider hardcodé — uniquement la structure.
+#DESACTIVE#     try:
+#DESACTIVE#         import math as _math
+#DESACTIVE#         _sign_lat  = "+" if tile.lat >= 0 else "-"
+#DESACTIVE#         _sign_lon  = "+" if tile.lon >= 0 else "-"
+#DESACTIVE#         _serie_lat = _math.floor(tile.lat / 10) * 10
+#DESACTIVE#         _serie_lon = _math.floor(tile.lon / 10) * 10
+#DESACTIVE#         _sign_slat = "+" if _serie_lat >= 0 else "-"
+#DESACTIVE#         _sign_slon = "+" if _serie_lon >= 0 else "-"
+#DESACTIVE#         _serie_dir = f"{_sign_slat}{abs(_serie_lat):02d}{_sign_slon}{abs(_serie_lon):03d}"
+#DESACTIVE#         _tile_dir  = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
+#DESACTIVE#         _extent_tile_dir = os.path.join(FNAMES.Extent_dir, _serie_dir, _tile_dir)
+#DESACTIVE#         os.makedirs(_extent_tile_dir, exist_ok=True)
+#DESACTIVE#         UI.vprint(1, f"   [Extents] Dossier créé : {_extent_tile_dir}")
+#DESACTIVE#     except Exception as _e:
+#DESACTIVE#         UI.vprint(1, f"   [Extents] Erreur création dossier : {_e}")
+#DESACTIVE# 
     UI.timings_and_bottom_line(timer)
     UI.logprint(
         "Step 2.5 for tile lat=", tile.lat, ", lon=", tile.lon, ": normal exit."
@@ -407,63 +407,14 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
             py1 -= py0; py2 -= py0; py3 -= py0
             mask_draw.polygon([(px1, py1), (px2, py2), (px3, py3)], fill=sea_level)
 
-    # ── Limite mer/terre depuis coastline OSM vectorielle ────────────────────
-    # Cache généré au Step 1 : OSM_data/+40-010/+46-003/+46-003_coastline.osm.bz2
-    # Si présent → précision vectorielle OSM. Sinon → fallback triangles mesh.
-    _osm_used = False
-    _coast_cache = FNAMES.osm_cached(tile.lat, tile.lon, "coastline")
-    if os.path.isfile(_coast_cache):
-        try:
-            _sea_layer = OSM.OSM_layer()
-            _sea_layer.update_dicosm(_coast_cache, input_tags=None, target_tags=None)
-            _coastline = OSM.OSM_to_MultiLineString(_sea_layer, tile.lat, tile.lon)
-            if not _coastline.is_empty:
-                _coast_poly = VECT.coastline_to_MultiPolygon(
-                    _coastline, tile.lat, tile.lon
-                )
-                if not _coast_poly.is_empty:
-                    for _poly in _coast_poly.geoms:
-                        # Extérieur du polygone = terre → blanc
-                        _ext = [
-                            (
-                                GEO.wgs84_to_pix(
-                                    _lat + tile.lat, _lon + tile.lon, tile.mask_zl
-                                )[0] - px0,
-                                GEO.wgs84_to_pix(
-                                    _lat + tile.lat, _lon + tile.lon, tile.mask_zl
-                                )[1] - py0,
-                            )
-                            for (_lon, _lat) in _poly.exterior.coords
-                        ]
-                        mask_draw.polygon(_ext, fill="white")
-                        # Intérieurs = mer intérieure → noir
-                        for _interior in _poly.interiors:
-                            _int = [
-                                (
-                                    GEO.wgs84_to_pix(
-                                        _lat + tile.lat, _lon + tile.lon, tile.mask_zl
-                                    )[0] - px0,
-                                    GEO.wgs84_to_pix(
-                                        _lat + tile.lat, _lon + tile.lon, tile.mask_zl
-                                    )[1] - py0,
-                                )
-                                for (_lon, _lat) in _interior.coords
-                            ]
-                            mask_draw.polygon(_int, fill="black")
-                    _osm_used = True
-        except Exception as _ec:
-            UI.vprint(1, f"   [OSM-coast] Erreur : {_ec} — fallback mesh")
-
-    # Fallback : triangles mesh si OSM absent ou erreur
-    if not _osm_used:
-        if (til_x, til_y) in dico_sea:
-            for (lat1, lon1, lat2, lon2, lat3, lon3) in dico_sea[(til_x, til_y)]:
-                (px1, py1) = GEO.wgs84_to_pix(lat1, lon1, tile.mask_zl)
-                (px2, py2) = GEO.wgs84_to_pix(lat2, lon2, tile.mask_zl)
-                (px3, py3) = GEO.wgs84_to_pix(lat3, lon3, tile.mask_zl)
-                px1 -= px0; px2 -= px0; px3 -= px0
-                py1 -= py0; py2 -= py0; py3 -= py0
-                mask_draw.polygon([(px1, py1), (px2, py2), (px3, py3)], fill="black")
+    if (til_x, til_y) in dico_sea:
+        for (lat1, lon1, lat2, lon2, lat3, lon3) in dico_sea[(til_x, til_y)]:
+            (px1, py1) = GEO.wgs84_to_pix(lat1, lon1, tile.mask_zl)
+            (px2, py2) = GEO.wgs84_to_pix(lat2, lon2, tile.mask_zl)
+            (px3, py3) = GEO.wgs84_to_pix(lat3, lon3, tile.mask_zl)
+            px1 -= px0; px2 -= px0; px3 -= px0
+            py1 -= py0; py2 -= py0; py3 -= py0
+            mask_draw.polygon([(px1, py1), (px2, py2), (px3, py3)], fill="black")
 
     del mask_draw
     img_array = numpy.array(mask_im, dtype=numpy.uint8)

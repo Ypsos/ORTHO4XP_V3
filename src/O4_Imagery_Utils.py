@@ -2290,15 +2290,20 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
             try:
                 _big_arr   = numpy.array(big_image.convert("RGB"), dtype=numpy.uint8)
                 _patch_arr = numpy.array(true_im.convert("RGB"),   dtype=numpy.uint8)
-                _nodata    = (_big_arr[:,:,0] > 240) & \
-                             (_big_arr[:,:,1] > 240) & \
-                             (_big_arr[:,:,2] > 240)
-                if _nodata.any():
-                    _big_arr[_nodata] = _patch_arr[_nodata]
-                    big_image = Image.fromarray(_big_arr)
-                    UI.vprint(2, f"   [SeaTex] PATCH appliqué : {_nodata.sum()} px nodata comblés")
+                # Cas A : big_image entièrement vide (aucun JPG provider) → patch = fond
+                _big_empty = (_big_arr.sum(axis=2) == 0).all()
+                if _big_empty:
+                    big_image = Image.fromarray(_patch_arr)
+                    UI.vprint(2, "   [SeaTex] PATCH appliqué comme fond (aucun JPG provider)")
                 else:
-                    UI.vprint(2, "   [SeaTex] PATCH : aucun nodata blanc détecté — ignoré")
+                    # Cas B : nodata blanc dans le JPG provider → patch comble
+                    _nodata = (_big_arr[:,:,0] > 240) &                               (_big_arr[:,:,1] > 240) &                               (_big_arr[:,:,2] > 240)
+                    if _nodata.any():
+                        _big_arr[_nodata] = _patch_arr[_nodata]
+                        big_image = Image.fromarray(_big_arr)
+                        UI.vprint(2, f"   [SeaTex] PATCH appliqué : {_nodata.sum()} px nodata comblés")
+                    else:
+                        UI.vprint(2, "   [SeaTex] PATCH : aucun nodata blanc détecté — ignoré")
             except Exception as _pe:
                 UI.vprint(2, f"   [SeaTex] PATCH composite erreur : {_pe}")
             continue  # ne pas passer par la mécanique priority

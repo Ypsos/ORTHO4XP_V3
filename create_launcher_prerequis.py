@@ -116,13 +116,27 @@ static int install_homebrew(const char *log) {
 
 static int find_python312(char *out, size_t n) {
     const char *c[] = {
+        /* Python 3.12 — Apple Silicon Homebrew */
         "/opt/homebrew/opt/python@3.12/bin/python3.12",
-        "/usr/local/opt/python@3.12/bin/python3.12",
         "/opt/homebrew/opt/python@3.12/libexec/bin/python3.12",
         "/opt/homebrew/Cellar/python@3.12/3.12.13/bin/python3.12",
         "/opt/homebrew/Cellar/python@3.12/3.12.13_1/bin/python3.12",
         "/opt/homebrew/bin/python3.12",
+        /* Python 3.12 — Intel Homebrew */
+        "/usr/local/opt/python@3.12/bin/python3.12",
         "/usr/local/bin/python3.12",
+        /* Python 3.11 — Apple Silicon Homebrew */
+        "/opt/homebrew/opt/python@3.11/bin/python3.11",
+        "/opt/homebrew/bin/python3.11",
+        /* Python 3.11 — Intel Homebrew */
+        "/usr/local/opt/python@3.11/bin/python3.11",
+        "/usr/local/bin/python3.11",
+        /* Python 3.11 — macOS system / python.org installer */
+        "/usr/bin/python3.11",
+        "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11",
+        /* Fallback python3 systeme */
+        "/usr/bin/python3",
+        "/usr/local/bin/python3",
         NULL
     };
     for (int i = 0; c[i]; i++) {

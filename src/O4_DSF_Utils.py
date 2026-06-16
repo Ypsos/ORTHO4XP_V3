@@ -662,8 +662,22 @@ def build_dsf(tile, download_queue):
             is_overlay = terrain_idx in overlay_terrains
         else:
             needs_new_terrain = False
+            mask_im = None
+            # Vérifier si un patch mer existe pour cette position
+            try:
+                _slat = "+" if tile.lat >= 0 else "-"
+                _slon = "+" if tile.lon >= 0 else "-"
+                _tk = f"{_slat}{abs(int(tile.lat)):02d}{_slon}{abs(int(tile.lon)):03d}"
+                _pn = (f"{int(texture_attributes[1])}_{int(texture_attributes[0])}"
+                       f"_PATCH{int(texture_attributes[2])}.jpg")
+                _pp = os.path.join(FNAMES.Patch_dir, _tk,
+                                   f"PATCH_{int(texture_attributes[2])}", _pn)
+                if os.path.isfile(_pp):
+                    needs_new_terrain = True
+            except Exception:
+                pass
             # if not we need to check with masks values
-            if terrain_attributes not in skipped_terrains_for_masking:
+            if not needs_new_terrain and terrain_attributes not in skipped_terrains_for_masking:
                 mask_im = MASK.needs_mask(tile, *texture_attributes)
                 if mask_im:
                     UI.vprint(2, "      Use of an alpha mask.")
@@ -731,7 +745,7 @@ def build_dsf(tile, download_queue):
                         else:
                             pass  # DXT1 existant, taille correcte
 
-                    if (rebuild or not tile.imprint_masks_to_dds):
+                    if mask_im is not None and (rebuild or not tile.imprint_masks_to_dds):
                         mask_im.save(os.path.join(
                             tile.build_dir,
                             "textures",
