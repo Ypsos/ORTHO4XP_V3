@@ -18,7 +18,6 @@ import O4_Overlay_Utils as OVL
 import O4_Mesh_Utils as MESH
 import O4_Bathymetry as BATHY
 
-
 quad_init_level = 3
 quad_capacity_high = 50000
 quad_capacity_low = 35000
@@ -32,6 +31,8 @@ def float2qquad(x):
         return "111111111111111111111111"
     return numpy.binary_repr(int(16777216 * x)).zfill(24)  # 2**24 == 16777216
 
+
+################################################################################
 
 ################################################################################
 class QuadTree(dict):
@@ -303,19 +304,11 @@ def create_terrain_file(
         f.write("BASE_TEX_NOWRAP ../textures/" + texture_file_name + "\n")
 
         if tri_type in (1, 2) and (not is_overlay):  # XP12 water
+            #pass
             f.write("WATER_COLOR_MASK\n")
-            if tri_type == 1:
-                f.write("BORDER_TEX ../textures/water_transition.png\n")
-                if not os.path.exists(
-                    os.path.join(tile.build_dir, "textures", "water_transition.png")
-                ):
-                    shutil.copy(
-                        os.path.join(FNAMES.Utils_dir, "water_transition.png"),
-                        os.path.join(tile.build_dir, "textures"),
-                    )
         elif (tri_type == 1) or (
             (tri_type == 2) and (is_overlay == "ratio_water")
-        ):  # constant transparency level
+        ):  # constant transparency level (V1.40 : eau intérieure uniquement)
             f.write("BORDER_TEX ../textures/water_transition.png\n")
             if not os.path.exists(
                 os.path.join(tile.build_dir, "textures", "water_transition.png")
@@ -324,10 +317,39 @@ def create_terrain_file(
                     os.path.join(FNAMES.Utils_dir, "water_transition.png"),
                     os.path.join(tile.build_dir, "textures"),
                 )
+        elif (tri_type == 2) and (not tile.imprint_masks_to_dds):
+            # border_tex mask (V1.40 restauré) : la mer overlay utilise le
+            # masque côtier PNG — le dégradé suit la côte, jamais
+            # water_transition.png (bandelette verticale → fondu plein nord
+            # identique sur toutes les tuiles = bug V79 constaté dans XP12).
+            # En V3 les tuiles purement maritimes n'ont pas de masque PNG :
+            # dans ce cas on retombe sur WATER_COLOR_MASK (natif XP12),
+            # sinon XP12 plante sur une ressource introuvable.
+            _mask_name = FNAMES.mask_file(
+                til_x_left, til_y_top, zoomlevel, provider_code
+            )
+            if os.path.exists(
+                os.path.join(tile.build_dir, "textures", _mask_name)
+            ):
+                f.write(
+                    "LOAD_CENTER_BORDER "
+                    + "{:.5f}".format(lat_med)
+                    + " "
+                    + "{:.5f}".format(lon_med)
+                    + " "
+                    + str(texture_approx_size)
+                    + " "
+                    + str(4096 // 2 ** (zoomlevel - tile.mask_zl))
+                    + "\n"
+                )
+                f.write("BORDER_TEX ../textures/" + _mask_name + "\n")
+            else:
+                f.write("WATER_COLOR_MASK\n")
 
-        # DECAL_LIB uniquement sur terrain terre (tri_type==0)
-        # Pas sur eau intérieure (1) ni mer (2) → évite les rectangles overlay
-        if (tri_type == 0) and (tile.use_decal_on_terrain):
+        # Hack/TODO
+        # Should we use decals on ocean floor ? 
+        #if (not tri_type) and (tile.use_decal_on_terrain):
+        if (tri_type not in (1, 2)) and (tile.use_decal_on_terrain):
             f.write("DECAL_LIB lib/g10/decals/maquify_2_green_key.dcl\n")
 
         if tri_type in (1, 2):
@@ -396,8 +418,6 @@ def extract_elevation_and_bathymetry_data(lat, lon):
     # read atoms
     atoms_len = file_len - 12 - 16  # 12 for HDR and 16 for MD5
     atoms_consumed = 0
-    bDEMN = b""   # initialisé par sécurité si atom NFED absent
-    bDEMS = b""   # initialisé par sécurité si atom SMED absent
     while atoms_consumed < atoms_len:
         atom_hdr = f.read(4).decode("ascii")
         atom_len = struct.unpack("<I", f.read(4))[0]
@@ -453,7 +473,7 @@ def extract_elevation_and_bathymetry_data(lat, lon):
 ################################################################################
 def build_dsf(tile, download_queue):
 
-
+    
     dico_customzl = zone_list_to_ortho_dico(tile)
 
     # 1 Read mesh file
@@ -478,9 +498,9 @@ def build_dsf(tile, download_queue):
     UI.vprint(1, "-> Computing bathymetry depth ratio bounds based on distance masks")
     node_bathy = BATHY.compute_depth_ratio_bounds_from_masks(
                             nbr_nodes, node_coords, node_types, tile)
-
+    
     UI.vprint(1, "-> Computing point pools and texture requirements")
-
+    
     # 5 Compute quadtree
     if (tile.use_masks_for_inland):
         quad_capacity = quad_capacity_low
@@ -494,7 +514,7 @@ def build_dsf(tile, download_queue):
                 quad_init_level)
     pool_quadtree.clean()
     pool_quadtree.statistics()
-
+    
     # 6 Compute pool params
     pool_nbr = len(pool_quadtree)
     idx_node_to_idx_pool = {}
@@ -567,7 +587,8 @@ def build_dsf(tile, download_queue):
     )
     node_icoords = array.array("H", node_icoords)
 
-
+    
+    
     ##########################
     dico_terrains = {}
     overlay_terrains = set()
@@ -580,19 +601,19 @@ def build_dsf(tile, download_queue):
     for idx_dsfpool in range(dsf_pool_nbr):
         dsf_pools[idx_dsfpool] = array.array("H")
     dsf_pool_length = numpy.zeros(dsf_pool_nbr, "int")
-    if (tile.water_tech == "XP11 + bathy"):
+     # === WATER TECH DETECTION (version propre) ===
+    # Compat V1.40 : la config peut contenir "XP11 + bathy" (avec espaces)
+    if tile.water_tech.replace(" ", "") == "XP11+bathy":
         # Land with ortho
         dsf_pool_plane = 7 * numpy.ones(dsf_pool_nbr, "int")
-        # Masked ortho (UV1 = ortho, UV2 = border_tex (if aplicable))
+        # Masked ortho (UV1 = ortho, UV2 = border_tex)
         dsf_pool_plane[pool_nbr : 2 * pool_nbr] = 9
         # Regular XP water
         dsf_pool_plane[2 * pool_nbr : 3 * pool_nbr] = 7
-    elif (tile.water_tech == "XP12"):
+    elif tile.water_tech == "XP12":
         # Land with ortho
         dsf_pool_plane = 7 * numpy.ones(dsf_pool_nbr, "int")
-        # Masked ortho : UV1 = fetch/depth UV2 = ortho)
-        #           or : UV1 = ortho, V2 = border_tex
-        #                for inland water with constant alpha
+        # Masked ortho
         dsf_pool_plane[pool_nbr : 2 * pool_nbr] = 9
         # Regular XP water
         dsf_pool_plane[2 * pool_nbr : 3 * pool_nbr] = 7
@@ -607,7 +628,7 @@ def build_dsf(tile, download_queue):
     bOBJT = b""
     bPOLY = b""
     bNETW = b""
-    bDEMN = b""
+    bDEMN = b""   # initialisé par sécurité si atom NFED absent
     bGEOD = b""
     bDEMS = b""
     bCMDS = b""
@@ -621,10 +642,10 @@ def build_dsf(tile, download_queue):
     # as well), point pools, etc.
 
     step = nbr_tris // 100 + 1
-
+    
     # Tri counter for progress_bars
     done = 0
-
+    
 
     # First potentially masked water tris
     for tri in range(nbr_tris):
@@ -654,7 +675,7 @@ def build_dsf(tile, download_queue):
         # The entries for the terrain and texture main dictionnaries
         terrain_attributes = (texture_attributes, tri_type)
         is_overlay = False
-
+        
 
         # Do we need to build new terrain file(s) ?
         if terrain_attributes in dico_terrains:
@@ -662,22 +683,8 @@ def build_dsf(tile, download_queue):
             is_overlay = terrain_idx in overlay_terrains
         else:
             needs_new_terrain = False
-            mask_im = None
-            # Vérifier si un patch mer existe pour cette position
-            try:
-                _slat = "+" if tile.lat >= 0 else "-"
-                _slon = "+" if tile.lon >= 0 else "-"
-                _tk = f"{_slat}{abs(int(tile.lat)):02d}{_slon}{abs(int(tile.lon)):03d}"
-                _pn = (f"{int(texture_attributes[1])}_{int(texture_attributes[0])}"
-                       f"_PATCH{int(texture_attributes[2])}.jpg")
-                _pp = os.path.join(FNAMES.Patch_dir, _tk,
-                                   f"PATCH_{int(texture_attributes[2])}", _pn)
-                if os.path.isfile(_pp):
-                    needs_new_terrain = True
-            except Exception:
-                pass
             # if not we need to check with masks values
-            if not needs_new_terrain and terrain_attributes not in skipped_terrains_for_masking:
+            if terrain_attributes not in skipped_terrains_for_masking:
                 mask_im = MASK.needs_mask(tile, *texture_attributes)
                 if mask_im:
                     UI.vprint(2, "      Use of an alpha mask.")
@@ -701,20 +708,16 @@ def build_dsf(tile, download_queue):
                     lambda: array.array("H")
                 )
                 dico_terrains[terrain_attributes] = terrain_idx
-
+                
                 # Is it an overlay terrain or the new XP 12 phys water type ?
                 # XP11 style => overlay
-                is_overlay = (tile.water_tech == "XP11 + bathy") 
+                is_overlay = (tile.water_tech.replace(" ", "") == "XP11+bathy") 
                 # No alpha channel in DDS => overlay
-                # Pour XP12 : forcer imprint=True si utilisateur a mis False
-                if tile.water_tech == "XP12":
-                    is_overlay = False
-                else:
-                    is_overlay |= not tile.imprint_masks_to_dds
-
+                is_overlay |= not tile.imprint_masks_to_dds
+                
                 if is_overlay:
                     overlay_terrains.add(terrain_idx)
-
+                
                 texture_file_name = FNAMES.dds_file_name_from_attributes(
                     *texture_attributes
                 )
@@ -743,9 +746,9 @@ def build_dsf(tile, download_queue):
                         if (os.path.getsize(target_tex) > 20000000):
                             rebuild = True
                         else:
-                            pass  # DXT1 existant, taille correcte
-
-                    if mask_im is not None and (rebuild or not tile.imprint_masks_to_dds):
+                            print(os.path.getsize(target_tex))
+                    
+                    if (rebuild or not tile.imprint_masks_to_dds):
                         mask_im.save(os.path.join(
                             tile.build_dir,
                             "textures",
@@ -773,7 +776,7 @@ def build_dsf(tile, download_queue):
                 bTERT += bytes("terrain/" + terrain_file_name + "\0", "ascii")
             else:
                 terrain_idx = 0
-
+        
         # We put the tri in the right terrain
         # First the ones associated to the dico_customzl
         if terrain_idx:
@@ -884,7 +887,7 @@ def build_dsf(tile, download_queue):
         if (tri_type == 2):
             continue
         (n1, n2, n3) = tri_idx[3 * tri: 3 * tri + 3]
-
+        
         if done % step == 0:
             UI.progress_bar(1, int(done / step * 0.9))
             if UI.red_flag:
@@ -914,7 +917,9 @@ def build_dsf(tile, download_queue):
             terrain_idx = len(dico_terrains)
             textured_tris[terrain_idx] = defaultdict(lambda: array.array("H"))
             dico_terrains[terrain_attributes] = terrain_idx
-            is_overlay = tri_type == 1
+            is_overlay = (tri_type == 1) or (
+                (tri_type == 2) and (not tile.imprint_masks_to_dds)
+            )
             if is_overlay:
                 overlay_terrains.add(terrain_idx)
             texture_file_name = FNAMES.dds_file_name_from_attributes(
@@ -1010,7 +1015,7 @@ def build_dsf(tile, download_queue):
         else:
             total_cross_pool += 1
             textured_tris[terrain_idx]["cross-pool"].extend(tri_p)
-
+        
         # XP water
         if is_overlay: 
             tri_p = array.array("H")
@@ -1045,7 +1050,7 @@ def build_dsf(tile, download_queue):
             else:
                 total_cross_pool += 1
                 textured_tris[0]["cross-pool"].extend(tri_p)
-
+    
     download_queue.put("quit")
 
     UI.vprint(1, "-> Encoding of the DSF file")
@@ -1059,7 +1064,7 @@ def build_dsf(tile, download_queue):
         "Earth nav data",
         FNAMES.long_latlon(tile.lat, tile.lon) + ".dsf",
     )
-
+    
     if os.path.exists(dsf_file_name):
         os.replace(dsf_file_name, dsf_file_name + ".bak")
 
@@ -1351,9 +1356,9 @@ def build_dsf(tile, download_queue):
     f = open(dsf_file_name + ".tmp", "ab")
     f.write(md5sum)
     f.close()
-
+    
     UI.progress_bar(1, 100)
-
+    
     size_of_dsf = (
         28
         + size_of_head_atom

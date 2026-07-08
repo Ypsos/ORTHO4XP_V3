@@ -6,8 +6,10 @@ import O4_Vector_Utils as VECT
 import O4_File_Names as FNAMES
 import O4_Geo_Utils as GEO
 import O4_UI_Utils as UI
+from O4_Lang import tr
 import O4_Color_Normalize as CNORM
 import O4_Color_Apply as CAPPLY
+import O4_Sea_Texture as _SEA_IMG
 try:
     import O4_Provider_Score as PSCORE
     _pscore_enabled = True
@@ -941,11 +943,12 @@ def initialize_local_combined_providers_dict(tile):
                 "url_template": "",
             }
             _patch_layer = {"layer_code":"PATCH","extent_code":"global",
-                            "color_code":"none","priority":"low"}
+                            "color_code":"none","priority":"low",
+                            "imagery_dir":"patch"}
             for _pc in list(local_combined_providers_dict.keys()):
                 if not any(l["layer_code"]=="PATCH" for l in local_combined_providers_dict[_pc]):
                     local_combined_providers_dict[_pc] = [_patch_layer] + local_combined_providers_dict[_pc]
-            UI.vprint(1, "   [SeaTex] Provider PATCH injecté.")
+            UI.vprint(1, tr("   [SeaTex] Provider PATCH injecté."))
             # ── Injecter PATCH pour les providers simples (non-combined) ────────
             # ESRI, Bing, IGN simple, etc. ne passent pas par combine_textures
             # sans cette injection → PATCH jamais assemblé pour ces providers.
@@ -969,7 +972,7 @@ def initialize_local_combined_providers_dict(tile):
                         local_combined_providers_dict[_pc] = [
                             _patch_layer, _prov_layer
                         ]
-                        UI.vprint(1, f"   [SeaTex] PATCH injecté pour provider simple : {_pc}")
+                        UI.vprint(1, tr("   [SeaTex] PATCH injecté pour provider simple : {pc}").format(pc=_pc))
                     except Exception as _sp:
                         UI.vprint(2, f"   [SeaTex] Injection simple {_pc} : {_sp}")
             # ────────────────────────────────────────────────────────────────────
@@ -2168,7 +2171,7 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
         )
         _true_path1 = os.path.join(true_file_dir, true_file_name)
         if not os.path.isfile(_true_path1):
-            UI.vprint(2, f"   [SeaTex] JPG absent — fond mer utilisé : {true_file_name}")
+            UI.vprint(2, tr("   [SeaTex] JPG absent — fond mer utilisé : {name}").format(name=true_file_name))
             return big_image
         true_im = Image.open(_true_path1)
         UI.vprint(2, "Imprinting for provider", rlayer, til_x_left, til_y_top)
@@ -2203,7 +2206,7 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
             _mask_pil = _mask_pil.filter(ImageFilter.GaussianBlur(32))
             big_image.paste(true_im.convert("RGB"), (0, 0), _mask_pil)
         except Exception as _pe:
-            UI.vprint(2, f"   [SeaTex] paste masqué échoué, paste direct : {_pe}")
+            UI.vprint(2, tr("   [SeaTex] paste masqué échoué, paste direct : {e}").format(e=_pe))
             big_image.paste(true_im.convert("RGB"), (0, 0))
         return big_image
     # ── FONDU : rayon lu UNE FOIS avant la boucle (évite _frad=0 si Color Check ouvert) ──
@@ -2242,17 +2245,25 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
                 )
                 pixx1 = round(pixx0 + 2 ** (12 - zoomlevel + max_zl))
                 pixy1 = round(pixy0 + 2 ** (12 - zoomlevel + max_zl))
-        true_file_name = FNAMES.jpeg_file_name_from_attributes(
-            true_til_x_left, true_til_y_top, true_zl, rlayer["layer_code"]
-        )
-        true_file_dir = FNAMES.jpeg_file_dir_from_attributes(
-            tile.lat, tile.lon, true_zl, providers_dict[rlayer["layer_code"]]
-        )
-        _true_path2 = os.path.join(true_file_dir, true_file_name)
-        if not os.path.isfile(_true_path2):
-            UI.vprint(2, f"   [SeaTex] JPG absent — fond mer utilisé : {true_file_name}")
-            continue
-        true_im = Image.open(_true_path2)
+        if rlayer.get("imagery_dir") == "patch":
+            true_im = _SEA_IMG._get_sea_tile_for_tile(tile, til_x_left, til_y_top, zoomlevel)
+            if true_im is None:
+                UI.vprint(2, tr("   [SeaTex] PATCH absent pour cette position — ignoré"))
+                continue
+            true_file_name = ""
+            true_file_dir  = ""
+        else:
+            true_file_name = FNAMES.jpeg_file_name_from_attributes(
+                true_til_x_left, true_til_y_top, true_zl, rlayer["layer_code"]
+            )
+            true_file_dir = FNAMES.jpeg_file_dir_from_attributes(
+                tile.lat, tile.lon, true_zl, providers_dict[rlayer["layer_code"]]
+            )
+            _true_path2 = os.path.join(true_file_dir, true_file_name)
+            if not os.path.isfile(_true_path2):
+                UI.vprint(2, tr("   [SeaTex] JPG absent — fond mer utilisé : {name}").format(name=true_file_name))
+                continue
+            true_im = Image.open(_true_path2)
         UI.vprint(2, "Imprinting for provider", rlayer, til_x_left, til_y_top)
         # ─────────────────────────────────────────────────────────────
         true_im = color_transform(true_im, rlayer["color_code"])
@@ -2294,16 +2305,16 @@ def combine_textures(tile, til_x_left, til_y_top, zoomlevel, provider_code):
                 _big_empty = (_big_arr.sum(axis=2) == 0).all()
                 if _big_empty:
                     big_image = Image.fromarray(_patch_arr)
-                    UI.vprint(2, "   [SeaTex] PATCH appliqué comme fond (aucun JPG provider)")
+                    UI.vprint(2, tr("   [SeaTex] PATCH appliqué comme fond (aucun JPG provider)"))
                 else:
                     # Cas B : nodata blanc dans le JPG provider → patch comble
                     _nodata = (_big_arr[:,:,0] > 240) &                               (_big_arr[:,:,1] > 240) &                               (_big_arr[:,:,2] > 240)
                     if _nodata.any():
                         _big_arr[_nodata] = _patch_arr[_nodata]
                         big_image = Image.fromarray(_big_arr)
-                        UI.vprint(2, f"   [SeaTex] PATCH appliqué : {_nodata.sum()} px nodata comblés")
+                        UI.vprint(2, tr("   [SeaTex] PATCH appliqué : {n} px nodata comblés").format(n=_nodata.sum()))
                     else:
-                        UI.vprint(2, "   [SeaTex] PATCH : aucun nodata blanc détecté — ignoré")
+                        UI.vprint(2, tr("   [SeaTex] PATCH : aucun nodata blanc détecté — ignoré"))
             except Exception as _pe:
                 UI.vprint(2, f"   [SeaTex] PATCH composite erreur : {_pe}")
             continue  # ne pas passer par la mécanique priority
@@ -2588,8 +2599,15 @@ def convert_texture(
         file_dir = FNAMES.jpeg_file_dir_from_attributes(
             tile.lat, tile.lon, zoomlevel, providers_dict[provider_code]
         )
+    # Patch sur disque — cherche par ty_tx sans nom codé en dur
+    try:
+        _patch_on_disk = (_SEA_IMG._get_sea_tile_for_tile(
+            tile, til_x_left, til_y_top, zoomlevel) is not None)
+    except Exception:
+        _patch_on_disk = False
     if (provider_code in local_combined_providers_dict) and (
-        (provider_code not in providers_dict)
+        _patch_on_disk
+        or (provider_code not in providers_dict)
         or not os.path.exists(os.path.join(file_dir, jpeg_file_name))
     ):
         big_image = combine_textures(

@@ -385,4 +385,69 @@ T = {
     "⚠ too low"                         : "⚠ too low",
     "⚠ detail risk"                     : "⚠ detail risk",
 
+
+    # ── LOGS CONSOLE — O4_Sea_Texture.py ──────────────────────────
+    "   [SeaTex] JPG-Patch généré : {jpg_name}"
+                                        : "   [SeaTex] JPG-Patch generated: {jpg_name}",
+    "   [SeaTex] Construction arêtes mesh..."
+                                        : "   [SeaTex] Building mesh edges...",
+    "   [SeaTex] {n} triangle(s) mer côtier(s) détecté(s)."
+                                        : "   [SeaTex] {n} coastal sea triangle(s) detected.",
+
+    # ── LOGS CONSOLE — O4_Coastal_Manager.py ──────────────────────
+    "   [Coastal] Transition côtière adoucie : {name}"
+                                        : "   [Coastal] Coastal transition softened: {name}",
+    "   [Coastal] post_process ignoré ({name}): {e}"
+                                        : "   [Coastal] post_process skipped ({name}): {e}",
+    "   [Coastal] Masque auto généré depuis mesh : {name}"
+                                        : "   [Coastal] Auto mask generated from mesh: {name}",
+
+    # ── LOGS CONSOLE — O4_Imagery_Utils.py ───────────────────────
+    "   [SeaTex] Provider PATCH injecté."
+                                        : "   [SeaTex] PATCH provider injected.",
+    "   [SeaTex] PATCH injecté pour provider simple : {pc}"
+                                        : "   [SeaTex] PATCH injected for simple provider: {pc}",
+    "   [SeaTex] JPG absent — fond mer utilisé : {name}"
+                                        : "   [SeaTex] JPG missing — sea background used: {name}",
+    "   [SeaTex] paste masqué échoué, paste direct : {e}"
+                                        : "   [SeaTex] masked paste failed, direct paste: {e}",
+    "   [SeaTex] PATCH absent pour cette position — ignoré"
+                                        : "   [SeaTex] PATCH missing for this position — skipped",
+    "   [SeaTex] PATCH appliqué comme fond (aucun JPG provider)"
+                                        : "   [SeaTex] PATCH applied as background (no provider JPG)",
+    "   [SeaTex] PATCH appliqué : {n} px nodata comblés"
+                                        : "   [SeaTex] PATCH applied: {n} nodata px filled",
+    "   [SeaTex] PATCH : aucun nodata blanc détecté — ignoré"
+                                        : "   [SeaTex] PATCH: no white nodata detected — skipped",
+
+    # ── LOGS CONSOLE — O4_Tile_Utils.py ──────────────────────────
+    "   [SeaTex] ERREUR : initialisation providers échouée."
+                                        : "   [SeaTex] ERROR: provider initialisation failed.",
+    "   [SeaTex] Aucune tuile mer côtière détectée — rien à générer."
+                                        : "   [SeaTex] No coastal sea tile detected — nothing to generate.",
+    "   [SeaTex] Cas 1 terminé — {n} patch(es) nodata corrigés."
+                                        : "   [SeaTex] Case 1 done — {n} nodata patch(es) corrected.",
+    "   [SeaTex] Cas 2 : aucun JPG côtier source — ignoré."
+                                        : "   [SeaTex] Case 2: no coastal source JPG — skipped.",
+    "   [SeaTex] Cas 2 terminé — {n} patch(es) pleine mer générés."
+                                        : "   [SeaTex] Case 2 done — {n} open-sea patch(es) generated.",
+    "   [SeaTex] Step 2.1 terminé."     : "   [SeaTex] Step 2.1 done.",
+    "   [SeaTex] Passage 2 terminé — {n} DDS générés."
+                                        : "   [SeaTex] Pass 2 done — {n} DDS generated.",
+    "   [Batch] DSF .tmp corrompu supprimé : {name}"
+                                        : "   [Batch] Corrupted DSF .tmp deleted: {name}",
+    "   [Batch] Tuile {tile} ignorée (erreur OSM) — batch continue."
+                                        : "   [Batch] Tile {tile} skipped (OSM error) — batch continues.",
+    "   [Batch] Tuile {tile} ignorée (erreur mesh) — batch continue."
+                                        : "   [Batch] Tile {tile} skipped (mesh error) — batch continues.",
+    "   [Batch] Tuile {tile} ignorée (erreur masque) — batch continue."
+                                        : "   [Batch] Tile {tile} skipped (mask error) — batch continues.",
+    "   [Batch] Tuile {tile} ignorée (erreur DSF/imagery) — batch continue."
+                                        : "   [Batch] Tile {tile} skipped (DSF/imagery error) — batch continues.",
+    "   [Batch] Tuile {tile} ignorée (erreur overlay) — batch continue."
+                                        : "   [Batch] Tile {tile} skipped (overlay error) — batch continues.",
+    "Batch terminé avec {n} tuile(s) ignorée(s) :"
+                                        : "Batch done — {n} tile(s) skipped:",
+
+
 }

@@ -381,7 +381,12 @@ class Ortho4XP_GUI(tk.Tk):
             bg=_BG, fg=_FG2, font=("TkFixedFont", fs(10))).grid(
             row=1, column=5, padx=10, sticky=W+E)
 
-        # ── LIGNE 3 :  Color Check + Timeline + RAM ────────────────────
+        # ── LIGNE 3 :  Correction Patches + Color Check + Timeline + RAM
+        ttk.Button(self.frame_cnorm,
+            text=tr("🖊 Correction Patches"),
+            command=self.open_patch_correction,
+            width=22).grid(row=2, column=2, padx=5, pady=(8,4), sticky=E)
+
         ttk.Button(self.frame_cnorm,
             text=tr("RGB adjustments, sharpness, saturation"),
             command=self.open_color_check,
@@ -553,6 +558,59 @@ class Ortho4XP_GUI(tk.Tk):
         custom = self.custom_build_dir.get() or ""
         build_dir = FNAMES.build_dir(lat, lon, custom)
         CC.open_color_check(self, os.path.join(build_dir, "textures"), {"lat": lat, "lon": lon})
+
+    def open_patch_correction(self):
+        """Ouvre directement la fenêtre Correction patches sans lancer de build."""
+        try:
+            lat = int(self.lat.get() or 0)
+            lon = int(self.lon.get() or 0)
+            # Construire tile_key au format +46-003
+            sign_lat = "+" if lat >= 0 else "-"
+            sign_lon = "+" if lon >= 0 else "-"
+            tile_key = f"{sign_lat}{abs(lat):02d}{sign_lon}{abs(lon):03d}"
+            # Trouver le ZL depuis l'interface
+            try:
+                zl = int(self.default_zl.get())
+            except Exception:
+                zl = 17
+            patch_dir = os.path.join(FNAMES.Patch_dir, tile_key, f"PATCH_{zl}")
+            if not os.path.isdir(patch_dir):
+                from tkinter import messagebox
+                messagebox.showinfo(
+                    tr("Correction Patches"),
+                    tr("Aucun dossier PATCH trouvé pour cette tuile.\n"
+                       "Lancer d'abord le Step 2.1 — Sea Patches."))
+                return
+            existing = sorted(f for f in os.listdir(patch_dir) if f.endswith(".jpg"))
+            if not existing:
+                from tkinter import messagebox
+                messagebox.showinfo(
+                    tr("Correction Patches"),
+                    tr("Aucun patch JPG trouvé dans :\n") + patch_dir)
+                return
+            # Couleurs thème
+            try:
+                import O4_Theme_Manager as _TM
+                _t = _TM.get_theme()
+                BG      = _t.get("patch_bg",      _t.get("bg",          "#0a1a0a"))
+                FG      = _t.get("patch_fg",      _t.get("fg",          "#00cc44"))
+                FG2     = _t.get("patch_fg2",     _t.get("fg_secondary","#88ffaa"))
+                PREV_BG = _t.get("patch_prev_bg", _t.get("canvas_bg",   "#050f05"))
+            except Exception:
+                BG, FG, FG2, PREV_BG = "#0a1a0a", "#00cc44", "#88ffaa", "#050f05"
+            FONT   = ("TkFixedFont", 11)
+            FONT_T = ("TkFixedFont", 13)
+            try:
+                from O4_Lang import tr as _tr
+            except Exception:
+                def _tr(k): return k
+            import O4_Tile_Utils as _TILE
+            _TILE._open_correction_window(
+                self, patch_dir, existing,
+                BG, FG, FG2, PREV_BG, FONT, FONT_T, _tr)
+        except Exception as _e:
+            from tkinter import messagebox
+            messagebox.showerror(tr("Correction Patches"), str(_e))
 
     # ── Icônes & navigation ────────────────────────────────────────────
     def choose_custom_build_dir(self):
@@ -2965,7 +3023,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ("water_tech",     "water_tech",     0, 0,    1,    str,
              "water_tech : XP12 = eau dynamique (vagues, reflets, bathymétrie). "
              "⚠ XP11+bathy = ancien mode, incompatible avec imprint_masks_to_dds=True.",
-             ["XP12"]),
+             ["XP12", "XP11+bathy"]),
             ("overlay_lod",    "overlay_lod (m)",5000,50000,1000,float,
              "overlay_lod : distance en mètres jusqu'où XPlane affiche l'imagerie sur la mer. "
              "30000 = recommandé.", None),

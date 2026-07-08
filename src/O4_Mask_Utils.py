@@ -59,7 +59,7 @@ def needs_mask(tile, til_x_left, til_y_top, zl, *args):
     y0 = int(ry * 4096 / factor)
     small_img = big_img.crop((x0, y0, x0 + 4096 // factor, y0 + 4096 // factor))
     small_array = numpy.array(small_img, dtype=numpy.uint8)
-    if small_array.max() == 0:
+    if small_array.max() <= 30:
         return False
     else:
         return small_img
@@ -179,7 +179,7 @@ def build_masks(tile, for_imagery=False):
         if tile.masks_custom_extent:
             blured_mask = numpy.maximum(blured_mask, custom_mask)
 
-        if not (blured_mask.max() == 0 or blured_mask.min() >= 250):
+        if not (blured_mask.max() == 0 or blured_mask.min() == 255):
             mask_im = Image.fromarray(blured_mask)
             _mask_png_path = os.path.join(dest_dir, FNAMES.legacy_mask(til_x, til_y))
             mask_im.save(_mask_png_path)
@@ -764,7 +764,7 @@ def blur_mask(img_array, tile, sea_level):
             numpy.array(
                 Image.fromarray(img_array)
                 .convert("L")
-                .filter(ImageFilter.GaussianBlur(blur_width / 3)),
+                .filter(ImageFilter.GaussianBlur(blur_width / 1.7)),
                 dtype=numpy.uint8,
             )
             > 0
@@ -787,7 +787,7 @@ def blur_mask(img_array, tile, sea_level):
         b_img_array = numpy.array(
             Image.fromarray(b_img_array)
             .convert("L")
-            .filter(ImageFilter.GaussianBlur(blur_width / 3)),
+            .filter(ImageFilter.GaussianBlur(blur_width / 1.7)),
             dtype=numpy.uint8,
         )
     # 3steps mode

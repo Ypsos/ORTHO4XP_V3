@@ -219,7 +219,7 @@ def post_process_coastal_mask(mask_path, tile=None):
 
         try:
             import O4_UI_Utils as UI
-            UI.vprint(1, f"   [Coastal] Transition côtière adoucie : {os.path.basename(mask_path)}")
+            UI.vprint(1, tr("   [Coastal] Transition côtière adoucie : {name}").format(name=os.path.basename(mask_path)))
         except Exception:
             pass
         return True
@@ -227,7 +227,7 @@ def post_process_coastal_mask(mask_path, tile=None):
     except Exception as e:
         try:
             import O4_UI_Utils as UI
-            UI.vprint(2, f"   [Coastal] post_process ignoré ({os.path.basename(mask_path)}): {e}")
+            UI.vprint(2, tr("   [Coastal] post_process ignoré ({name}): {e}").format(name=os.path.basename(mask_path), e=e))
         except Exception:
             pass
         return False
@@ -385,7 +385,7 @@ def generate_coastal_mask_from_mesh(tile, til_x, til_y, zoomlevel, dico_sea):
 
         try:
             import O4_UI_Utils as UI
-            UI.vprint(1, f"   [Coastal] Masque auto généré depuis mesh : {os.path.basename(mask_path)}")
+            UI.vprint(1, tr("   [Coastal] Masque auto généré depuis mesh : {name}").format(name=os.path.basename(mask_path)))
         except Exception:
             pass
 

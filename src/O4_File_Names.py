@@ -335,10 +335,10 @@ def SRTM_1sec(lat, lon):
 
 ##############################################################################
 def legacy_mask(m_til_x_left, m_til_y_top):
-    return str(m_til_x_left) + "_" + str(m_til_y_top) + ".png"
+    return str(m_til_y_top) + "_" + str(m_til_x_left) + ".png"
 
 def distance_mask(m_til_x_left, m_til_y_top):
-    return str(m_til_x_left) + "_" + str(m_til_y_top) + "_dist.png"
+    return str(m_til_y_top) + "_" + str(m_til_x_left) + "_dist.png"
 
 
 def mask_file(til_x_left, til_y_top, zoomlevel, provider_code):

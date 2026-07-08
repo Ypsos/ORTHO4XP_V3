@@ -295,8 +295,8 @@ too low to grab these details.",
     "water_tech": {
             "type": str,
             "default": "XP12",
-            "values" : ("XP12",),
-            "hint" : "Water tech type. XP12 uses native X-Plane 12 water rendering (WATER_COLOR_MASK). XP11 + bathy is no longer supported in V2."
+            "values" : ("XP12", "XP11+bathy"),
+            "hint" : "Water tech type. XP12 uses native X-Plane 12 water rendering (WATER_COLOR_MASK). XP11+bathy = legacy mode."
     },
     #"add_low_res_sea_ovl": {
     #    "type": bool,
