@@ -1,0 +1,9 @@
+request_type=wms
+epsg_code=3857
+wms_size=512
+wms_version=1.3.0
+layers=ortho_2019
+url_prefix=http://tiles.craig.fr/ortho/ows?
+image_type=png
+imagery_dir=code
+in_GUI=True

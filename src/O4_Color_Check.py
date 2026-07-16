@@ -950,13 +950,6 @@ class ColorCheckWindow(tk.Toplevel):
         ttk.Button(cb, text=tr("↺ Reset curseurs"),    command=self._reset_sliders).pack(side=LEFT, padx=4)
         ttk.Button(cb, text=tr("🔬 Auto depuis Cible"), command=self._auto_from_target).pack(side=LEFT, padx=4)
 
-        # ── Panneau Côtes & Îles (O4_Coastal_Manager) ─────────────────────
-        try:
-            import O4_Coastal_Manager as COAST
-            COAST.build_coastal_info_panel(self)
-        except ImportError:
-            pass
-        # ──────────────────────────────────────────────────────────────────
 
         self.status = tk.Label(self, text=tr("En attente…"),
                                bg="black", fg="light green",

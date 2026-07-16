@@ -11,11 +11,16 @@ import O4_File_Names as FNAMES
 
 overpass_servers = {
     "DE": "http://overpass-api.de/api/interpreter",
-    "FR": "http://api.openstreetmap.fr/oapi/interpreter",
     "KU": "https://overpass.kumi.systems/api/interpreter",
-    "RU": "http://overpass.osm.rambler.ru/cgi/interpreter",
+    "RU": "https://maps.mail.ru/osm/tools/overpass/api/interpreter",  # Correctif shred86 : rambler.ru mort
 }
 overpass_server_choice = "KU"  # V3.2 — KU (Kumi Systems) plus fiable que DE en 2026
+# Amélioration V3.2 : mémoire des serveurs en panne partagée entre toutes les
+# requêtes de la session — un serveur qui vient d'échouer est évité pendant
+# _SERVER_COOLDOWN secondes au lieu de faire perdre une tentative + délai à
+# chacune des requêtes suivantes (aéroports, routes, coastline, eau...).
+_server_cooldown = {}   # {code: timestamp du dernier échec}
+_SERVER_COOLDOWN = 300  # secondes
 max_osm_tentatives = 8
 
 ################################################################################
@@ -521,14 +526,31 @@ def get_overpass_data(query, bbox, server_code=None):
             "contact: ortho4xp@github.com)"
         )
     })
+    # Correctif shred86 1.40.13 : rotation de serveur — après un échec, la
+    # tentative suivante utilise un serveur différent plutôt que de retenter
+    # indéfiniment le même.
+    _failed_codes = set()
     while True:
         true_server_code = server_code
         if not server_code:
-            true_server_code = (
-                random.choice(list(overpass_servers.keys()))
-                if overpass_server_choice == "random"
-                else overpass_server_choice
-            )
+            _now = time.time()
+            _cooled = {k for k, t in _server_cooldown.items()
+                       if _now - t < _SERVER_COOLDOWN}
+            _avoid = _failed_codes | _cooled
+            if overpass_server_choice == "random" or _avoid:
+                _pool = [k for k in overpass_servers
+                         if k not in _avoid] or \
+                        [k for k in overpass_servers
+                         if k not in _failed_codes] or \
+                        list(overpass_servers)
+                true_server_code = (
+                    overpass_server_choice
+                    if overpass_server_choice in _pool
+                    and overpass_server_choice != "random"
+                    else random.choice(_pool)
+                )
+            else:
+                true_server_code = overpass_server_choice
         base_url = overpass_servers[true_server_code]
         if isinstance(query, str):
             overpass_query = query + str(bbox) + ";"
@@ -587,6 +609,8 @@ def get_overpass_data(query, bbox, server_code=None):
             return 0
         if UI.red_flag:
             return 0
+        _failed_codes.add(true_server_code)  # rotation : éviter ce serveur au prochain tour
+        _server_cooldown[true_server_code] = time.time()  # mémoire session (cooldown)
         time.sleep(min(2 ** tentative, 30) + random.uniform(0, 2))  # V3.2 — jitter anti-thundering-herd
         tentative += 1
     return r.content

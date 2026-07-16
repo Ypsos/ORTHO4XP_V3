@@ -51,6 +51,16 @@ import random
 from math import ceil, log, tan, pi
 import numpy
 from PIL import Image, ImageFilter, ImageEnhance, ImageOps
+
+# Compatibilité Pillow ≥ 10 (correctif shred86 "deprecated BICUBIC") :
+# les constantes Image.BICUBIC / Image.MESH sont des alias dépréciés,
+# supprimés dans les Pillow récents. Si absents, on les rétablit depuis
+# leurs enums officiels — aucun changement de comportement sur les
+# versions de Pillow où les alias existent encore.
+if not hasattr(Image, "BICUBIC"):
+    Image.BICUBIC = Image.Resampling.BICUBIC
+if not hasattr(Image, "MESH"):
+    Image.MESH = Image.Transform.MESH
 try:
     from scipy import ndimage as _ndi
     _scipy_enabled = True
@@ -58,25 +68,6 @@ except Exception:
     _scipy_enabled = False
 
 Image.MAX_IMAGE_PIXELS = 1000000000  # Not a decompression bomb attack!
-
-# Cache global dico_sea — lu une seule fois par tile, réutilisé pour chaque DDS
-_dico_sea_cache = {}
-_dico_sea_tile  = None
-
-def _get_dico_sea(tile):
-    """Retourne dico_sea depuis cache ou relit le mesh une seule fois par tile."""
-    global _dico_sea_cache, _dico_sea_tile
-    key = (tile.lat, tile.lon)
-    if _dico_sea_tile == key and _dico_sea_cache:
-        return _dico_sea_cache
-    try:
-        import O4_Mask_Utils as _MASK
-        (dico_sea, _) = _MASK.record_water_tris(tile)
-        _dico_sea_cache = dico_sea
-        _dico_sea_tile  = key
-        return _dico_sea_cache
-    except Exception:
-        return {}
 
 
 def _find_sea_mask(tile, til_x_left, til_y_top, zoomlevel, provider_code):
@@ -96,7 +87,6 @@ def _find_sea_mask(tile, til_x_left, til_y_top, zoomlevel, provider_code):
          AVANT Masks/ (les PNG de build_masks sont court-circuités).
       1. Chercher dans textures/ (masques manuels ZL direct)
       2. Chercher dans Masks/ avec conversion ZL→mask_zl
-      3. Coastal Manager auto
     """
     textures_dir = os.path.join(tile.build_dir, "textures")
     mask_zl = int(getattr(tile, "mask_zl", 15))
@@ -153,35 +143,11 @@ def _find_sea_mask(tile, til_x_left, til_y_top, zoomlevel, provider_code):
             sz = 4096 // factor
             return mask_path, (x0, y0, x0 + sz, y0 + sz)
 
-    # 3. Aucun masque manuel → Coastal Manager auto
-    try:
-        import O4_Coastal_Manager as _COAST
-        dico_sea = _get_dico_sea(tile)
-        if dico_sea:
-            if int(zoomlevel) == mask_zl:
-                key = (til_x_left, til_y_top)
-            else:
-                factor = 2 ** (int(zoomlevel) - mask_zl)
-                key = ((int(til_x_left/factor)//16)*16,
-                       (int(til_y_top /factor)//16)*16)
-            generated = _COAST.generate_coastal_mask_from_mesh(
-                tile, key[0], key[1], mask_zl, dico_sea)
-            if generated and os.path.isfile(generated):
-                if int(zoomlevel) == mask_zl:
-                    return generated, None
-                else:
-                    rx = int((til_x_left - factor*key[0]) / 16)
-                    ry = int((til_y_top  - factor*key[1]) / 16)
-                    x0 = int(rx * 4096 / factor)
-                    y0 = int(ry * 4096 / factor)
-                    sz = 4096 // factor
-                    return generated, (x0, y0, x0+sz, y0+sz)
-    except Exception:
-        pass
+    # Aucune generation de mask auto : seuls les masks Masks/ (V1.40) sont utilises.
     return None, None
 
 
-def _load_coastal_alpha(mask_path, crop_box=None, size=(4096, 4096)):
+def _load_sea_alpha(mask_path, crop_box=None, size=(4096, 4096)):
     """
     Charge le masque PNG côtier comme canal alpha pour XP12.
     Si crop_box fourni : crop + resize (masque ZL masque → ZL texture).
@@ -1614,23 +1580,39 @@ def download_jpeg_ortho(
         if zoomlevel > max_zl:
             super_resol_factor = 2 ** (max_zl - zoomlevel)
     width = height = int(4096 * super_resol_factor)
-    if "grid_type" in provider and provider["grid_type"] == "webmercator":
-        tilbox = [til_x_left, til_y_top, til_x_left + 16, til_y_top + 16]
-        tilbox_mod = [int(round(p * super_resol_factor)) for p in tilbox]
-        zoom_shift = round(log(super_resol_factor) / log(2))
-        (success, big_image) = build_texture_from_tilbox(
-            tilbox_mod, zoomlevel + zoom_shift, provider
+    # Correctif shred86 1.40.08 : si une partie de l'image n'a pas pu être
+    # téléchargée (remplie en blanc), retenter UNE SEULE fois le
+    # téléchargement complet avant d'accepter les carrés blancs.
+    _attempt = 0
+    while True:
+        if "grid_type" in provider and provider["grid_type"] == "webmercator":
+            tilbox = [til_x_left, til_y_top, til_x_left + 16, til_y_top + 16]
+            tilbox_mod = [int(round(p * super_resol_factor)) for p in tilbox]
+            zoom_shift = round(log(super_resol_factor) / log(2))
+            (success, big_image) = build_texture_from_tilbox(
+                tilbox_mod, zoomlevel + zoom_shift, provider
+            )
+        else:
+            [latmax, lonmin] = GEO.gtile_to_wgs84(til_x_left, til_y_top, zoomlevel)
+            [latmin, lonmax] = GEO.gtile_to_wgs84(
+                til_x_left + 16, til_y_top + 16, zoomlevel
+            )
+            [xmin, ymax] = GEO.geo_to_webm(lonmin, latmax)
+            [xmax, ymin] = GEO.geo_to_webm(lonmax, latmin)
+            (success, big_image) = build_texture_from_bbox_and_size(
+                [xmin, ymax, xmax, ymin], "3857", (width, height), provider
+            )
+        _attempt += 1
+        if success or _attempt >= 2 or UI.red_flag:
+            break
+        UI.vprint(
+            1, "   White squares detected in", file_name,
+            "- attempting one redownload in 5 sec.",
         )
-    else:
-        [latmax, lonmin] = GEO.gtile_to_wgs84(til_x_left, til_y_top, zoomlevel)
-        [latmin, lonmax] = GEO.gtile_to_wgs84(
-            til_x_left + 16, til_y_top + 16, zoomlevel
-        )
-        [xmin, ymax] = GEO.geo_to_webm(lonmin, latmax)
-        [xmax, ymin] = GEO.geo_to_webm(lonmax, latmin)
-        (success, big_image) = build_texture_from_bbox_and_size(
-            [xmin, ymax, xmax, ymin], "3857", (width, height), provider
-        )
+        # Amélioration V3.2 : pause avant le retry — un carré blanc vient
+        # presque toujours d'un incident réseau transitoire ; retenter
+        # immédiatement re-échoue souvent, quelques secondes suffisent.
+        time.sleep(5)
     if UI.red_flag:
         return 0
     if not success:
@@ -1638,6 +1620,32 @@ def download_jpeg_ortho(
             1, "Part of image", file_name, "could not be obtained ",
             "(even at lower ZL), it was filled with white there.",
         )
+    else:
+        # Amélioration V3.2 (signalement uniquement — ne bloque JAMAIS la
+        # tuile) : certains serveurs renvoient un 200 OK avec des dalles
+        # blanches → aucun échec signalé, aucun retry possible. On détecte
+        # ici les blocs 256×256 blanc pur et on prévient l'utilisateur,
+        # mais l'image est sauvegardée quand même (faux positifs possibles :
+        # neige, marais salants — d'où signalement sans action).
+        try:
+            _arr_ws = numpy.asarray(big_image.convert("L"))
+            _h_ws, _w_ws = _arr_ws.shape
+            _b_ws = 256
+            _n_white = 0
+            for _y_ws in range(0, _h_ws - _b_ws + 1, _b_ws):
+                for _x_ws in range(0, _w_ws - _b_ws + 1, _b_ws):
+                    if _arr_ws[_y_ws:_y_ws + _b_ws,
+                               _x_ws:_x_ws + _b_ws].min() == 255:
+                        _n_white += 1
+            if _n_white:
+                UI.lvprint(
+                    1, "WARNING:", file_name, "contains", _n_white,
+                    "pure white block(s) despite a successful download",
+                    "(server-side white tiles or snow/salt flats).",
+                    "Image kept — check it visually if unexpected.",
+                )
+        except Exception:
+            pass
     if not os.path.exists(file_dir):
         os.makedirs(file_dir)
     try:
@@ -2768,8 +2776,11 @@ def convert_texture(
         except:
             pass
     if erase_tmp_tif:
+        # Correctif shred86 : c'est le TIF temporaire qu'il faut supprimer
+        # ici (l'ancien code retentait de supprimer le PNG, déjà traité
+        # ci-dessus, et le tmp .tif restait sur disque).
         try:
-            os.remove(os.path.join(UI.Ortho4XP_dir, "tmp", png_file_name))
+            os.remove(tmp_tif_file_name)
         except:
             pass
     return

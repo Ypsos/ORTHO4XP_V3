@@ -3,11 +3,7 @@
 """
 O4_Color_Normalize.py - Color normalization module for Ortho4XP V2.0
 =====================================================================
-v2.5 — Appel Coastal Manager (Roland/Ypsos, Avril 2026) :
-  • coastal_post_normalize() appelé dans normalize_if_enabled() après correction
-    → protection automatique des zones côtières / eau après normalisation couleur
-    → appel try/except : transparent si O4_Coastal_Manager absent
-    → conforme à la documentation O4_Coastal_Manager.py lignes 34-38
+v2.5 — (module de cotes retire du projet)
 v2.4 — Corrections diagnostiquées (Roland/Ypsos, Avril 2026) :
   • Bug typo corrigé : eathering_mask_radius → feathering_mask_radius (ligne 334)
     → get_effective_feather_radius() ne crashait plus silencieusement
@@ -995,12 +991,5 @@ def normalize_if_enabled(img, dds_name="", textures_dir="", zl=None, provider_co
         # ── ZonePhoto : restauration zones masquées par filtre ─────
         result = _apply_zonephoto_filter_mask(result, img)
 
-        # ── Coastal Manager : protection zones côtières après correction ─
-        try:
-            import O4_Coastal_Manager as COAST
-            result = COAST.coastal_post_normalize(result, img, sea_mask_path, zl)
-        except ImportError:
-            pass
-        # ──────────────────────────────────────────────────────────────────
 
     return result

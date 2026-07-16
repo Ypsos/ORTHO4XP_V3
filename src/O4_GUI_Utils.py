@@ -413,8 +413,17 @@ class Ortho4XP_GUI(tk.Tk):
         self.frame_console.columnconfigure(0, weight=1)
         self.console = tk.Text(self.frame_console, bd=0, font=("Courier", fs(13)))
         self.console.grid(row=0, column=0, sticky=N+S+E+W)
+        # ── Barre de défilement verticale (droite) ─────────────────────
+        self.console_scrollbar = tk.Scrollbar(self.frame_console, orient="vertical",
+                                              command=self.console.yview)
+        self.console_scrollbar.grid(row=0, column=1, sticky=N+S)
+        self.console.config(yscrollcommand=self.console_scrollbar.set)
         # Lecture seule multi-OS : bloque saisie/suppression, autorise sélection et copie
         def _console_key(e):
+            # Touches de navigation autorisées (déplacement/défilement seul, aucune édition)
+            if e.keysym in ("Up", "Down", "Left", "Right",
+                            "Prior", "Next", "Home", "End"):
+                return None   # Flèches haut/bas, Page préc./suiv., Début/Fin
             # Ctrl (Win/Linux) = state & 0x4 / Cmd (Mac) = state & 0x8
             mod = e.state & 0x4 or e.state & 0x8
             if mod and e.keysym.lower() in ("c", "a"):

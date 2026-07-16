@@ -176,25 +176,65 @@ def _ask_patch_management(patch_dir, existing_files):
         canvas_list.create_window((0, 0), window=inner, anchor="nw")
 
         sorted_files = sorted(existing_files)
-        for fname in sorted_files:
+
+        # ── Rubriques dédiées (validé 14/07/2026) ────────────────────────────
+        # « Patchs à fabriquer » = marqueur .afabriquer présent (orange),
+        # « JPG à corriger » = les autres, rubrique toujours affichée.
+        def _est_a_fabriquer(fname):
+            return os.path.isfile(os.path.join(patch_dir, fname + ".afabriquer"))
+
+        _afab = [f for f in sorted_files if _est_a_fabriquer(f)]
+        _norm = [f for f in sorted_files if f not in _afab]
+        _nav_ordre = []
+        _nav_courant = [None]
+        _lignes = {}   # fname -> (row, cb, lbl) pour le surlignage
+        SURL = "#1a4a1a"  # couleur de surlignage de la ligne sélectionnée
+
+        def _surligne(fname):
+            # Retirer le surlignage précédent, poser le nouveau
+            _prec = _nav_courant[0]
+            if _prec in _lignes:
+                for w in _lignes[_prec]:
+                    try:
+                        w.config(bg=BG)
+                    except Exception:
+                        pass
+            if fname in _lignes:
+                for w in _lignes[fname]:
+                    try:
+                        w.config(bg=SURL)
+                    except Exception:
+                        pass
+
+        def _ajout_titre_sel(texte):
+            tk.Label(inner, text=texte, font=("TkFixedFont", 10, "bold"),
+                     bg=BG, fg=FG, anchor="w").pack(fill=tk.X, pady=(6, 2))
+
+        def _ajout_ligne_sel(fname, couleur):
             var = tk.BooleanVar(value=False)
             check_vars[fname] = var
             row = tk.Frame(inner, bg=BG, cursor="hand2")
             row.pack(fill=tk.X, pady=1)
             cb = tk.Checkbutton(row, variable=var, bg=BG,
                                 fg=FG, selectcolor="#1a4a1a",
-                                activebackground=BG, activeforeground=FG)
+                                activebackground=BG, activeforeground=FG,
+                                takefocus=0)
             cb.pack(side=tk.LEFT)
             lbl = tk.Label(row, text=fname, font=("TkFixedFont", 10),
-                           bg=BG, fg=FG2, anchor="w", cursor="hand2")
+                           bg=BG, fg=couleur, anchor="w", cursor="hand2")
             lbl.pack(side=tk.LEFT, fill=tk.X)
-
-            # Clic sur le label → sélectionner + afficher aperçu
-            def _on_click(f=fname, v=var, r=row):
-                v.set(not v.get())
-                _show_preview(f)
             lbl.bind("<Button-1>", lambda e, f=fname, v=var: (v.set(not v.get()), _show_preview(f)))
             cb.config(command=lambda f=fname: _show_preview(f))
+            _nav_ordre.append(fname)
+            _lignes[fname] = (row, cb, lbl)
+
+        if _afab:
+            _ajout_titre_sel(_tr("── Patchs à fabriquer ──") + f" ({len(_afab)})")
+            for fname in _afab:
+                _ajout_ligne_sel(fname, "#ffaa33")
+        _ajout_titre_sel(_tr("── JPG à corriger ──") + f" ({len(_norm)})")
+        for fname in _norm:
+            _ajout_ligne_sel(fname, FG2)
 
         inner.update_idletasks()
         canvas_list.config(scrollregion=canvas_list.bbox("all"))
@@ -216,6 +256,8 @@ def _ask_patch_management(patch_dir, existing_files):
         _current_photo = [None]
 
         def _show_preview(fname):
+            _surligne(fname)
+            _nav_courant[0] = fname
             lbl_preview_name.config(text=fname, fg=FG)
             fpath = os.path.join(patch_dir, fname)
             try:
@@ -232,6 +274,35 @@ def _ask_patch_management(patch_dir, existing_files):
                 canvas_prev.delete("all")
                 canvas_prev.create_text(PREV_W//2, PREV_H//2,
                     text=f"Erreur : {_pe}", fill="#ff4444", font=FONT)
+
+        # ── Navigation clavier ↑/↓ (validé 14/07/2026) ──────────────────────
+        # bind_all : fiable même si le focus est sur un widget enfant (macOS).
+        # Nettoyé à la fermeture pour ne pas polluer les autres fenêtres.
+        def _nav_fleche_sel(delta):
+            if not _nav_ordre:
+                return "break"
+            try:
+                _i = _nav_ordre.index(_nav_courant[0])
+                _i = max(0, min(len(_nav_ordre) - 1, _i + delta))
+            except ValueError:
+                _i = 0 if delta > 0 else len(_nav_ordre) - 1
+            _show_preview(_nav_ordre[_i])
+            try:
+                canvas_list.yview_moveto(_i / max(1, len(_nav_ordre)))
+            except Exception:
+                pass
+            return "break"
+
+        sel.bind_all("<Up>", lambda e: _nav_fleche_sel(-1))
+        sel.bind_all("<Down>", lambda e: _nav_fleche_sel(1))
+
+        def _nettoie_binds_sel(_e=None):
+            try:
+                sel.unbind_all("<Up>")
+                sel.unbind_all("<Down>")
+            except Exception:
+                pass
+        sel.bind("<Destroy>", _nettoie_binds_sel)
 
         # ── Boutons bas ───────────────────────────────────────────────────────
         frm_bot = tk.Frame(sel, bg=BG)
@@ -254,9 +325,9 @@ def _ask_patch_management(patch_dir, existing_files):
         ttk.Button(frm_bot, text="✅  Valider",
                    command=_validate).grid(row=0, column=2, padx=12, ipadx=16, ipady=6)
 
-        # Afficher le premier patch au démarrage
-        if sorted_files:
-            sel.after(100, lambda: _show_preview(sorted_files[0]))
+        # Afficher le premier patch au démarrage (ordre affiché, rubriques comprises)
+        if _nav_ordre:
+            sel.after(100, lambda: _show_preview(_nav_ordre[0]))
 
         sel.update_idletasks()
         ww2 = max(900, sel.winfo_reqwidth())
@@ -379,26 +450,74 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     canvas_list.create_window((0, 0), window=inner, anchor="nw")
 
     check_vars = {}
+    _nav_ordre = []   # ordre visuel des patches pour la navigation clavier
+    _nav_courant = [None]  # patch actuellement affiché dans l'aperçu
+    _lignes = {}      # fname -> (row, cb, lbl) pour le surlignage
+    SURL = "#1a4a1a"  # couleur de surlignage de la ligne sélectionnée
+
+    def _surligne(fname):
+        _prec = _nav_courant[0]
+        if _prec in _lignes:
+            for w in _lignes[_prec]:
+                try:
+                    w.config(bg=BG)
+                except Exception:
+                    pass
+        if fname in _lignes:
+            for w in _lignes[fname]:
+                try:
+                    w.config(bg=SURL)
+                except Exception:
+                    pass
+
     sorted_files = sorted(f for f in existing_files
                           if os.path.isfile(os.path.join(patch_dir, f)))
+
+    def _est_a_fabriquer(fname):
+        # Rubrique dédiée (validé 14/07/2026) : un patch est « à fabriquer »
+        # tant que son marqueur .afabriquer existe dans PATCH_{zl}.
+        return os.path.isfile(os.path.join(patch_dir, fname + ".afabriquer"))
 
     def _rebuild_list():
         for widget in inner.winfo_children():
             widget.destroy()
-        for fname in sorted(check_vars.keys()):
+        _lignes.clear()
+        _all = sorted(check_vars.keys())
+        _afab = [f for f in _all if _est_a_fabriquer(f)]
+        _norm = [f for f in _all if f not in _afab]
+
+        def _ajout_ligne(fname, couleur):
             var = check_vars[fname]
             row = tk.Frame(inner, bg=BG, cursor="hand2")
             row.pack(fill=tk.X, pady=1)
             cb = tk.Checkbutton(row, variable=var, bg=BG,
                                 fg=FG, selectcolor="#1a4a1a",
-                                activebackground=BG, activeforeground=FG)
+                                activebackground=BG, activeforeground=FG,
+                                takefocus=0)
             cb.pack(side=tk.LEFT)
             lbl = tk.Label(row, text=fname, font=("TkFixedFont", 10),
-                           bg=BG, fg=FG2, anchor="w", cursor="hand2")
+                           bg=BG, fg=couleur, anchor="w", cursor="hand2")
             lbl.pack(side=tk.LEFT, fill=tk.X)
             lbl.bind("<Button-1>",
                      lambda e, v=var, f=fname: (v.set(not v.get()), _show_preview(f)))
             cb.config(command=lambda f=fname: _show_preview(f))
+            _lignes[fname] = (row, cb, lbl)
+
+        def _ajout_titre(texte):
+            tk.Label(inner, text=texte, font=("TkFixedFont", 10, "bold"),
+                     bg=BG, fg=FG, anchor="w").pack(fill=tk.X, pady=(6, 2))
+
+        _ordre_affiche = []  # ordre visuel pour la navigation clavier
+        if _afab:
+            _ajout_titre(_tr("── Patchs à fabriquer ──") + f" ({len(_afab)})")
+            for fname in _afab:
+                _ajout_ligne(fname, "#ffaa33")
+                _ordre_affiche.append(fname)
+        _ajout_titre(_tr("── JPG à corriger ──") + f" ({len(_norm)})")
+        for fname in _norm:
+            _ajout_ligne(fname, FG2)
+            _ordre_affiche.append(fname)
+        _nav_ordre[:] = _ordre_affiche
         inner.update_idletasks()
         canvas_list.config(scrollregion=canvas_list.bbox("all"))
 
@@ -421,6 +540,8 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     _current_photo = [None]
 
     def _show_preview(fname):
+        _surligne(fname)
+        _nav_courant[0] = fname
         lbl_preview_name.config(text=fname, fg=FG)
         fpath = os.path.join(patch_dir, fname)
         try:
@@ -437,8 +558,40 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
             canvas_prev.create_text(PREV_W // 2, PREV_H // 2,
                 text=f"Erreur : {_pe}", fill="#ff4444", font=FONT)
 
+    # ── Navigation clavier ↑/↓ dans la liste de gauche (validé 14/07/2026) ──
+    # Les flèches parcourent la liste dans l'ordre affiché (rubriques
+    # comprises) et mettent l'aperçu à jour ; la liste défile pour suivre.
+    def _nav_fleche(delta):
+        if not _nav_ordre:
+            return "break"
+        try:
+            _i = _nav_ordre.index(_nav_courant[0])
+        except ValueError:
+            _i = 0 if delta > 0 else len(_nav_ordre) - 1
+            _show_preview(_nav_ordre[_i])
+            return "break"
+        _i = max(0, min(len(_nav_ordre) - 1, _i + delta))
+        _show_preview(_nav_ordre[_i])
+        try:
+            canvas_list.yview_moveto(_i / max(1, len(_nav_ordre)))
+        except Exception:
+            pass
+        return "break"
+
+    corr.bind_all("<Up>", lambda e: _nav_fleche(-1))
+    corr.bind_all("<Down>", lambda e: _nav_fleche(1))
+
+    def _nettoie_binds_corr(_e=None):
+        try:
+            corr.unbind_all("<Up>")
+            corr.unbind_all("<Down>")
+        except Exception:
+            pass
+    corr.bind("<Destroy>", _nettoie_binds_corr)
+
     if sorted_files:
-        corr.after(100, lambda: _show_preview(sorted_files[0]))
+        corr.after(100, lambda: _show_preview(
+            _nav_ordre[0] if _nav_ordre else sorted_files[0]))
 
     # Barre chemin éditeur
     _editor_var = tk.StringVar(value=_read_editor_path())
@@ -473,6 +626,10 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
         for fname in to_del:
             try:
                 os.remove(os.path.join(patch_dir, fname))
+                # Supprimer aussi le marqueur .afabriquer associé (orphelin)
+                _mk = os.path.join(patch_dir, fname + ".afabriquer")
+                if os.path.isfile(_mk):
+                    os.remove(_mk)
             except Exception as _re:
                 messagebox.showerror(_tr("Erreur"),
                     f"{_tr('Impossible de supprimer')} {fname} :\n{_re}")
@@ -745,6 +902,10 @@ def build_sea_patches(tile):
             for _f in _to_delete:
                 try:
                     os.remove(os.path.join(_patch_dir, _f))
+                    # Supprimer aussi le marqueur .afabriquer associé
+                    _mk_d = os.path.join(_patch_dir, _f + ".afabriquer")
+                    if os.path.isfile(_mk_d):
+                        os.remove(_mk_d)
                 except Exception:
                     pass
         UI.vprint(1, f"   [SeaTex] Dossier JPG-Patch : {_patch_dir}")
@@ -759,7 +920,7 @@ def build_sea_patches(tile):
     # ── Identifier tuiles mer côtières via mesh ───────────────────────────────
     try:
         dico_customzl = _DSF.zone_list_to_ortho_dico(tile)
-        sea_texture_set, sea_set_missing = _SEA.build_sea_texture_set(tile, dico_customzl)
+        sea_texture_set = _SEA.build_sea_texture_set(tile, dico_customzl)
     except Exception as _ste:
         import traceback
         UI.vprint(0, f"   [SeaTex] build_sea_texture_set ERREUR : {_ste}\n"
@@ -810,58 +971,6 @@ def build_sea_patches(tile):
 
     UI.vprint(1, tr("   [SeaTex] Cas 1 terminé — {n} patch(es) nodata corrigés.").format(n=generated))
 
-    # ── Codage A : JPG absents en pleine mer → prolongement/fondu du JPG côtier ──
-    # Pour chaque position pleine mer détectée (rangée au contact d'un JPG
-    # côtier) : trouver le JPG côtier existant le plus proche → generate_sea_jpg_missing
-    # prolonge et fond le vrai fond marin de ce JPG vers cette position.
-    # Garde-fou anti-terre intégré dans generate_sea_jpg_missing — aucune
-    # couleur/texture synthétique, jamais de terre prolongée en mer.
-    if sea_set_missing:
-        UI.vprint(1, f"   [SeaTex] Codage A : {len(sea_set_missing)} JPG manquants vers le large...")
-        _genA = 0
-        _totalA = len(sea_set_missing)
-
-        # Construire index (tx, ty) → chemin JPG pour les côtiers existants sur disque
-        _coastal_index = {}
-        for _ta_c2 in sea_texture_set:
-            (tx_c2, ty_c2, zl_c2, prov_c2) = _ta_c2
-            _layers_c2 = IMG.local_combined_providers_dict.get(prov_c2, [])
-            _lc_c2 = next((rl.get("layer_code", "") for rl in _layers_c2
-                           if rl.get("layer_code", "") in IMG.providers_dict
-                           and rl.get("layer_code", "") != "PATCH"), None)
-            if _lc_c2 is None:
-                continue
-            _lpd_c2 = IMG.providers_dict.get(_lc_c2)
-            if _lpd_c2 is None:
-                continue
-            _fd_c2 = FNAMES.jpeg_file_dir_from_attributes(
-                tile.lat, tile.lon, zl_c2, _lpd_c2)
-            _fn_c2 = FNAMES.jpeg_file_name_from_attributes(tx_c2, ty_c2, zl_c2, _lc_c2)
-            _fp_c2 = os.path.join(_fd_c2, _fn_c2)
-            if os.path.isfile(_fp_c2):
-                _coastal_index[(tx_c2, ty_c2)] = _fp_c2
-
-        if not _coastal_index:
-            UI.vprint(1, tr("   [SeaTex] Codage A : aucun JPG côtier source — ignoré."))
-        else:
-            for _k2, (_ta2, _dxdy2) in enumerate(sea_set_missing.items(), 1):
-                (tx2, ty2, zl2, prov2) = _ta2
-                (_dx2, _dy2) = _dxdy2
-                UI.vprint(1, f"   [SeaTex] Patch manquant {_k2}/{_totalA} : {ty2}_{tx2}_PATCH{zl2}...")
-                if (ty2, tx2, zl2) in _patches_done:
-                    continue
-                _sorted = sorted(_coastal_index.items(),
-                                 key=lambda kv: abs(kv[0][0]-tx2) + abs(kv[0][1]-ty2))
-                _src_paths2 = [v for _, v in _sorted[:1]]
-                if not _src_paths2:
-                    continue
-                _jpg2 = _SEA.generate_sea_jpg_missing(
-                    tile, tx2, ty2, zl2, _src_paths2[0],
-                    dx=_dx2, dy=_dy2)
-                if _jpg2:
-                    _genA += 1
-                    _patches_done.add((ty2, tx2, zl2))
-        UI.vprint(1, tr("   [SeaTex] Codage A terminé — {n} patch(es) prolongés/fondus générés.").format(n=_genA))
 
     UI.vprint(1, tr("   [SeaTex] Step 2.1 terminé."))
     UI.timings_and_bottom_line(_timer_21)
@@ -976,7 +1085,6 @@ def build_tile(tile):
     # Pas de parcours mesh — silencieux — juste lire les JPG-Patch présents
     sea_texture_set = set()
     try:
-        import O4_Geo_Utils as _GEO_st
         _sign_lat = "+" if tile.lat >= 0 else "-"
         _sign_lon = "+" if tile.lon >= 0 else "-"
         _tile_key = f"{_sign_lat}{abs(int(tile.lat)):02d}{_sign_lon}{abs(int(tile.lon)):03d}"
@@ -984,14 +1092,7 @@ def build_tile(tile):
         _patch_dir_st = os.path.join(FNAMES.Patch_dir,
                                      _tile_key, f"PATCH_{_zl_st}")
         if os.path.isdir(_patch_dir_st):
-            # Provider actif = layer_code réel (ex: BI, Esri) — pas default_website
             _prov_st = getattr(tile, "default_website", "")
-            _layers_pre = IMG.local_combined_providers_dict.get(_prov_st, [])
-            _lc_pre = next((rl.get("layer_code", "") for rl in _layers_pre
-                            if rl.get("layer_code", "") in IMG.providers_dict
-                            and rl.get("layer_code", "") != "PATCH"), _prov_st)
-            _terrain_dir_pre = os.path.join(tile.build_dir, "terrain")
-            os.makedirs(_terrain_dir_pre, exist_ok=True)
             for _fn_st in os.listdir(_patch_dir_st):
                 if not _fn_st.endswith(".jpg"):
                     continue
@@ -1003,46 +1104,7 @@ def build_tile(tile):
                     _tx_st = int(_p_st[1])
                     sea_texture_set.add((_tx_st, _ty_st, _zl_st, _prov_st))
                 except ValueError:
-                    # Cas 2 : _PATCH.jpg → créer _sea_overlay.ter avant build_dsf
-                    # Conforme V1.40 : tri_type==2, is_overlay=True
-                    # Nom DDS = ty_tx_{layer_code}{zl}.dds (provider actif réel)
-                    if "_PATCH" not in _fn_st:
-                        continue
-                    try:
-                        _ty2 = int(_p_st[0])
-                        _tx2 = int(_p_st[1])
-                    except (ValueError, IndexError):
-                        continue
-                    _dds_pre = FNAMES.dds_file_name_from_attributes(
-                        _tx2, _ty2, _zl_st, _lc_pre)
-                    _lat2, _lon2 = _GEO_st.gtile_to_wgs84(
-                        _tx2 + 8, _ty2 + 8, _zl_st)
-                    _size2 = int(
-                        _GEO_st.webmercator_pixel_size(_lat2, _zl_st) * 4096)
-                    _ter_pre = _dds_pre.replace(".dds", "_sea_overlay.ter")
-                    _ter_pre_path = os.path.join(_terrain_dir_pre, _ter_pre)
-                    if not os.path.isfile(_ter_pre_path):
-                        _wt_src = os.path.join(FNAMES.Utils_dir,
-                                               "water_transition.png")
-                        _wt_dst = os.path.join(tile.build_dir, "textures",
-                                               "water_transition.png")
-                        if os.path.isfile(_wt_src) and not os.path.isfile(_wt_dst):
-                            import shutil as _sh
-                            _sh.copy(_wt_src, _wt_dst)
-                        with open(_ter_pre_path, "w") as _tf2:
-                            _tf2.write("A\n800\nTERRAIN\n\n")
-                            _tf2.write("LOAD_CENTER "
-                                       + "{:.5f}".format(_lat2) + " "
-                                       + "{:.5f}".format(_lon2) + " "
-                                       + str(_size2) + " 4096\n")
-                            _tf2.write("BASE_TEX_NOWRAP ../textures/"
-                                       + _dds_pre + "\n")
-                            _tf2.write("BORDER_TEX ../textures/"
-                                       "water_transition.png\n")
-                            _tf2.write("WET\n")
-                            _tf2.write("NO_SHADOW\n")
-                        UI.vprint(1, "   [SeaTex] .ter Cas2 pré-DSF : "
-                                  + _ter_pre)
+                    continue
     except Exception as _e_pre:
         UI.vprint(2, "   [SeaTex] Erreur pré-DSF ter : " + str(_e_pre))
         sea_texture_set = None
@@ -1113,55 +1175,29 @@ def build_tile(tile):
                     for _fn_p2 in _patches_p2:
                         try:
                             _jpg_p2 = os.path.join(_patch_dir_p2, _fn_p2)
-                            if '_PATCH' in _fn_p2:
-                                # Cas 2 : nom DDS standard sans _PATCH
-                                _dds_name_p2 = _fn_p2.replace('_PATCH.jpg', '.dds')
-                            else:
-                                # Cas 1 : nom DDS identique au JPG
-                                _dds_name_p2 = _fn_p2.replace('.jpg', '.dds')
+                            # ── Patch « à fabriquer » (validé 14/07/2026) ──
+                            # Tant que le marqueur .afabriquer existe et que
+                            # le JPG n'a pas été retouché depuis (mtime JPG
+                            # <= mtime marqueur), le duplicata brut défectueux
+                            # ne doit PAS remplacer le DDS propre du pipeline.
+                            # Dès que le JPG est retouché (mtime > marqueur),
+                            # le marqueur est supprimé et la conversion a lieu.
+                            _mk_p2 = _jpg_p2 + ".afabriquer"
+                            if os.path.isfile(_mk_p2):
+                                if os.path.getmtime(_jpg_p2) <= os.path.getmtime(_mk_p2):
+                                    UI.vprint(2, "   [SeaTex] Passage 2 : patch à fabriquer non retouché, DDS conservé : " + _fn_p2)
+                                    continue
+                                try:
+                                    os.remove(_mk_p2)
+                                except Exception:
+                                    pass
+                            # Cas 1 : nom DDS identique au JPG
+                            _dds_name_p2 = _fn_p2.replace('.jpg', '.dds')
                             _dds_p2 = os.path.join(_textures_dir_p2, _dds_name_p2)
                             _sp.call([IMG.dds_convert_cmd, '-bc1', '-fast',
                                       _jpg_p2, _dds_p2],
                                      stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
                             _done_p2 += 1
-                            # Générer .ter uniquement pour Cas 2 (_PATCH)
-                            if '_PATCH' not in _fn_p2:
-                                continue
-                            _parts_p2 = _fn_p2.split('_')
-                            if len(_parts_p2) < 2:
-                                continue
-                            try:
-                                _ty_p2 = int(_parts_p2[0])
-                                _tx_p2 = int(_parts_p2[1])
-                                _zl_p2 = getattr(tile, 'default_zl', 17)
-                            except ValueError:
-                                continue
-                            _lat_c, _lon_c = _GEO_p2.gtile_to_wgs84(
-                                _tx_p2 + 8, _ty_p2 + 8, _zl_p2)
-                            _size_c = int(
-                                _GEO_p2.webmercator_pixel_size(_lat_c, _zl_p2) * 4096)
-                            _lc_line = ('LOAD_CENTER '
-                                        + '{:.5f}'.format(_lat_c) + ' '
-                                        + '{:.5f}'.format(_lon_c) + ' '
-                                        + str(_size_c) + ' 4096\n')
-                            _base = 'BASE_TEX_NOWRAP ../textures/' + _dds_name_p2 + '\n'
-                            # .ter standard (terre)
-                            _ter1 = _dds_name_p2.replace('.dds', '.ter')
-                            with open(os.path.join(_terrain_dir_p2, _ter1), 'w') as _tf:
-                                _tf.write('A\n800\nTERRAIN\n\n')
-                                _tf.write(_lc_line)
-                                _tf.write(_base)
-                                _tf.write('DECAL_LIB lib/g10/decals/maquify_2_green_key.dcl\n')
-                                _tf.write('NO_ALPHA\n')
-                            # .ter sea overlay (mer)
-                            _ter2 = _dds_name_p2.replace('.dds', '_sea_overlay.ter')
-                            with open(os.path.join(_terrain_dir_p2, _ter2), 'w') as _tf:
-                                _tf.write('A\n800\nTERRAIN\n\n')
-                                _tf.write(_lc_line)
-                                _tf.write(_base)
-                                _tf.write('WET\n')
-                                _tf.write('NO_SHADOW\n')
-                            UI.vprint(1, '   [SeaTex] .ter Cas2 : ' + _ter1 + ' + ' + _ter2)
                         except Exception as _ep2:
                             UI.vprint(2, '   [SeaTex] Passage 2 erreur : ' + str(_ep2))
                     if _done_p2 >= 1:
@@ -1369,14 +1405,21 @@ def build_tile_list(
 
 ################################################################################
 def remove_unwanted_textures(tile):
+    # Correctif shred86 1.40.13 : les .ter mer/eau portent les suffixes
+    # _water, _sea, _overlay (et combinaisons _sea_overlay, _water_overlay)
+    # alors que le DDS correspondant n'a pas de suffixe. L'ancien code en
+    # déduisait un nom de DDS inexistant (ex: ..._sea.dds), et le vrai DDS
+    # (couvert uniquement par des triangles mer, comme les patches mer)
+    # était alors supprimé comme "obsolète" quand cleaning_level > 1.
     texture_list = []
     for f in os.listdir(os.path.join(tile.build_dir, "terrain")):
         if f[-4:] != ".ter":
             continue
-        if f[-5] != "y":  # overlay
-            texture_list.append(f.replace(".ter", ".dds"))
-        else:
-            texture_list.append("_".join(f[:-4].split("_")[:-2]) + ".dds")
+        base = f[:-4]
+        for _suffix in ("_overlay", "_sea", "_water"):
+            if base.endswith(_suffix):
+                base = base[: -len(_suffix)]
+        texture_list.append(base + ".dds")
     for f in os.listdir(os.path.join(tile.build_dir, "textures")):
         if f[-4:] != ".dds":
             continue

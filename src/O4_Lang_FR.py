@@ -215,11 +215,6 @@ T = {
     "💡 Seam persistante : augmentez le rayon\\n"
                                         : "💡 Jointure persistante : augmentez le rayon\\n",
 
-    # ── COASTAL MANAGER UI ─────────────────────────────────────────
-    "🌊 Zone maritime : bord de côtes et d'iles : dégradé automatique."
-                                        : "🌊 Zone maritime : bord de côtes et d'îles : dégradé automatique.",
-    "Aucune tuile côtière dans Masks/"  : "Aucune tuile côtière dans Masks/",
-
     # ── MESSAGES STATUT / CONFIGURATION ───────────────────────────
     "✓ Valeurs chargées depuis le cfg." : "✓ Valeurs chargées depuis le cfg.",
     "✅ Sauvegardé dans cfg tuile."     : "✅ Sauvegardé dans cfg tuile.",
@@ -395,13 +390,9 @@ T = {
     "   [SeaTex] {n} triangle(s) mer côtier(s) détecté(s)."
                                         : "   [SeaTex] {n} triangle(s) mer côtier(s) détecté(s).",
 
-    # ── LOGS CONSOLE — O4_Coastal_Manager.py ──────────────────────
-    "   [Coastal] Transition côtière adoucie : {name}"
-                                        : "   [Coastal] Transition côtière adoucie : {name}",
-    "   [Coastal] post_process ignoré ({name}): {e}"
-                                        : "   [Coastal] post_process ignoré ({name}): {e}",
-    "   [Coastal] Masque auto généré depuis mesh : {name}"
-                                        : "   [Coastal] Masque auto généré depuis mesh : {name}",
+    # ── LOGS CONSOLE — O4_Mask_Utils.py ───────────────────────────
+    "ERROR: masks_width = {mw} m est invalide (trop grand). Maximum autorisé pour cette tuile et ce mask_zl : {maxw} m. Diminuez masks_width dans la config de la tuile et relancez l'étape masks (2.5)."
+                                        : "ERROR: masks_width = {mw} m est invalide (trop grand). Maximum autorisé pour cette tuile et ce mask_zl : {maxw} m. Diminuez masks_width dans la config de la tuile et relancez l'étape masks (2.5).",
 
     # ── LOGS CONSOLE — O4_Imagery_Utils.py ───────────────────────
     "   [SeaTex] Provider PATCH injecté."
@@ -428,10 +419,6 @@ T = {
                                         : "   [SeaTex] Aucune tuile mer côtière détectée — rien à générer.",
     "   [SeaTex] Cas 1 terminé — {n} patch(es) nodata corrigés."
                                         : "   [SeaTex] Cas 1 terminé — {n} patch(es) nodata corrigés.",
-    "   [SeaTex] Cas 2 : aucun JPG côtier source — ignoré."
-                                        : "   [SeaTex] Cas 2 : aucun JPG côtier source — ignoré.",
-    "   [SeaTex] Cas 2 terminé — {n} patch(es) pleine mer générés."
-                                        : "   [SeaTex] Cas 2 terminé — {n} patch(es) pleine mer générés.",
     "   [SeaTex] Step 2.1 terminé."     : "   [SeaTex] Step 2.1 terminé.",
     "   [SeaTex] Passage 2 terminé — {n} DDS générés."
                                         : "   [SeaTex] Passage 2 terminé — {n} DDS générés.",

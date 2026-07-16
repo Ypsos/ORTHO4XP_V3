@@ -1,0 +1,10 @@
+request_type=wms
+epsg_code=3857
+wms_size=1024
+max_threads=8
+wms_version=1.3.0
+url_prefix=https://data.geopf.fr/wms-r/wms?
+layers=ORTHOIMAGERY.ORTHOPHOTOS2022
+image_type=png
+imagery_dir=code
+in_GUI=True

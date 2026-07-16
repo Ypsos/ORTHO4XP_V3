@@ -1,0 +1,5 @@
+request_type=tms
+grid_type=webmercator
+url_template=https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={zoom}&TILEROW={y}&TILECOL={x}&FORMAT=image%2Fjpeg
+imagery_dir=code
+in_GUI=True

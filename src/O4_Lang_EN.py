@@ -214,11 +214,6 @@ T = {
     "💡 Seam persistante : augmentez le rayon\\n"
                                         : "💡 Persistent seam: increase the radius\\n",
 
-    # ── COASTAL MANAGER UI ─────────────────────────────────────────
-    "🌊 Zone maritime : bord de côtes et d'iles : dégradé automatique."
-                                        : "🌊 Maritime zone: coastlines and islands: automatic gradient.",
-    "Aucune tuile côtière dans Masks/"  : "No coastal tile in Masks/",
-
     # ── STATUS / CONFIG MESSAGES ───────────────────────────────────
     "✓ Valeurs chargées depuis le cfg." : "✓ Values loaded from cfg.",
     "✅ Sauvegardé dans cfg tuile."     : "✅ Saved to tile cfg.",
@@ -394,13 +389,9 @@ T = {
     "   [SeaTex] {n} triangle(s) mer côtier(s) détecté(s)."
                                         : "   [SeaTex] {n} coastal sea triangle(s) detected.",
 
-    # ── LOGS CONSOLE — O4_Coastal_Manager.py ──────────────────────
-    "   [Coastal] Transition côtière adoucie : {name}"
-                                        : "   [Coastal] Coastal transition softened: {name}",
-    "   [Coastal] post_process ignoré ({name}): {e}"
-                                        : "   [Coastal] post_process skipped ({name}): {e}",
-    "   [Coastal] Masque auto généré depuis mesh : {name}"
-                                        : "   [Coastal] Auto mask generated from mesh: {name}",
+    # ── LOGS CONSOLE — O4_Mask_Utils.py ───────────────────────────
+    "ERROR: masks_width = {mw} m est invalide (trop grand). Maximum autorisé pour cette tuile et ce mask_zl : {maxw} m. Diminuez masks_width dans la config de la tuile et relancez l'étape masks (2.5)."
+                                        : "ERROR: masks_width = {mw} m is invalid (too large). Maximum allowed for this tile and mask_zl is {maxw} m. Please lower masks_width in the tile config and relaunch the masks step (2.5).",
 
     # ── LOGS CONSOLE — O4_Imagery_Utils.py ───────────────────────
     "   [SeaTex] Provider PATCH injecté."
@@ -427,10 +418,6 @@ T = {
                                         : "   [SeaTex] No coastal sea tile detected — nothing to generate.",
     "   [SeaTex] Cas 1 terminé — {n} patch(es) nodata corrigés."
                                         : "   [SeaTex] Case 1 done — {n} nodata patch(es) corrected.",
-    "   [SeaTex] Cas 2 : aucun JPG côtier source — ignoré."
-                                        : "   [SeaTex] Case 2: no coastal source JPG — skipped.",
-    "   [SeaTex] Cas 2 terminé — {n} patch(es) pleine mer générés."
-                                        : "   [SeaTex] Case 2 done — {n} open-sea patch(es) generated.",
     "   [SeaTex] Step 2.1 terminé."     : "   [SeaTex] Step 2.1 done.",
     "   [SeaTex] Passage 2 terminé — {n} DDS générés."
                                         : "   [SeaTex] Pass 2 done — {n} DDS generated.",
