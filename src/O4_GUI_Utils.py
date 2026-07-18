@@ -22,6 +22,18 @@ import O4_Color_Normalize as CNORM
 import O4_Color_Check as CC
 from O4_Lang import tr
 
+# ── Module de correction imagerie/zone (non bloquant) ────────────────────
+#  Fichier autonome hébergeant, à terme, le preview des DDS, la correction
+#  GIMP et la gestion des couches JOSM. Import non bloquant : si le module
+#  est absent ou défaillant, le GUI démarre normalement et le bouton se
+#  replie sur l'ancienne fenêtre de correction (open_patch_correction).
+try:
+    import O4_Correction_Utils as _CORRMOD
+    _corrmod_enabled = True
+except Exception:
+    _CORRMOD = None
+    _corrmod_enabled = False
+
 # ── Nouveaux modules Phase 3 (non bloquants) ─────────────────────────────
 try:
     from O4_Benchmark import Timeline as _Timeline
@@ -383,8 +395,8 @@ class Ortho4XP_GUI(tk.Tk):
 
         # ── LIGNE 3 :  Correction Patches + Color Check + Timeline + RAM
         ttk.Button(self.frame_cnorm,
-            text=tr("🖊 Correction Patches"),
-            command=self.open_patch_correction,
+            text=tr("🖊 Correction imagerie/zone"),
+            command=self.open_correction_module,
             width=22).grid(row=2, column=2, padx=5, pady=(8,4), sticky=E)
 
         ttk.Button(self.frame_cnorm,
@@ -567,6 +579,31 @@ class Ortho4XP_GUI(tk.Tk):
         custom = self.custom_build_dir.get() or ""
         build_dir = FNAMES.build_dir(lat, lon, custom)
         CC.open_color_check(self, os.path.join(build_dir, "textures"), {"lat": lat, "lon": lon})
+
+    def open_correction_module(self):
+        """Point d'entrée du bouton « Correction imagerie/zone ».
+
+        Étape 1 (architecture) : délègue au nouveau module autonome
+        O4_Correction_Utils s'il est disponible. Pour l'instant ce module
+        se contente de rouvrir la fenêtre de correction existante, afin de
+        NE RIEN CASSER : le workflow validé reste identique. Le preview
+        enrichi (tous les DDS, terre comprise) y sera ajouté à l'étape 2.
+
+        Repli de sécurité : si le module est absent ou lève une erreur,
+        on rouvre directement l'ancienne fenêtre (open_patch_correction).
+        """
+        if _corrmod_enabled and _CORRMOD is not None:
+            try:
+                _CORRMOD.open_correction_window(self)
+                return
+            except Exception as _e:
+                try:
+                    UI.vprint(1, "[CorrMod] Repli sur l'ancienne fenêtre : "
+                                 + str(_e))
+                except Exception:
+                    pass
+        # Repli : comportement historique inchangé
+        self.open_patch_correction()
 
     def open_patch_correction(self):
         """Ouvre directement la fenêtre Correction patches sans lancer de build."""

@@ -396,44 +396,6 @@ def fill_sea_nodata(jpg_path, sea_mask=None):
         return None
 
 
-def has_flat_nodata_zones(jpg_path):
-    """
-    Détection SECONDAIRE (validé Roland 14 juillet 2026) — LECTURE SEULE.
-
-    Détecte les zones no-data de N'IMPORTE QUELLE couleur (gris, bleu
-    terne, vert sale, marron, noir, blanc...) qui échappent au remplissage
-    du Cas 1 (fill_sea_nodata, strictement intact).
-
-    Critère unique : présence d'une part significative (>10% de la surface)
-    de PLAT ABSOLU — variance locale quasi nulle, le silence total qu'aucune
-    vraie surface d'eau photographiée ne produit — QUELLE QUE SOIT la
-    couleur de l'aplat.
-
-    Mécanique : réduction 1024px, variance locale fenêtre 9px, seuil 1.2,
-    surface >10%. Un faux positif est bénin (duplicata en trop dans la
-    liste « à fabriquer », jamais aucun pixel modifié) : LECTURE SEULE.
-
-    Retourne True/False. En cas d'erreur de lecture : False.
-    """
-    from scipy.ndimage import uniform_filter as _uf
-    try:
-        img = Image.open(jpg_path).convert('RGB')
-        if max(img.size) > 1024:
-            _sc = 1024.0 / max(img.size)
-            img = img.resize((max(1, int(img.size[0] * _sc)),
-                              max(1, int(img.size[1] * _sc))),
-                             Image.BILINEAR)
-        arr = numpy.array(img, dtype=numpy.float32)
-        gray = arr.mean(axis=2)
-        _m1 = _uf(gray, size=9)
-        _m2 = _uf(gray ** 2, size=9)
-        _std = numpy.sqrt(numpy.clip(_m2 - _m1 ** 2, 0, None))
-        return bool((_std < 1.2).mean() > 0.10)
-    except Exception as _e:
-        UI.vprint(2, f"   [SeaTex] has_flat_nodata_zones erreur : {_e}")
-        return False
-
-
 def generate_sea_jpg(tile, til_x_left, til_y_top, zoomlevel, provider_code,
                      neighbor_colors=None, jpeg_dir=None, dico_customzl=None,
                      existing_jpg_paths=None, provider_dict=None):
@@ -549,22 +511,13 @@ def generate_sea_jpg(tile, til_x_left, til_y_top, zoomlevel, provider_code,
 
         filled_img = fill_sea_nodata(neighbor_jpg)
         if filled_img is None:
-            # Détection secondaire (validé 14/07/2026) : no-data d'autres
-            # couleurs (gris, bleu terne, vert sale, marron...) échappant au
-            # remplissage noir/blanc → duplicata BRUT (aucun pixel modifié)
-            # dans PATCH_{zl} + marqueur .afabriquer (rubrique « Patchs à
-            # fabriquer »). Le Passage 2 ne convertira ce duplicata en DDS
-            # qu'après retouche manuelle (protection dans O4_Tile_Utils).
-            if has_flat_nodata_zones(neighbor_jpg):
-                import shutil as _sh
-                _sh.copyfile(neighbor_jpg, jpg_path)
-                try:
-                    open(jpg_path + ".afabriquer", "w").close()
-                except Exception:
-                    pass
-                UI.vprint(1, tr("   [SeaTex] Patch à fabriquer (no-data couleur) : {jpg_name}").format(jpg_name=jpg_name))
-                return jpg_path
-            UI.vprint(2, f"   [SeaTex] JPG valide — pas de patch : {jpg_name}")
+            # Fabrication automatique des patches « à fabriquer » SUPPRIMÉE :
+            # les zones no-data de couleur (gris/vert/bleu/marron) qui
+            # échappent au Cas 1 (noir/blanc) ne sont plus dupliquées ni
+            # marquées automatiquement. L'utilisateur les traite désormais à
+            # la main via le visualiseur (« Visualiser la tuile »).
+            # Le Cas 1 (fill_sea_nodata, noir/blanc) reste strictement intact.
+            UI.vprint(2, f"   [SeaTex] Pas de nodata noir/blanc — pas de patch : {jpg_name}")
             return None
 
         filled_img.save(jpg_path, quality=85)
