@@ -28,7 +28,8 @@ import os
 
 def _open_correction_window(parent_win, patch_dir, existing_files,
                              BG, FG, FG2, PREV_BG, FONT, FONT_T, _tr,
-                             textures_dir=None, preview_corr_dir=None):
+                             textures_dir=None, preview_corr_dir=None,
+                             avert_patch=""):
     """
     Fenêtre "Correction patches" :
       - Liste des patches avec cases à cocher
@@ -101,7 +102,16 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     tk.Label(corr, text=_tr("Correction patches"),
              font=FONT_T, bg=BG, fg=FG).pack(pady=(12, 2))
     tk.Label(corr, text=_tr("Cocher les patches à traiter"),
-             font=FONT, bg=BG, fg="#888888").pack(pady=(0, 8))
+             font=FONT, bg=BG, fg="#888888").pack(pady=(0, 2))
+
+    # Avertissement non bloquant : la fenêtre s'ouvre même sans patch,
+    # pour laisser l'accès à « Visualiser la tuile » et aux autres outils.
+    if avert_patch:
+        tk.Label(corr, text="⚠ " + avert_patch, font=FONT, bg=BG,
+                 fg="#ffaa00", wraplength=760,
+                 justify="center").pack(pady=(0, 6))
+    else:
+        tk.Frame(corr, bg=BG, height=6).pack()
 
     frm_main = tk.Frame(corr, bg=BG)
     frm_main.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
@@ -928,7 +938,10 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                command=_supprimer_preview).grid(row=1, column=2, padx=6,
                                                 pady=(8, 0), ipadx=8, ipady=4)
 
-    # ── Ligne 3 : trois colonnes — GIMP / QGIS / JOSM ────────────────
+    # ── Ligne 3 : deux colonnes — GIMP / JOSM ────────────────────────
+    # Le cadre QGIS a été retiré : QGIS est désormais géré dans la
+    # fenêtre « Altimétrie / DEM » (choix de l'application + ouverture
+    # du .tif assemblé). Un seul endroit pour QGIS, pas deux.
     frm_tools = tk.Frame(frm_bot, bg=BG)
     frm_tools.grid(row=2, column=0, columnspan=3, pady=(12, 0), sticky="ew")
 
@@ -941,13 +954,6 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     ttk.Button(gimp_lf, text=_tr("Ouvrir dans l'éditeur"),
                command=_open_in_editor).pack(fill=tk.X, padx=8, pady=(3, 8),
                                              ipady=3)
-
-    # QGIS : outil SIG, placé entre GIMP et JOSM.
-    qgis_lf = tk.LabelFrame(frm_tools, text=_tr("QGIS"),
-                            bg=BG, fg=FG, font=FONT)
-    qgis_lf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=6)
-    tk.Label(qgis_lf, text=_tr("à venir"),
-             bg=BG, fg="#888888", font=FONT).pack(padx=16, pady=16)
 
     josm_lf = tk.LabelFrame(frm_tools, text=_tr("JOSM"),
                             bg=BG, fg=FG, font=FONT)
@@ -987,19 +993,20 @@ def open_correction_window(gui):
         except Exception:
             zl = 17
         patch_dir = os.path.join(FNAMES.Patch_dir, tile_key, f"PATCH_{zl}")
+        # L'absence de patches n'est PLUS bloquante : la fenêtre s'ouvre
+        # quand même, car « Visualiser la tuile » et les autres outils ne
+        # dépendent pas des patches. On se contente d'informer.
+        # (La liste de gauche « JPG à corriger » sera simplement vide.)
+        _avert_patch = ""
         if not os.path.isdir(patch_dir):
-            messagebox.showinfo(
-                tr("Correction imagerie/zone"),
-                tr("Aucun dossier PATCH trouvé pour cette tuile.\n"
-                   "Lancer d'abord le Step 2.1 — Sea Patches."))
-            return
-        existing = sorted(f for f in os.listdir(patch_dir)
-                          if f.endswith(".jpg"))
-        if not existing:
-            messagebox.showinfo(
-                tr("Correction imagerie/zone"),
-                tr("Aucun patch JPG trouvé dans :\n") + patch_dir)
-            return
+            _avert_patch = tr("Aucun dossier PATCH pour cette tuile "
+                              "(Step 2.1 non lancé).")
+            existing = []
+        else:
+            existing = sorted(f for f in os.listdir(patch_dir)
+                              if f.endswith(".jpg"))
+            if not existing:
+                _avert_patch = tr("Aucun patch JPG dans :") + " " + patch_dir
         # Couleurs thème (identique au GUI historique)
         try:
             import O4_Theme_Manager as _TM
@@ -1035,6 +1042,7 @@ def open_correction_window(gui):
         _open_correction_window(
             gui, patch_dir, existing,
             BG, FG, FG2, PREV_BG, FONT, FONT_T, _tr,
-            textures_dir=textures_dir, preview_corr_dir=preview_corr_dir)
+            textures_dir=textures_dir, preview_corr_dir=preview_corr_dir,
+            avert_patch=_avert_patch)
     except Exception as _e:
         messagebox.showerror(tr("Correction imagerie/zone"), str(_e))

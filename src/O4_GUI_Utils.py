@@ -34,6 +34,18 @@ except Exception:
     _CORRMOD = None
     _corrmod_enabled = False
 
+# ── Module Altimétrie / DEM (non bloquant) ───────────────────────────────
+#  Fichier autonome : assemblage des altimétries d'une tuile (remplace la
+#  procédure QGIS manuelle). Import non bloquant : si le module est absent
+#  ou défaillant, le GUI démarre normalement et le bouton le signale.
+#  AUCUN fichier du pipeline n'est concerné par ce module.
+try:
+    import O4_Altimetrie_Utils as _ALTIMOD
+    _altimod_enabled = True
+except Exception:
+    _ALTIMOD = None
+    _altimod_enabled = False
+
 # ── Nouveaux modules Phase 3 (non bloquants) ─────────────────────────────
 try:
     from O4_Benchmark import Timeline as _Timeline
@@ -393,7 +405,13 @@ class Ortho4XP_GUI(tk.Tk):
             bg=_BG, fg=_FG2, font=("TkFixedFont", fs(10))).grid(
             row=1, column=5, padx=10, sticky=W+E)
 
-        # ── LIGNE 3 :  Correction Patches + Color Check + Timeline + RAM
+        # ── LIGNE 3 :  Altimétrie + Correction Patches + Color Check + …
+        ttk.Button(self.frame_cnorm,
+            text=tr("⛰ Altimétrie / DEM"),
+            command=self.open_altimetrie_module,
+            width=22).grid(row=2, column=0, columnspan=2, padx=5,
+                           pady=(8,4), sticky=W+E)
+
         ttk.Button(self.frame_cnorm,
             text=tr("🖊 Correction imagerie/zone"),
             command=self.open_correction_module,
@@ -579,6 +597,33 @@ class Ortho4XP_GUI(tk.Tk):
         custom = self.custom_build_dir.get() or ""
         build_dir = FNAMES.build_dir(lat, lon, custom)
         CC.open_color_check(self, os.path.join(build_dir, "textures"), {"lat": lat, "lon": lon})
+
+    def open_altimetrie_module(self):
+        """Point d'entrée du bouton « Altimétrie / DEM ».
+
+        Délègue au module autonome O4_Altimetrie_Utils, qui assemble les
+        fichiers altimétriques de la tuile (reprojection EPSG:4326,
+        découpe avec débord de chevauchement, fusion) et renseigne
+        custom_dem. Aucun fichier du pipeline n'est modifié.
+
+        Si le module est absent ou lève une erreur, le GUI reste
+        parfaitement fonctionnel : on se contente d'informer.
+        """
+        from tkinter import messagebox
+        if not (_altimod_enabled and _ALTIMOD is not None):
+            messagebox.showinfo(
+                tr("Altimétrie / DEM"),
+                tr("Le module O4_Altimetrie_Utils.py est introuvable "
+                   "dans le dossier src/."))
+            return
+        try:
+            _ALTIMOD.open_altimetrie_window(self)
+        except Exception as _e:
+            try:
+                UI.vprint(1, "[Altimetrie] " + str(_e))
+            except Exception:
+                pass
+            messagebox.showerror(tr("Altimétrie / DEM"), str(_e))
 
     def open_correction_module(self):
         """Point d'entrée du bouton « Correction imagerie/zone ».

@@ -472,4 +472,195 @@ T = {
                                         : "Batch terminé avec {n} tuile(s) ignorée(s) :",
 
 
+
+    # ── ALTIMÉTRIE / DEM ───────────────────────────────────────────
+    '⛰ Altimétrie / DEM'
+        : '⛰ Altimétrie / DEM',
+    'Altimétrie / DEM'
+        : 'Altimétrie / DEM',
+    'Altimétrie / DEM — Ortho4XP V3'
+        : 'Altimétrie / DEM — Ortho4XP V3',
+    'Le module O4_Altimetrie_Utils.py est introuvable dans le dossier src/.'
+        : 'Le module O4_Altimetrie_Utils.py est introuvable dans le dossier src/.',
+    'Latitude / longitude invalides.'
+        : 'Latitude / longitude invalides.',
+    'Créer / choisir la structure'
+        : 'Créer / choisir la structure',
+    'Ajouter un pays'
+        : 'Ajouter un pays',
+    'Rafraîchir'
+        : 'Rafraîchir',
+    'Assembler'
+        : 'Assembler',
+    'Vérifier (auto-test)'
+        : 'Vérifier (auto-test)',
+    'Choisir QGIS'
+        : 'Choisir QGIS',
+    'Ouvrir dans QGIS'
+        : 'Ouvrir dans QGIS',
+    'Fermer'
+        : 'Fermer',
+    'QGIS :'
+        : 'QGIS :',
+    'Débord de chevauchement (°) :'
+        : 'Débord de chevauchement (°) :',
+    '(0.1 = 10 % de la tuile sur les 4 côtés)'
+        : '(0.1 = 10 % de la tuile sur les 4 côtés)',
+    'Tuile'
+        : 'Tuile',
+    'emprise'
+        : 'emprise',
+    'Racine :'
+        : 'Racine :',
+    'Pays du stock :'
+        : 'Pays du stock :',
+    '(aucun)'
+        : '(aucun)',
+    'stock'
+        : 'stock',
+    'dossier de la tuile'
+        : 'dossier de la tuile',
+    '{n} source(s) trouvée(s) — origine : {o}'
+        : '{n} source(s) trouvée(s) — origine : {o}',
+    'Cliquer sur « Assembler » pour lancer.'
+        : 'Cliquer sur « Assembler » pour lancer.',
+    'Prêt.'
+        : 'Prêt.',
+    'Terminé.'
+        : 'Terminé.',
+    'TERMINÉ.'
+        : 'TERMINÉ.',
+    'Échec.'
+        : 'Échec.',
+    'ÉCHEC :'
+        : 'ÉCHEC :',
+    'SUCCÈS'
+        : 'SUCCÈS',
+    'ÉCHEC'
+        : 'ÉCHEC',
+    'Recherche des sources…'
+        : 'Recherche des sources…',
+    'Assemblage en cours… ne fermez pas la fenêtre.'
+        : 'Assemblage en cours… ne fermez pas la fenêtre.',
+    'Auto-test en cours…'
+        : 'Auto-test en cours…',
+    'Auto-test terminé.'
+        : 'Auto-test terminé.',
+    "Auto-test du moteur d'assemblage"
+        : "Auto-test du moteur d'assemblage",
+    "(aucun de vos fichiers n'est touché)"
+        : "(aucun de vos fichiers n'est touché)",
+    "Auto-test réussi : le moteur d'assemblage fonctionne."
+        : "Auto-test réussi : le moteur d'assemblage fonctionne.",
+    'Auto-test en échec — voir le détail dans la fenêtre.'
+        : 'Auto-test en échec — voir le détail dans la fenêtre.',
+    'Structure non créée.'
+        : 'Structure non créée.',
+    'Structure créée.'
+        : 'Structure créée.',
+    'Structure créée :'
+        : 'Structure créée :',
+    'Création de la structure…'
+        : 'Création de la structure…',
+    'Structure non configurée.'
+        : 'Structure non configurée.',
+    "Aucune organisation d'altimétries n'est configurée."
+        : "Aucune organisation d'altimétries n'est configurée.",
+    'Cliquez sur « Créer / choisir la structure ».'
+        : 'Cliquez sur « Créer / choisir la structure ».',
+    'Chemin mémorisé introuvable :'
+        : 'Chemin mémorisé introuvable :',
+    'Si vos altimétries sont sur un disque externe,'
+        : 'Si vos altimétries sont sur un disque externe,',
+    "vérifiez qu'il est branché."
+        : "vérifiez qu'il est branché.",
+    'Première utilisation : Ortho4XP va créer votre organisation des altimétries.\n\nChoisissez le disque ou le dossier de stockage (un disque externe convient).'
+        : 'Première utilisation : Ortho4XP va créer votre organisation des altimétries.\n\nChoisissez le disque ou le dossier de stockage (un disque externe convient).',
+    'Choisir le disque / dossier de stockage des altimétries'
+        : 'Choisir le disque / dossier de stockage des altimétries',
+    'Nom du pays (ex. : France, Suisse, Allemagne) :'
+        : 'Nom du pays (ex. : France, Suisse, Allemagne) :',
+    'À FAIRE MAINTENANT :'
+        : 'À FAIRE MAINTENANT :',
+    'Déposez les données altimétriques du pays dans :'
+        : 'Déposez les données altimétriques du pays dans :',
+    'Elles doivent être en EPSG:4326 — X-Plane ne lit aucune'
+        : 'Elles doivent être en EPSG:4326 — X-Plane ne lit aucune',
+    'autre projection. Ortho4XP convertira au besoin, mais'
+        : 'autre projection. Ortho4XP convertira au besoin, mais',
+    'préparez-les de préférence en 4326.'
+        : 'préparez-les de préférence en 4326.',
+    'Le résultat assemblé sera écrit dans :'
+        : 'Le résultat assemblé sera écrit dans :',
+    'Structure créée.\n\nDéposez vos altimétries dans :\n{d}\n\nFormat requis : EPSG:4326.'
+        : 'Structure créée.\n\nDéposez vos altimétries dans :\n{d}\n\nFormat requis : EPSG:4326.',
+    'Déposez vos altimétries dans :\n{d}\n\nFormat requis : EPSG:4326.'
+        : 'Déposez vos altimétries dans :\n{d}\n\nFormat requis : EPSG:4326.',
+    'Pays ajouté :'
+        : 'Pays ajouté :',
+    'Aucune source pour cette tuile.'
+        : 'Aucune source pour cette tuile.',
+    'Aucun fichier altimétrique ne recouvre cette tuile.'
+        : 'Aucun fichier altimétrique ne recouvre cette tuile.',
+    'Déposez vos données dans le stock du pays, en EPSG:4326.'
+        : 'Déposez vos données dans le stock du pays, en EPSG:4326.',
+    "rasterio est introuvable dans l'installation d'Ortho4XP."
+        : "rasterio est introuvable dans l'installation d'Ortho4XP.",
+    '{f} existe déjà. Le remplacer ?'
+        : '{f} existe déjà. Le remplacer ?',
+    'custom_dem renseigné dans le cfg de la tuile.'
+        : 'custom_dem renseigné dans le cfg de la tuile.',
+    'custom_dem non écrit :'
+        : 'custom_dem non écrit :',
+    "Assemblage terminé.\n\n{f}\n\ncustom_dem est renseigné : la tuile est prête pour l'étape mesh."
+        : "Assemblage terminé.\n\n{f}\n\ncustom_dem est renseigné : la tuile est prête pour l'étape mesh.",
+    "Choisir l'application QGIS"
+        : "Choisir l'application QGIS",
+    'Application QGIS enregistrée.'
+        : 'Application QGIS enregistrée.',
+    "Aucune application QGIS définie.\nCliquez d'abord sur « Choisir QGIS »."
+        : "Aucune application QGIS définie.\nCliquez d'abord sur « Choisir QGIS ».",
+    'QGIS lancé.'
+        : 'QGIS lancé.',
+    'Applications macOS'
+        : 'Applications macOS',
+    'Exécutables Windows'
+        : 'Exécutables Windows',
+    'Tous les fichiers'
+        : 'Tous les fichiers',
+
+    'Assemblage en cours… ne fermez pas la fenêtre'
+        : 'Assemblage en cours… ne fermez pas la fenêtre',
+    'Aucun dossier PATCH pour cette tuile (Step 2.1 non lancé).'
+        : 'Aucun dossier PATCH pour cette tuile (Step 2.1 non lancé).',
+    'Aucun patch JPG dans :'
+        : 'Aucun patch JPG dans :',
+    'Aucun fichier altimétrique lisible dans ce dossier.'
+        : 'Aucun fichier altimétrique lisible dans ce dossier.',
+    'Destination :'
+        : 'Destination :',
+    'Dossier des données brutes (.asc, .tif…)'
+        : 'Dossier des données brutes (.asc, .tif…)',
+    "Fichier préparé :\n\n{f}\n\nIl est maintenant dans le stock et sera utilisé automatiquement pour les tuiles qu'il recouvre."
+        : "Fichier préparé :\n\n{f}\n\nIl est maintenant dans le stock et sera utilisé automatiquement pour les tuiles qu'il recouvre.",
+    'La source est déjà à {a} m. Réduire encore donnerait {b} m et ferait perdre du relief.\n\nContinuer quand même ?'
+        : 'La source est déjà à {a} m. Réduire encore donnerait {b} m et ferait perdre du relief.\n\nContinuer quand même ?',
+    'Nom du fichier produit :'
+        : 'Nom du fichier produit :',
+    'Pays de destination ({p}) :'
+        : 'Pays de destination ({p}) :',
+    'Préparation :'
+        : 'Préparation :',
+    'Préparation en cours… ne fermez pas la fenêtre'
+        : 'Préparation en cours… ne fermez pas la fenêtre',
+    'Préparer un pays'
+        : 'Préparer un pays',
+    'Ratio :'
+        : 'Ratio :',
+    'Ratio invalide.'
+        : 'Ratio invalide.',
+    'Résolution source :'
+        : 'Résolution source :',
+    'Résolution source détectée : {r} m\n\nRatio de réduction en % (25 = diviser par 4) :\n100 = aucune réduction.'
+        : 'Résolution source détectée : {r} m\n\nRatio de réduction en % (25 = diviser par 4) :\n100 = aucune réduction.',
 }

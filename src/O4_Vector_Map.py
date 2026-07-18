@@ -192,7 +192,15 @@ def include_airports(vector_map, tile):
         tags_of_interest,
         cached_suffix="airports",
     ):
-        return (0, 0)
+        # Echec definitif du telechargement OSM des aeroports :
+        # on retourne des objets neutres du bon type (tableau vide et
+        # geometrie vide) au lieu de (0, 0), afin que la suite du build
+        # (include_roads) continue sans aeroport au lieu de planter
+        # avec un TypeError sur apt_array / apt_area.
+        return (
+            numpy.zeros((1001, 1001), dtype=bool),
+            geometry.Polygon(),
+        )
     dico_airports = {}
     APT.discover_airport_names(airport_layer, dico_airports)
     APT.attach_surfaces_to_airports(airport_layer, dico_airports)

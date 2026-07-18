@@ -1,0 +1,1446 @@
+# ============================================================
+#  O4_Altimetrie_Utils.py  —  ORTHO4XP V3
+#  Module autonome « Altimétrie / DEM »
+#
+#  RÔLE :
+#    Remplacer la procédure QGIS manuelle (41 étapes + tableur .ods) par
+#    un seul bouton. Le module lit les fichiers altimétriques présents
+#    dans le dossier de la tuile (fichiers réels OU liens symboliques
+#    relatifs), les reprojette en EPSG:4326, les découpe à l'emprise de
+#    la tuile élargie du débord de chevauchement, les fusionne, écrit
+#    <tuile>.tif à côté, et renseigne custom_dem dans le cfg de la tuile.
+#
+#  ÉQUIVALENCE AVEC LA PROCÉDURE MANUELLE (validée avec Roland) :
+#    Raster/Projections/Warp  -> reprojection EPSG:4326
+#    NoData -32767 -> -99999  -> _NODATA
+#    Emprise du tableur .ods  -> gdalwarp -te (lon-0.1) (lat-0.1)
+#                                          (lon+1.1) (lat+1.1)
+#    Raster/Divers/Fusion     -> rasterio.merge
+#    Export + champ DEM       -> écriture <tuile>.tif + custom_dem
+#
+#  RÈGLES RESPECTÉES :
+#    - Fichier NEUF. Aucun fichier du pipeline n'est modifié :
+#      ni O4_DSF_Utils.py, ni les fichiers Sea, ni le mécanisme Extents/.
+#    - Aucune commande Terminal. Tout passe par rasterio (déjà installé
+#      dans le venv, avec gdal_data/ et proj_data/ embarqués : l'erreur
+#      « Cannot find proj.db » ne peut donc pas se produire).
+#    - Le CRS source n'est JAMAIS codé en dur : il est lu dans le
+#      fichier. EPSG:2154 (Lambert-93) n'est proposé qu'en repli pour les
+#      fichiers qui ne déclarent aucun CRS (cas des .asc IGN bruts).
+#    - L'arborescence de Roland n'est ni interprétée ni réorganisée.
+#    - Les fichiers sources ne sont jamais modifiés (lecture seule).
+# ============================================================
+
+import os
+
+# Débord de chevauchement : 10 % d'une tuile de 1° = 0,1° sur les 4 côtés.
+# Sert à ce que les bords fusionnent sans couture avec la tuile voisine.
+DEBORD_DEFAUT = 0.1
+
+# Valeur NoData de sortie (identique à la procédure manuelle).
+_NODATA = -99999.0
+
+# CRS de repli, utilisé UNIQUEMENT si le fichier ne déclare aucun CRS.
+_CRS_REPLI = "EPSG:2154"
+
+_EXT_RASTER = (".tif", ".tiff", ".vrt", ".asc", ".img", ".hgt", ".dt2")
+
+# ── Structure imposée (créée au premier lancement) ──────────────────
+#   <racine choisie>/Altimétrie/
+#       ├── Altimétrie TIFF/<Pays>/      ← sources déposées (EPSG:4326)
+#       └── Altimétrie assemble/
+#             └── Assemble <Pays>/<tuile>/<tuile>.tif
+# Imposer la structure supprime toute la classe d'erreurs « chemin
+# introuvable » chez les utilisateurs qui n'ont pas d'organisation.
+DOSSIER_RACINE = "Altimétrie"
+DOSSIER_STOCK = "Altimétrie TIFF"
+DOSSIER_ASSEMBLE = "Altimétrie assemble"
+PREFIXE_PAYS_ASSEMBLE = "Assemble "
+
+CFG_RACINE = "dem_root_dir"      # racine <...>/Altimétrie
+CFG_PAYS = "dem_last_country"    # dernier pays utilisé
+CFG_QGIS = "qgis_app"            # application QGIS (comme patch_editor_app)
+
+
+def chemins_structure(racine):
+    """Retourne (stock, assemble) pour une racine <...>/Altimétrie."""
+    return (os.path.join(racine, DOSSIER_STOCK),
+            os.path.join(racine, DOSSIER_ASSEMBLE))
+
+
+def creer_structure(base, pays):
+    """Crée la structure complète. Idempotent : ne détruit jamais rien,
+    se contente de créer ce qui manque. Retourne (racine, stock_pays,
+    assemble_pays)."""
+    racine = os.path.join(base, DOSSIER_RACINE) \
+        if os.path.basename(os.path.normpath(base)) != DOSSIER_RACINE \
+        else base
+    stock, assemble = chemins_structure(racine)
+    stock_pays = os.path.join(stock, pays)
+    assemble_pays = os.path.join(assemble, PREFIXE_PAYS_ASSEMBLE + pays)
+    for d in (racine, stock, assemble, stock_pays, assemble_pays):
+        os.makedirs(d, exist_ok=True)
+    return racine, stock_pays, assemble_pays
+
+
+def lister_pays(racine):
+    """Pays présents dans le stock."""
+    stock, _a = chemins_structure(racine)
+    if not os.path.isdir(stock):
+        return []
+    return sorted(d for d in os.listdir(stock)
+                  if not d.startswith(".")
+                  and os.path.isdir(os.path.join(stock, d)))
+
+
+# ────────────────────────────────────────────────────────────────────
+#  Partie 1 — logique pure (sans rasterio, entièrement simulable)
+# ────────────────────────────────────────────────────────────────────
+
+def tile_key(lat, lon):
+    """Nom canonique de la tuile : +46-003, +49+007, -34+151…"""
+    return "%s%02d%s%03d" % ("+" if lat >= 0 else "-", abs(int(lat)),
+                             "+" if lon >= 0 else "-", abs(int(lon)))
+
+
+def tile_bounds(lat, lon, debord=DEBORD_DEFAUT):
+    """Emprise (ouest, sud, est, nord) de la tuile élargie du débord.
+    Reproduit exactement la formule du tableur FormuleBord :
+      gdalwarp -te (lon-0.1) (lat-0.1) (lon+1.1) (lat+1.1)"""
+    return (lon - debord, lat - debord,
+            lon + 1 + debord, lat + 1 + debord)
+
+
+def intersecte(src, tgt):
+    """Vrai si les deux emprises se touchent, ne serait-ce que d'un pixel.
+    Un contact strictement tangent n'apporte aucun pixel → exclu."""
+    return (src[0] < tgt[2] and src[2] > tgt[0] and
+            src[1] < tgt[3] and src[3] > tgt[1])
+
+
+def maj_cfg_lignes(lignes, chemin):
+    """Remplace (ou ajoute) custom_dem sans toucher aux autres lignes."""
+    out = []
+    trouve = False
+    for l in lignes:
+        if l.startswith("custom_dem="):
+            out.append("custom_dem=%s\n" % chemin)
+            trouve = True
+        else:
+            out.append(l)
+    if not trouve:
+        out.append("custom_dem=%s\n" % chemin)
+    return out
+
+
+def ecrire_custom_dem(cfg_path, chemin_tif):
+    """Écrit custom_dem dans le cfg de la tuile. Le cfg est créé s'il
+    n'existe pas. Aucune autre clé n'est touchée."""
+    lignes = []
+    if os.path.isfile(cfg_path):
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            lignes = f.readlines()
+    lignes = maj_cfg_lignes(lignes, chemin_tif)
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        f.writelines(lignes)
+
+
+def lister_sources(dossier, sortie_exclue=None):
+    """Fichiers raster du dossier de la tuile, liens relatifs compris.
+    Le fichier de sortie déjà présent est exclu (pas d'auto-fusion)."""
+    res = []
+    if not dossier or not os.path.isdir(dossier):
+        return res
+    for f in sorted(os.listdir(dossier)):
+        if f.startswith("."):
+            continue
+        if sortie_exclue and f == sortie_exclue:
+            continue
+        p = os.path.join(dossier, f)
+        # os.path.isfile suit les liens symboliques relatifs.
+        if os.path.isfile(p) and f.lower().endswith(_EXT_RASTER):
+            res.append(p)
+    return res
+
+
+def sources_depuis_stock(racine, lat, lon, debord=DEBORD_DEFAUT):
+    """Étape B — parcourt TOUS les pays du stock et retourne les fichiers
+    dont l'emprise intersecte la tuile élargie. L'utilisateur n'a plus ni
+    dossier à peupler, ni lien à créer, ni département à deviner.
+
+    Nécessite rasterio pour lire les emprises. Les fichiers dont
+    l'emprise n'est pas lisible en degrés sont retournés quand même :
+    assembler_tuile() refera le test après reprojection.
+    """
+    stock, _a = chemins_structure(racine)
+    res = []
+    if not os.path.isdir(stock):
+        return res
+    try:
+        rasterio = _import_rasterio()[0]
+    except Exception:
+        return res
+    bornes = tile_bounds(lat, lon, debord)
+    # followlinks=True : indispensable. L'utilisateur place souvent un
+    # LIEN vers son stock réel (plusieurs dizaines de Go) au lieu de
+    # dupliquer les données. Sans cette option, os.walk ne descendrait
+    # pas dans le lien et ne trouverait aucun fichier.
+    vus = set()
+    for rep, sous, fichiers in os.walk(stock, followlinks=True):
+        # Garde-fou : un lien qui pointerait sur un parent créerait une
+        # boucle infinie. On ne visite jamais deux fois le même dossier.
+        reel = os.path.realpath(rep)
+        if reel in vus:
+            sous[:] = []
+            continue
+        vus.add(reel)
+        for f in sorted(fichiers):
+            if f.startswith(".") or not f.lower().endswith(_EXT_RASTER):
+                continue
+            p = os.path.join(rep, f)
+            try:
+                with rasterio.open(p) as ds:
+                    b = ds.bounds
+                    crs = ds.crs
+                if crs is not None and crs.to_epsg() == 4326:
+                    if not intersecte((b.left, b.bottom, b.right, b.top),
+                                      bornes):
+                        continue
+                # CRS non 4326 → emprise non comparable ici : on garde,
+                # le test définitif est fait après reprojection.
+                res.append(p)
+            except Exception:
+                continue
+    return res
+
+
+# ────────────────────────────────────────────────────────────────────
+#  Partie 2 — moteur raster (rasterio)
+# ────────────────────────────────────────────────────────────────────
+
+def _import_rasterio():
+    """Import différé : le module reste chargeable même sans rasterio,
+    et la fenêtre affiche alors un message clair au lieu de planter."""
+    import rasterio
+    from rasterio.warp import calculate_default_transform, reproject, Resampling
+    from rasterio.merge import merge
+    from rasterio.crs import CRS
+    return rasterio, calculate_default_transform, reproject, Resampling, merge, CRS
+
+
+def rasterio_disponible():
+    try:
+        _import_rasterio()
+        return True
+    except Exception:
+        return False
+
+
+def _reprojeter(src_path, dst_path, log=None):
+    """Reprojette en EPSG:4326 et impose le NoData de sortie.
+    Équivaut à : gdalwarp -t_srs EPSG:4326 -dstnodata -99999"""
+    (rasterio, calculate_default_transform, reproject,
+     Resampling, merge, CRS) = _import_rasterio()
+
+    with rasterio.open(src_path) as src:
+        src_crs = src.crs
+        if src_crs is None:
+            # Aucun CRS déclaré (cas des .asc IGN bruts) → repli Lambert-93.
+            src_crs = CRS.from_string(_CRS_REPLI)
+            if log:
+                log("      CRS absent — repli %s : %s"
+                    % (_CRS_REPLI, os.path.basename(src_path)))
+
+        dst_crs = CRS.from_epsg(4326)
+        transform, width, height = calculate_default_transform(
+            src_crs, dst_crs, src.width, src.height, *src.bounds)
+
+        profil = src.profile.copy()
+        profil.update(driver="GTiff", crs=dst_crs, transform=transform,
+                      width=width, height=height, nodata=_NODATA,
+                      dtype="float32", count=1, compress="DEFLATE")
+        profil.pop("blockxsize", None)
+        profil.pop("blockysize", None)
+        if width >= 256 and height >= 256:
+            profil["tiled"] = True
+        else:
+            profil["tiled"] = False
+
+        with rasterio.open(dst_path, "w", **profil) as dst:
+            reproject(source=rasterio.band(src, 1),
+                      destination=rasterio.band(dst, 1),
+                      src_transform=src.transform, src_crs=src_crs,
+                      src_nodata=src.nodata,
+                      dst_transform=transform, dst_crs=dst_crs,
+                      dst_nodata=_NODATA,
+                      resampling=Resampling.bilinear)
+    return dst_path
+
+
+def assembler_tuile(lat, lon, dossier_tuile, debord=DEBORD_DEFAUT,
+                    log=None, sources=None):
+    """Assemble le DEM de la tuile. Retourne le chemin du .tif produit.
+
+    Enchaînement, identique à la procédure manuelle :
+      1) sélection des sources qui intersectent la tuile élargie
+      2) reprojection EPSG:4326 + NoData -99999
+      3) fusion (merge) bornée à l'emprise élargie
+      4) écriture de <tuile>.tif dans le dossier de la tuile
+    """
+    import tempfile
+    import shutil
+
+    (rasterio, calculate_default_transform, reproject,
+     Resampling, merge, CRS) = _import_rasterio()
+
+    def _log(m):
+        if log:
+            log(m)
+
+    cle = tile_key(lat, lon)
+    nom_sortie = cle + ".tif"
+    sortie = os.path.join(dossier_tuile, nom_sortie)
+    bornes = tile_bounds(lat, lon, debord)
+
+    _log("   [DEM] Tuile %s — emprise %.3f %.3f %.3f %.3f (débord %.3f°)"
+         % (cle, bornes[0], bornes[1], bornes[2], bornes[3], debord))
+
+    if sources is None:
+        sources = lister_sources(dossier_tuile, sortie_exclue=nom_sortie)
+    if not sources:
+        raise RuntimeError("Aucun fichier altimétrique dans le dossier "
+                           "de la tuile.")
+
+    tmp = tempfile.mkdtemp(prefix="o4_dem_")
+    reprojetes = []
+    ignorees = []
+    try:
+        # ── 1 + 2 : lecture, test d'intersection, reprojection ────────
+        for i, s in enumerate(sources):
+            nom = os.path.basename(s)
+            try:
+                with rasterio.open(s) as ds:
+                    b = ds.bounds
+                    crs = ds.crs
+                    if crs is not None and crs.to_epsg() == 4326:
+                        emprise = (b.left, b.bottom, b.right, b.top)
+                    else:
+                        # Emprise inconnue en degrés avant reprojection :
+                        # on ne peut pas trancher ici → on reprojette puis
+                        # on teste. Marqué par emprise=None.
+                        emprise = None
+            except Exception as e:
+                ignorees.append((nom, "illisible : %s" % e))
+                _log("      IGNORÉ (illisible) : %s" % nom)
+                continue
+
+            if emprise is not None and not intersecte(emprise, bornes):
+                ignorees.append((nom, "hors emprise %.3f %.3f %.3f %.3f"
+                                 % emprise))
+                _log("      IGNORÉ (hors emprise) : %s" % nom)
+                continue
+
+            dst = os.path.join(tmp, "r%03d.tif" % i)
+            try:
+                _reprojeter(s, dst, log=_log)
+            except Exception as e:
+                ignorees.append((nom, "reprojection : %s" % e))
+                _log("      IGNORÉ (reprojection) : %s" % nom)
+                continue
+
+            # Second test après reprojection (cas emprise inconnue).
+            with rasterio.open(dst) as ds:
+                b = ds.bounds
+                if not intersecte((b.left, b.bottom, b.right, b.top),
+                                  bornes):
+                    ignorees.append(
+                        (nom, "hors emprise après reprojection "
+                              "%.3f %.3f %.3f %.3f"
+                              % (b.left, b.bottom, b.right, b.top)))
+                    _log("      IGNORÉ (hors emprise) : %s" % nom)
+                    continue
+
+            reprojetes.append(dst)
+            _log("      RETENU : %s" % nom)
+
+        if not reprojetes:
+            detail = "\n".join("   • %s : %s" % (n, r) for n, r in ignorees)
+            raise RuntimeError(
+                "Aucune source ne recouvre cette tuile.\n"
+                "Emprise cherchée : %.3f %.3f %.3f %.3f\n"
+                "%d fichier(s) écarté(s) :\n%s"
+                % (bornes[0], bornes[1], bornes[2], bornes[3],
+                   len(ignorees), detail or "   (aucun)"))
+
+        # ── 3 : fusion bornée à l'emprise élargie ─────────────────────
+        _log("   [DEM] Fusion de %d source(s)…" % len(reprojetes))
+        ouverts = [rasterio.open(p) for p in reprojetes]
+        try:
+            mosaic, out_transform = merge(ouverts, bounds=bornes,
+                                          nodata=_NODATA)
+            profil = ouverts[0].profile.copy()
+        finally:
+            for o in ouverts:
+                try:
+                    o.close()
+                except Exception:
+                    pass
+
+        profil.update(driver="GTiff", height=mosaic.shape[1],
+                      width=mosaic.shape[2], transform=out_transform,
+                      count=1, dtype="float32", nodata=_NODATA,
+                      compress="DEFLATE")
+        profil.pop("blockxsize", None)
+        profil.pop("blockysize", None)
+        profil["tiled"] = (mosaic.shape[1] >= 256 and mosaic.shape[2] >= 256)
+
+        # ── 4 : écriture ─────────────────────────────────────────────
+        tmp_out = os.path.join(tmp, "final.tif")
+        with rasterio.open(tmp_out, "w", **profil) as dst:
+            dst.write(mosaic[0].astype("float32"), 1)
+
+        # Écriture finale seulement si tout a réussi : un assemblage
+        # interrompu ne laisse jamais un .tif partiel à la place du bon.
+        shutil.move(tmp_out, sortie)
+        _log("   [DEM] Écrit : %s" % sortie)
+        return sortie, ignorees
+    finally:
+        try:
+            shutil.rmtree(tmp, ignore_errors=True)
+        except Exception:
+            pass
+
+
+def resolution_metres(src_path):
+    """Résolution approximative du fichier, en mètres.
+    Sert à afficher ce que donnera un ratio de réduction et à empêcher
+    de « réduire » une source déjà grossière (Sonny ≈ 20 m) en dessous
+    de sa résolution native, ce qui n'apporterait aucune information."""
+    rasterio = _import_rasterio()[0]
+    with rasterio.open(src_path) as ds:
+        rx, ry = abs(ds.res[0]), abs(ds.res[1])
+        crs = ds.crs
+        lat = (ds.bounds.bottom + ds.bounds.top) / 2.0
+        if crs is not None and crs.to_epsg() == 4326:
+            # Degrés → mètres, à la latitude médiane du fichier.
+            import math
+            mx = rx * 111320.0 * max(0.05, math.cos(math.radians(lat)))
+            my = ry * 110540.0
+            return (mx + my) / 2.0
+        # CRS projeté (Lambert-93, UTM…) : l'unité est déjà le mètre.
+        return (rx + ry) / 2.0
+
+
+def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
+                  crs_repli=_CRS_REPLI, log=None, stop=None):
+    """Chaîne A — prépare le fichier réduit d'un département / pays.
+
+    Équivaut à la procédure Terminal :
+        gdalbuildvrt X.vrt *.asc
+        gdalwarp -s_srs <CRS> -t_srs EPSG:4326 X.vrt XEPSG.tif
+        gdal_translate -outsize <ratio>% <ratio>% XEPSG.tif X-reduit.tif
+
+    DIFFÉRENCE ASSUMÉE : l'ordre est inversé (reprojection + réduction
+    dalle par dalle, PUIS assemblage). Le résultat est identique, mais la
+    mémoire reste constante : un département IGN en 1 m représente des
+    dizaines de Go et ne peut pas être assemblé en mémoire.
+
+    Le CRS source est LU dans chaque fichier ; crs_repli ne sert que pour
+    les fichiers qui n'en déclarent aucun (cas des .asc IGN bruts, d'où
+    le -s_srs EPSG:2154 de la procédure manuelle).
+    """
+    import tempfile
+    import shutil
+
+    (rasterio, calculate_default_transform, reproject,
+     Resampling, merge, CRS) = _import_rasterio()
+    from rasterio.transform import Affine
+
+    def _log(m=""):
+        if log:
+            log(m)
+
+    if not os.path.isdir(dossier_source):
+        raise RuntimeError("Dossier source introuvable : %s" % dossier_source)
+    ratio = max(0.01, min(1.0, float(ratio)))
+
+    sources = []
+    for rep, _d, fichiers in os.walk(dossier_source, followlinks=True):
+        for f in sorted(fichiers):
+            if not f.startswith(".") and f.lower().endswith(_EXT_RASTER):
+                sources.append(os.path.join(rep, f))
+    if not sources:
+        raise RuntimeError("Aucun fichier altimétrique dans :\n%s"
+                           % dossier_source)
+
+    _log("   [PREP] %d fichier(s) source(s), ratio %.0f %%"
+         % (len(sources), ratio * 100))
+
+    tmp = tempfile.mkdtemp(prefix="o4_prep_")
+    reduits = []
+    ignorees = []
+    try:
+        dst_crs = CRS.from_epsg(4326)
+        for i, src_path in enumerate(sources):
+            if stop is not None and stop():
+                raise RuntimeError("Préparation interrompue par "
+                                   "l'utilisateur.")
+            nom = os.path.basename(src_path)
+            try:
+                with rasterio.open(src_path) as src:
+                    src_crs = src.crs
+                    if src_crs is None:
+                        src_crs = CRS.from_string(crs_repli)
+                    transform, width, height = calculate_default_transform(
+                        src_crs, dst_crs, src.width, src.height,
+                        *src.bounds)
+                    # Réduction : on applique le ratio à la grille de
+                    # sortie, exactement comme gdal_translate -outsize.
+                    w2 = max(1, int(round(width * ratio)))
+                    h2 = max(1, int(round(height * ratio)))
+                    t2 = transform * Affine.scale(width / float(w2),
+                                                  height / float(h2))
+                    profil = src.profile.copy()
+                    profil.update(driver="GTiff", crs=dst_crs,
+                                  transform=t2, width=w2, height=h2,
+                                  count=1, dtype="float32",
+                                  nodata=_NODATA, compress="DEFLATE")
+                    profil.pop("blockxsize", None)
+                    profil.pop("blockysize", None)
+                    profil["tiled"] = (w2 >= 256 and h2 >= 256)
+                    dst_path = os.path.join(tmp, "p%05d.tif" % i)
+                    with rasterio.open(dst_path, "w", **profil) as dst:
+                        reproject(
+                            source=rasterio.band(src, 1),
+                            destination=rasterio.band(dst, 1),
+                            src_transform=src.transform, src_crs=src_crs,
+                            src_nodata=src.nodata,
+                            dst_transform=t2, dst_crs=dst_crs,
+                            dst_nodata=_NODATA,
+                            # average : moyenne des pixels regroupés.
+                            # Sur un MNT c'est nettement meilleur que le
+                            # plus proche voisin, qui crée des marches.
+                            resampling=(Resampling.average if ratio < 1.0
+                                        else Resampling.bilinear))
+                reduits.append(dst_path)
+            except Exception as e:
+                ignorees.append((nom, str(e)))
+                _log("      IGNORÉ : %s (%s)" % (nom, e))
+                continue
+            if (i + 1) % 10 == 0 or i + 1 == len(sources):
+                _log("      %d / %d traité(s)" % (i + 1, len(sources)))
+
+        if not reduits:
+            detail = "\n".join("   • %s : %s" % (n, r) for n, r in ignorees)
+            raise RuntimeError("Aucun fichier exploitable.\n%s" % detail)
+
+        _log("   [PREP] Assemblage de %d dalle(s) réduite(s)…"
+             % len(reduits))
+        ouverts = [rasterio.open(p) for p in reduits]
+        try:
+            mosaic, out_transform = merge(ouverts, nodata=_NODATA)
+            profil = ouverts[0].profile.copy()
+        finally:
+            for o in ouverts:
+                try:
+                    o.close()
+                except Exception:
+                    pass
+
+        profil.update(driver="GTiff", height=mosaic.shape[1],
+                      width=mosaic.shape[2], transform=out_transform,
+                      count=1, dtype="float32", nodata=_NODATA,
+                      compress="DEFLATE")
+        profil.pop("blockxsize", None)
+        profil.pop("blockysize", None)
+        profil["tiled"] = (mosaic.shape[1] >= 256 and mosaic.shape[2] >= 256)
+
+        tmp_out = os.path.join(tmp, "final.tif")
+        with rasterio.open(tmp_out, "w", **profil) as dst:
+            dst.write(mosaic[0].astype("float32"), 1)
+        os.makedirs(os.path.dirname(fichier_sortie), exist_ok=True)
+        # Écriture atomique : jamais de fichier partiel dans le stock.
+        shutil.move(tmp_out, fichier_sortie)
+        _log("   [PREP] Écrit : %s" % fichier_sortie)
+        return fichier_sortie, ignorees
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ────────────────────────────────────────────────────────────────────
+#  Partie 3 — auto-test (validation du moteur sans toucher aux données)
+# ────────────────────────────────────────────────────────────────────
+
+def auto_test(log=None):
+    """Fabrique des GeoTIFF de test dans un dossier temporaire, exécute
+    la chaîne complète et vérifie le résultat. Ne touche à AUCUN fichier
+    de Roland. Retourne (ok, rapport)."""
+    import tempfile
+    import shutil
+
+    lignes = []
+
+    def _l(m):
+        lignes.append(m)
+        if log:
+            log(m)
+
+    # ── Tests de logique pure (toujours exécutables) ─────────────────
+    try:
+        assert tile_key(46, -3) == "+46-003"
+        assert tile_key(49, 7) == "+49+007"
+        assert tile_key(-34, 151) == "-34+151"
+        _l("[1/6] Nommage des tuiles ................ OK")
+
+        assert tile_bounds(45, 1) == (0.9, 44.9, 2.1, 46.1)
+        b = [round(x, 6) for x in tile_bounds(49, 7)]
+        assert b == [6.9, 48.9, 8.1, 50.1]
+        _l("[2/6] Emprise + débord (formule .ods) ... OK")
+
+        t = tile_bounds(49, 7)
+        assert intersecte((5.0, 48.0, 6.9001, 50.0), t)
+        assert not intersecte((5.0, 48.0, 6.9, 50.0), t)
+        assert not intersecte((10, 49, 11, 50), t)
+        _l("[3/6] Règle du pixel de contact ......... OK")
+
+        r = maj_cfg_lignes(["default_zl=17\n", "custom_dem=/vieux.tif\n"],
+                           "/neuf.tif")
+        assert r[1] == "custom_dem=/neuf.tif\n" and len(r) == 2
+        r = maj_cfg_lignes(["default_zl=17\n"], "/neuf.tif")
+        assert r[-1] == "custom_dem=/neuf.tif\n"
+        _l("[4/6] Écriture custom_dem ............... OK")
+    except Exception as e:
+        _l("ÉCHEC logique : %s" % e)
+        return False, "\n".join(lignes)
+
+    # ── Tests raster (nécessitent rasterio) ──────────────────────────
+    if not rasterio_disponible():
+        _l("[5/6] rasterio .......................... ABSENT")
+        _l("")
+        _l("rasterio est introuvable dans le venv d'Ortho4XP.")
+        _l("Le moteur d'assemblage ne peut pas fonctionner.")
+        return False, "\n".join(lignes)
+
+    (rasterio, calculate_default_transform, reproject,
+     Resampling, merge, CRS) = _import_rasterio()
+    import numpy as np
+    from rasterio.transform import from_origin
+
+    tmp = tempfile.mkdtemp(prefix="o4_dem_test_")
+    try:
+        # Deux dalles voisines en 4326, NoData -32767, qui se chevauchent
+        # et couvrent ensemble la tuile +45+001.
+        chemins = []
+        for k, (x0, y0) in enumerate([(0.5, 46.5), (1.4, 46.5)]):
+            p = os.path.join(tmp, "src%d.tif" % k)
+            data = np.full((120, 120), 100.0 + k, dtype="float32")
+            data[0, 0] = -32767.0
+            prof = dict(driver="GTiff", height=120, width=120, count=1,
+                        dtype="float32", crs=CRS.from_epsg(4326),
+                        transform=from_origin(x0, y0, 0.01, 0.01),
+                        nodata=-32767.0)
+            with rasterio.open(p, "w", **prof) as d:
+                d.write(data, 1)
+            chemins.append(p)
+
+        # Une dalle volontairement hors emprise : doit être ignorée.
+        p = os.path.join(tmp, "hors.tif")
+        prof = dict(driver="GTiff", height=20, width=20, count=1,
+                    dtype="float32", crs=CRS.from_epsg(4326),
+                    transform=from_origin(20.0, 60.0, 0.01, 0.01),
+                    nodata=-32767.0)
+        with rasterio.open(p, "w", **prof) as d:
+            d.write(np.full((20, 20), 5.0, dtype="float32"), 1)
+        chemins.append(p)
+
+        _l("[5/6] Lecture / reprojection ............ OK")
+
+        sortie, ignorees = assembler_tuile(45, 1, tmp, log=_l,
+                                           sources=chemins)
+        assert os.path.isfile(sortie), "fichier de sortie absent"
+        assert os.path.basename(sortie) == "+45+001.tif"
+        assert any(n == "hors.tif" for n, _r in ignorees), \
+            "la dalle hors emprise aurait dû être ignorée"
+
+        with rasterio.open(sortie) as d:
+            assert d.crs.to_epsg() == 4326, "CRS de sortie incorrect"
+            assert abs(d.nodata - _NODATA) < 1e-6, "NoData incorrect"
+            bb = d.bounds
+            for got, want in ((bb.left, 0.9), (bb.bottom, 44.9),
+                              (bb.right, 2.1), (bb.top, 46.1)):
+                assert abs(got - want) < 0.02, \
+                    "emprise %.4f attendue %.4f" % (got, want)
+            arr = d.read(1)
+            assert float(arr.max()) > 99.0, "aucune donnée utile fusionnée"
+        _l("[6/6] Fusion + écriture + NoData ........ OK")
+        _l("")
+        _l("Moteur d'assemblage opérationnel.")
+        return True, "\n".join(lignes)
+    except Exception as e:
+        _l("ÉCHEC raster : %s" % e)
+        return False, "\n".join(lignes)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ────────────────────────────────────────────────────────────────────
+#  Partie 4 — fenêtre
+# ────────────────────────────────────────────────────────────────────
+
+def _lire_cfg_valeur(cfg_path, cle):
+    try:
+        if not os.path.isfile(cfg_path):
+            return ""
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            for l in f:
+                if l.startswith(cle + "="):
+                    return l.split("=", 1)[1].strip()
+    except Exception:
+        pass
+    return ""
+
+
+def open_altimetrie_window(gui):
+    """Point d'entrée du module, appelé par le bouton « Altimétrie / DEM ».
+
+    Au premier lancement, un assistant crée la structure imposée. Ensuite,
+    le module trouve seul les sources qui recouvrent la tuile.
+    """
+    import tkinter as tk
+    from tkinter import ttk, filedialog, messagebox, simpledialog
+    import subprocess
+    import sys
+
+    try:
+        from O4_Lang import tr as _tr
+    except Exception:
+        def _tr(k):
+            return k
+
+    import O4_File_Names as FNAMES
+
+    def _app_cfg():
+        return os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
+
+    def _cfg_get(cle):
+        return _lire_cfg_valeur(_app_cfg(), cle)
+
+    def _cfg_set(cle, valeur):
+        try:
+            p = _app_cfg()
+            lignes = []
+            trouve = False
+            if os.path.isfile(p):
+                with open(p, "r", encoding="utf-8") as f:
+                    for l in f:
+                        if l.startswith(cle + "="):
+                            lignes.append("%s=%s\n" % (cle, valeur))
+                            trouve = True
+                        else:
+                            lignes.append(l)
+            if not trouve:
+                lignes.append("%s=%s\n" % (cle, valeur))
+            with open(p, "w", encoding="utf-8") as f:
+                f.writelines(lignes)
+        except Exception:
+            pass
+
+    try:
+        lat = int(gui.lat.get() or 0)
+        lon = int(gui.lon.get() or 0)
+    except Exception:
+        messagebox.showerror(_tr("Altimétrie / DEM"),
+                             _tr("Latitude / longitude invalides."))
+        return
+
+    cle = tile_key(lat, lon)
+
+    try:
+        import O4_Theme_Manager as _TM
+        _t = _TM.get_theme()
+        BG = _t.get("patch_bg", _t.get("bg", "#0a1a0a"))
+        FG = _t.get("patch_fg", _t.get("fg", "#00cc44"))
+        FG2 = _t.get("patch_fg2", _t.get("fg_secondary", "#88ffaa"))
+        PREV_BG = _t.get("patch_prev_bg", _t.get("canvas_bg", "#050f05"))
+    except Exception:
+        BG, FG, FG2, PREV_BG = "#0a1a0a", "#00cc44", "#88ffaa", "#050f05"
+    FONT = ("TkFixedFont", 11)
+    FONT_T = ("TkFixedFont", 13)
+
+    root_ref = None
+    try:
+        root_ref = tk._default_root
+    except Exception:
+        pass
+    win = tk.Toplevel(root_ref) if root_ref else tk.Toplevel(gui)
+    win.title(_tr("Altimétrie / DEM — Ortho4XP V3"))
+    win.configure(bg=BG)
+    # Rattachée au GUI : elle ne se perd jamais derrière la fenêtre
+    # principale après une boîte de dialogue.
+    try:
+        win.transient(gui)
+    except Exception:
+        pass
+    win.lift()
+    win.focus_force()
+
+    def _remonter():
+        """Ramène la fenêtre au premier plan. Appelée après chaque boîte
+        de dialogue : sous macOS, la fenêtre repasse sinon derrière le
+        GUI et donne l'impression de s'être fermée."""
+        try:
+            win.deiconify()
+            win.lift()
+            win.focus_force()
+            win.attributes("-topmost", True)
+            win.after(300, lambda: win.attributes("-topmost", False))
+        except Exception:
+            pass
+    sw = win.winfo_screenwidth()
+    sh = win.winfo_screenheight()
+
+    tk.Label(win, text=_tr("Altimétrie / DEM") + "  —  " + cle,
+             font=FONT_T, bg=BG, fg=FG).pack(pady=(12, 2))
+    lbl_etat = tk.Label(win, text="", font=FONT, bg=BG, fg="#888888")
+    lbl_etat.pack(pady=(0, 6))
+
+    # ── Journal ──────────────────────────────────────────────────────
+    frm_log = tk.Frame(win, bg=BG)
+    frm_log.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 4))
+    sb = tk.Scrollbar(frm_log, bg=BG, troughcolor=BG)
+    sb.pack(side=tk.RIGHT, fill=tk.Y)
+    txt = tk.Text(frm_log, bg=PREV_BG, fg=FG2, font=("TkFixedFont", 10),
+                  height=18, width=92, yscrollcommand=sb.set,
+                  highlightthickness=1, highlightbackground="#1a4a1a")
+    txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    sb.config(command=txt.yview)
+
+    import queue as _queue
+    import threading as _threading
+    _fil = _queue.Queue()
+
+    def _log(m=""):
+        """Journalise. Appelable depuis n'importe quel thread : si on
+        n'est pas dans le thread de l'interface, le message passe par une
+        file d'attente vidée par _pomper()."""
+        if _threading.current_thread() is _threading.main_thread():
+            try:
+                txt.insert(tk.END, m + "\n")
+                txt.see(tk.END)
+                win.update()
+            except Exception:
+                pass
+        else:
+            _fil.put(m)
+
+    def _pomper():
+        """Vide la file d'attente dans le journal. Rappelée toutes les
+        100 ms tant qu'un travail de fond est en cours : l'interface
+        reste vivante et l'utilisateur voit l'avancement."""
+        try:
+            while True:
+                txt.insert(tk.END, _fil.get_nowait() + "\n")
+                txt.see(tk.END)
+        except Exception:
+            pass
+
+    def _etat(m, couleur="#888888"):
+        # L'utilisateur n'est JAMAIS laissé sans information : chaque
+        # opération annonce son début et sa fin.
+        try:
+            lbl_etat.config(text=m, fg=couleur)
+            win.update()
+        except Exception:
+            pass
+
+    _boutons = []
+    _travail = [False]
+    _anim = [0]
+
+    def _animer(message):
+        """Indicateur d'activité : l'utilisateur n'a jamais l'impression
+        que l'application est figée."""
+        if not _travail[0]:
+            return
+        _anim[0] = (_anim[0] + 1) % 4
+        _etat(message + " " + ("." * _anim[0]).ljust(3), FG)
+        _pomper()
+        win.after(400, lambda: _animer(message))
+
+    _racine = [_cfg_get(CFG_RACINE)]
+    _pays = [_cfg_get(CFG_PAYS)]
+    _dossier_tuile = [""]
+
+    # ── Assistant de création de la structure ────────────────────────
+    def _assistant(force=False):
+        if _racine[0] and os.path.isdir(_racine[0]) and not force:
+            return True
+        messagebox.showinfo(
+            _tr("Altimétrie / DEM"),
+            _tr("Première utilisation : Ortho4XP va créer votre "
+                "organisation des altimétries.\n\n"
+                "Choisissez le disque ou le dossier de stockage "
+                "(un disque externe convient)."), parent=win)
+        _remonter()
+        base = filedialog.askdirectory(
+            parent=win,
+            title=_tr("Choisir le disque / dossier de stockage des "
+                      "altimétries"))
+        _remonter()
+        if not base:
+            return False
+        pays = simpledialog.askstring(
+            _tr("Altimétrie / DEM"),
+            _tr("Nom du pays (ex. : France, Suisse, Allemagne) :"),
+            parent=win, initialvalue=_pays[0] or "France")
+        _remonter()
+        if not pays:
+            return False
+        pays = pays.strip().replace("/", "-").replace("\\", "-")
+        if not pays:
+            return False
+        _etat(_tr("Création de la structure…"), FG)
+        try:
+            racine, stock_pays, assemble_pays = creer_structure(base, pays)
+        except Exception as e:
+            _etat("")
+            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            _remonter()
+            return False
+        _racine[0] = racine
+        _pays[0] = pays
+        _cfg_set(CFG_RACINE, racine)
+        _cfg_set(CFG_PAYS, pays)
+        _etat(_tr("Structure créée."), FG)
+        txt.delete("1.0", tk.END)
+        _log(_tr("Structure créée :"))
+        _log("   " + racine)
+        _log("   ├── " + DOSSIER_STOCK + os.sep + pays)
+        _log("   └── " + DOSSIER_ASSEMBLE + os.sep
+             + PREFIXE_PAYS_ASSEMBLE + pays)
+        _log()
+        _log(_tr("À FAIRE MAINTENANT :"))
+        _log(_tr("Déposez les données altimétriques du pays dans :"))
+        _log("   " + stock_pays)
+        _log()
+        _log(_tr("Elles doivent être en EPSG:4326 — X-Plane ne lit aucune"))
+        _log(_tr("autre projection. Ortho4XP convertira au besoin, mais"))
+        _log(_tr("préparez-les de préférence en 4326."))
+        _log()
+        _log(_tr("Le résultat assemblé sera écrit dans :"))
+        _log("   " + os.path.join(assemble_pays, cle, cle + ".tif"))
+        messagebox.showinfo(
+            _tr("Altimétrie / DEM"),
+            _tr("Structure créée.\n\nDéposez vos altimétries dans :\n{d}\n\n"
+                "Format requis : EPSG:4326.").format(d=stock_pays),
+            parent=win)
+        _remonter()
+        return True
+
+    def _ajouter_pays():
+        if not _racine[0]:
+            if not _assistant():
+                return
+            return
+        pays = simpledialog.askstring(
+            _tr("Altimétrie / DEM"),
+            _tr("Nom du pays (ex. : France, Suisse, Allemagne) :"),
+            parent=win)
+        _remonter()
+        if not pays:
+            return
+        pays = pays.strip().replace("/", "-").replace("\\", "-")
+        if not pays:
+            return
+        try:
+            _r, stock_pays, assemble_pays = creer_structure(_racine[0], pays)
+        except Exception as e:
+            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            _remonter()
+            return
+        _pays[0] = pays
+        _cfg_set(CFG_PAYS, pays)
+        _log(_tr("Pays ajouté :") + " " + pays)
+        _log("   " + stock_pays)
+        messagebox.showinfo(
+            _tr("Altimétrie / DEM"),
+            _tr("Déposez vos altimétries dans :\n{d}\n\n"
+                "Format requis : EPSG:4326.").format(d=stock_pays),
+            parent=win)
+        _remonter()
+        _rafraichir()
+
+    # ── Dossier de sortie de la tuile ────────────────────────────────
+    try:
+        tile_cfg = os.path.join(FNAMES.Tile_dir, cle, "Ortho4XP_%s.cfg" % cle)
+    except Exception:
+        tile_cfg = ""
+
+    def _dossier_sortie():
+        # Priorité au custom_dem existant : l'organisation déjà en place
+        # (celle de Roland) est respectée sans être interprétée.
+        dem = _lire_cfg_valeur(tile_cfg, "custom_dem") if tile_cfg else ""
+        if dem and os.path.isdir(os.path.dirname(dem)):
+            return os.path.dirname(dem)
+        if _racine[0] and _pays[0]:
+            _s, assemble = chemins_structure(_racine[0])
+            return os.path.join(assemble, PREFIXE_PAYS_ASSEMBLE + _pays[0],
+                                cle)
+        return ""
+
+    _deb_var = None
+
+    def _debord():
+        try:
+            v = float(_deb_var.get().replace(",", "."))
+            if 0 <= v <= 1:
+                return v
+        except Exception:
+            pass
+        return DEBORD_DEFAUT
+
+    def _sources():
+        """Sources retenues, avec repli sur le dossier de la tuile.
+        1) stock imposé (aucun lien à créer)
+        2) sinon dossier de sortie s'il contient déjà des fichiers
+           (compatibilité avec les tuiles préparées à la main)"""
+        srcs = []
+        origine = ""
+        if _racine[0] and os.path.isdir(_racine[0]):
+            srcs = sources_depuis_stock(_racine[0], lat, lon, _debord())
+            origine = _tr("stock")
+        if not srcs:
+            d = _dossier_sortie()
+            srcs = lister_sources(d, sortie_exclue=cle + ".tif")
+            origine = _tr("dossier de la tuile")
+        return srcs, origine
+
+    def _rafraichir():
+        txt.delete("1.0", tk.END)
+        if not _racine[0] or not os.path.isdir(_racine[0]):
+            _etat(_tr("Structure non créée."), "#ffaa00")
+            _log(_tr("Aucune organisation d'altimétries n'est configurée."))
+            _log(_tr("Cliquez sur « Créer / choisir la structure »."))
+            if _racine[0]:
+                _log()
+                _log(_tr("Chemin mémorisé introuvable :"))
+                _log("   " + _racine[0])
+                _log(_tr("Si vos altimétries sont sur un disque externe,"))
+                _log(_tr("vérifiez qu'il est branché."))
+            return
+        b = tile_bounds(lat, lon, _debord())
+        _log(_tr("Tuile") + " %s — %s %.3f %.3f %.3f %.3f"
+             % (cle, _tr("emprise"), b[0], b[1], b[2], b[3]))
+        _log(_tr("Racine :") + " " + _racine[0])
+        pays = lister_pays(_racine[0])
+        _log(_tr("Pays du stock :") + " "
+             + (", ".join(pays) if pays else _tr("(aucun)")))
+        _log()
+        _etat(_tr("Recherche des sources…"), FG)
+        srcs, origine = _sources()
+        _etat("")
+        if not srcs:
+            _etat(_tr("Aucune source pour cette tuile."), "#ffaa00")
+            _log(_tr("Aucun fichier altimétrique ne recouvre cette tuile."))
+            _log(_tr("Déposez vos données dans le stock du pays, "
+                     "en EPSG:4326."))
+            return
+        _log(_tr("{n} source(s) trouvée(s) — origine : {o}").format(
+            n=len(srcs), o=origine))
+        for s in srcs:
+            marque = " (lien)" if os.path.islink(s) else ""
+            _log("   • " + os.path.basename(s) + marque)
+        _log()
+        _log(_tr("Cliquer sur « Assembler » pour lancer."))
+        _etat(_tr("Prêt."), FG)
+
+    # ── Actions ──────────────────────────────────────────────────────
+    def _assembler():
+        if not rasterio_disponible():
+            messagebox.showerror(
+                _tr("Altimétrie / DEM"),
+                _tr("rasterio est introuvable dans l'installation "
+                    "d'Ortho4XP."), parent=win)
+            _remonter()
+            return
+        srcs, _o = _sources()
+        if not srcs:
+            messagebox.showinfo(_tr("Altimétrie / DEM"),
+                                _tr("Aucune source pour cette tuile."),
+                                parent=win)
+            _remonter()
+            return
+        dest = _dossier_sortie()
+        if not dest:
+            messagebox.showinfo(_tr("Altimétrie / DEM"),
+                                _tr("Structure non configurée."), parent=win)
+            _remonter()
+            return
+        try:
+            os.makedirs(dest, exist_ok=True)
+        except Exception as e:
+            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            _remonter()
+            return
+        sortie = os.path.join(dest, cle + ".tif")
+        if os.path.isfile(sortie):
+            if not messagebox.askyesno(
+                    _tr("Altimétrie / DEM"),
+                    _tr("{f} existe déjà. Le remplacer ?").format(
+                        f=cle + ".tif"), parent=win):
+                _remonter()
+                return
+        txt.delete("1.0", tk.END)
+        _travail[0] = True
+        for b in _boutons:
+            try:
+                b.state(["disabled"])
+            except Exception:
+                pass
+        _animer(_tr("Assemblage en cours… ne fermez pas la fenêtre"))
+        _res = {}
+
+        def _tache():
+            # Le travail lourd (reprojection, fusion, écriture) tourne
+            # ICI, hors du thread de l'interface : plus de gel, plus de
+            # curseur d'attente. Le journal remonte par la file.
+            try:
+                _res["ok"] = assembler_tuile(lat, lon, dest,
+                                             debord=_debord(), log=_log,
+                                             sources=srcs)
+            except Exception as _e:
+                _res["err"] = str(_e)
+
+        th = _threading.Thread(target=_tache, daemon=True)
+        th.start()
+
+        def _fin():
+            if th.is_alive():
+                _pomper()
+                win.after(150, _fin)
+                return
+            _travail[0] = False
+            _pomper()
+            for b in _boutons:
+                try:
+                    b.state(["!disabled"])
+                except Exception:
+                    pass
+            if "err" in _res:
+                _etat(_tr("Échec."), "#ff4444")
+                _log()
+                _log(_tr("ÉCHEC :") + " " + _res["err"])
+                messagebox.showerror(_tr("Altimétrie / DEM"), _res["err"],
+                                     parent=win)
+                _remonter()
+                return
+            chemin, ignorees = _res["ok"]
+            if tile_cfg:
+                try:
+                    os.makedirs(os.path.dirname(tile_cfg), exist_ok=True)
+                    ecrire_custom_dem(tile_cfg, chemin)
+                    _log()
+                    _log(_tr("custom_dem renseigné dans le cfg de la tuile."))
+                except Exception as _e:
+                    _log(_tr("custom_dem non écrit :") + " " + str(_e))
+            _etat(_tr("Terminé."), FG)
+            _log()
+            _log(_tr("TERMINÉ."))
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _tr("Assemblage terminé.\n\n{f}\n\n"
+                    "custom_dem est renseigné : la tuile est prête pour "
+                    "l'étape mesh.").format(f=chemin), parent=win)
+            _remonter()
+
+        win.after(150, _fin)
+
+    def _auto_test():
+        txt.delete("1.0", tk.END)
+        _etat(_tr("Auto-test en cours…"), FG)
+        _log(_tr("Auto-test du moteur d'assemblage"))
+        _log(_tr("(aucun de vos fichiers n'est touché)"))
+        _log()
+        ok, _rap = auto_test(log=_log)
+        _log()
+        _log("=> " + (_tr("SUCCÈS") if ok else _tr("ÉCHEC")))
+        _etat(_tr("Auto-test terminé.") + " "
+              + (_tr("SUCCÈS") if ok else _tr("ÉCHEC")),
+              FG if ok else "#ff4444")
+        messagebox.showinfo(
+            _tr("Altimétrie / DEM"),
+            (_tr("Auto-test réussi : le moteur d'assemblage fonctionne.")
+             if ok else
+             _tr("Auto-test en échec — voir le détail dans la fenêtre.")),
+            parent=win)
+        _remonter()
+
+    # ── QGIS (mémorisé comme GIMP dans la fenêtre Correction) ────────
+    def _choisir_qgis():
+        if sys.platform == "darwin":
+            init_dir, ft = "/Applications", [(_tr("Applications macOS"),
+                                              "*.app"),
+                                             (_tr("Tous les fichiers"), "*")]
+        elif sys.platform.startswith("win"):
+            init_dir, ft = "C:\\Program Files", \
+                [(_tr("Exécutables Windows"), "*.exe"),
+                 (_tr("Tous les fichiers"), "*")]
+        else:
+            init_dir, ft = "/usr/bin", [(_tr("Tous les fichiers"), "*")]
+        p = filedialog.askopenfilename(
+            parent=win, title=_tr("Choisir l'application QGIS"),
+            initialdir=init_dir, filetypes=ft)
+        _remonter()
+        if p:
+            _cfg_set(CFG_QGIS, p)
+            _qgis_var.set(p)
+            messagebox.showinfo(_tr("Altimétrie / DEM"),
+                                _tr("Application QGIS enregistrée."),
+                                parent=win)
+            _remonter()
+
+    def _ouvrir_qgis():
+        app = _qgis_var.get().strip()
+        if not app:
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _tr("Aucune application QGIS définie.\n"
+                    "Cliquez d'abord sur « Choisir QGIS »."), parent=win)
+            _remonter()
+            return
+        cible = os.path.join(_dossier_sortie(), cle + ".tif")
+        args = [cible] if os.path.isfile(cible) else []
+        try:
+            if sys.platform == "darwin" and app.endswith(".app"):
+                subprocess.Popen(["open", "-a", app] + args)
+            else:
+                subprocess.Popen([app] + args)
+            _etat(_tr("QGIS lancé."), FG)
+        except Exception as e:
+            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            _remonter()
+
+    # ── Préparer un pays (chaîne A : brut → EPSG:4326 → réduit) ──────
+    def _preparer():
+        if not rasterio_disponible():
+            messagebox.showerror(
+                _tr("Altimétrie / DEM"),
+                _tr("rasterio est introuvable dans l'installation "
+                    "d'Ortho4XP."), parent=win)
+            _remonter()
+            return
+        if not _racine[0] or not os.path.isdir(_racine[0]):
+            messagebox.showinfo(_tr("Altimétrie / DEM"),
+                                _tr("Structure non configurée."), parent=win)
+            _remonter()
+            return
+        src = filedialog.askdirectory(
+            parent=win,
+            title=_tr("Dossier des données brutes (.asc, .tif…)"))
+        _remonter()
+        if not src:
+            return
+        # Résolution réelle de la source : évite de « réduire » du Sonny
+        # (~20 m) en dessous de sa résolution native.
+        res_m = None
+        try:
+            for rep, _d, fs in os.walk(src, followlinks=True):
+                for f in sorted(fs):
+                    if not f.startswith(".") and \
+                            f.lower().endswith(_EXT_RASTER):
+                        res_m = resolution_metres(os.path.join(rep, f))
+                        break
+                if res_m:
+                    break
+        except Exception:
+            res_m = None
+        if res_m is None:
+            messagebox.showerror(
+                _tr("Altimétrie / DEM"),
+                _tr("Aucun fichier altimétrique lisible dans ce dossier."),
+                parent=win)
+            _remonter()
+            return
+
+        # Ratio proposé : 25 % pour du 1 m (procédure IGN), 100 % si la
+        # source est déjà grossière.
+        defaut = "25" if res_m <= 2.0 else "100"
+        rep_ratio = simpledialog.askstring(
+            _tr("Altimétrie / DEM"),
+            _tr("Résolution source détectée : {r} m\n\n"
+                "Ratio de réduction en % (25 = diviser par 4) :\n"
+                "100 = aucune réduction.").format(r=("%.1f" % res_m)),
+            parent=win, initialvalue=defaut)
+        _remonter()
+        if not rep_ratio:
+            return
+        try:
+            ratio = float(rep_ratio.replace(",", ".").replace("%", "")) / 100.0
+        except Exception:
+            messagebox.showerror(_tr("Altimétrie / DEM"),
+                                 _tr("Ratio invalide."), parent=win)
+            _remonter()
+            return
+        ratio = max(0.01, min(1.0, ratio))
+        res_finale = res_m / ratio
+        if ratio < 1.0 and res_m > 5.0:
+            if not messagebox.askyesno(
+                    _tr("Altimétrie / DEM"),
+                    _tr("La source est déjà à {a} m. Réduire encore "
+                        "donnerait {b} m et ferait perdre du relief.\n\n"
+                        "Continuer quand même ?").format(
+                            a=("%.1f" % res_m), b=("%.1f" % res_finale)),
+                    parent=win):
+                _remonter()
+                return
+            _remonter()
+
+        pays_dispo = lister_pays(_racine[0])
+        pays = simpledialog.askstring(
+            _tr("Altimétrie / DEM"),
+            _tr("Pays de destination ({p}) :").format(
+                p=", ".join(pays_dispo) if pays_dispo else _tr("(aucun)")),
+            parent=win, initialvalue=_pays[0] or "France")
+        _remonter()
+        if not pays:
+            return
+        pays = pays.strip().replace("/", "-").replace("\\", "-")
+        if not pays:
+            return
+
+        suffixe = "%dM" % int(round(res_finale)) if res_finale >= 1 else "1M"
+        nom_def = "%s-%s-reduit.tif" % (os.path.basename(
+            os.path.normpath(src)), suffixe)
+        nom = simpledialog.askstring(
+            _tr("Altimétrie / DEM"),
+            _tr("Nom du fichier produit :"),
+            parent=win, initialvalue=nom_def)
+        _remonter()
+        if not nom:
+            return
+        if not nom.lower().endswith(".tif"):
+            nom += ".tif"
+
+        _r, stock_pays, _a = creer_structure(_racine[0], pays)
+        dest = os.path.join(stock_pays, nom)
+        if os.path.isfile(dest):
+            if not messagebox.askyesno(
+                    _tr("Altimétrie / DEM"),
+                    _tr("{f} existe déjà. Le remplacer ?").format(f=nom),
+                    parent=win):
+                _remonter()
+                return
+            _remonter()
+
+        txt.delete("1.0", tk.END)
+        _log(_tr("Préparation :") + " " + src)
+        _log(_tr("Résolution source :") + " %.1f m" % res_m)
+        _log(_tr("Ratio :") + " %.0f %%  →  %.1f m" % (ratio * 100,
+                                                       res_finale))
+        _log(_tr("Destination :") + " " + dest)
+        _log()
+        _travail[0] = True
+        for b in _boutons:
+            try:
+                b.state(["disabled"])
+            except Exception:
+                pass
+        _animer(_tr("Préparation en cours… ne fermez pas la fenêtre"))
+        _res = {}
+
+        def _tache():
+            try:
+                _res["ok"] = preparer_pays(src, dest, ratio=ratio, log=_log)
+            except Exception as _e:
+                _res["err"] = str(_e)
+
+        th = _threading.Thread(target=_tache, daemon=True)
+        th.start()
+
+        def _fin():
+            if th.is_alive():
+                _pomper()
+                win.after(150, _fin)
+                return
+            _travail[0] = False
+            _pomper()
+            for b in _boutons:
+                try:
+                    b.state(["!disabled"])
+                except Exception:
+                    pass
+            if "err" in _res:
+                _etat(_tr("Échec."), "#ff4444")
+                _log()
+                _log(_tr("ÉCHEC :") + " " + _res["err"])
+                messagebox.showerror(_tr("Altimétrie / DEM"), _res["err"],
+                                     parent=win)
+                _remonter()
+                return
+            _etat(_tr("Terminé."), FG)
+            _log()
+            _log(_tr("TERMINÉ."))
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _tr("Fichier préparé :\n\n{f}\n\n"
+                    "Il est maintenant dans le stock et sera utilisé "
+                    "automatiquement pour les tuiles qu'il "
+                    "recouvre.").format(f=_res["ok"][0]), parent=win)
+            _remonter()
+            _rafraichir()
+
+        win.after(150, _fin)
+
+    # ── Barre du bas ─────────────────────────────────────────────────
+    frm_deb = tk.Frame(win, bg=BG)
+    frm_deb.pack(fill=tk.X, padx=14, pady=(0, 4))
+    tk.Label(frm_deb, text=_tr("Débord de chevauchement (°) :"),
+             font=FONT, bg=BG, fg=FG).pack(side=tk.LEFT)
+    _deb_var = tk.StringVar(value=str(DEBORD_DEFAUT))
+    tk.Entry(frm_deb, textvariable=_deb_var, width=8, bg=PREV_BG, fg=FG2,
+             insertbackground=FG).pack(side=tk.LEFT, padx=(8, 0))
+    tk.Label(frm_deb, text=_tr("(0.1 = 10 % de la tuile sur les 4 côtés)"),
+             font=FONT, bg=BG, fg="#888888").pack(side=tk.LEFT, padx=(8, 0))
+
+    _qgis_var = tk.StringVar(value=_cfg_get(CFG_QGIS))
+    frm_q = tk.Frame(win, bg=BG)
+    frm_q.pack(fill=tk.X, padx=14, pady=(0, 4))
+    tk.Label(frm_q, text=_tr("QGIS :"), font=FONT, bg=BG,
+             fg=FG).pack(side=tk.LEFT)
+    tk.Label(frm_q, textvariable=_qgis_var, font=("TkFixedFont", 10),
+             bg=BG, fg=FG2, anchor="w", wraplength=560,
+             justify="left").pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                  padx=(8, 0))
+
+    frm_bot = tk.Frame(win, bg=BG)
+    frm_bot.pack(pady=(6, 12))
+    _defs = [
+        (_tr("Créer / choisir la structure"),
+         lambda: (_assistant(force=True), _rafraichir()), 0, 0),
+        (_tr("Ajouter un pays"), _ajouter_pays, 0, 1),
+        (_tr("Rafraîchir"), _rafraichir, 0, 2),
+        (_tr("Assembler"), _assembler, 0, 3),
+        (_tr("Préparer un pays"), _preparer, 1, 0),
+        (_tr("Vérifier (auto-test)"), _auto_test, 1, 1),
+        (_tr("Choisir QGIS"), _choisir_qgis, 1, 2),
+        (_tr("Ouvrir dans QGIS"), _ouvrir_qgis, 1, 3),
+        (_tr("Fermer"), win.destroy, 2, 3),
+    ]
+    for _txt, _cmd, _r, _c in _defs:
+        _b = ttk.Button(frm_bot, text=_txt, command=_cmd)
+        _b.grid(row=_r, column=_c, padx=5, pady=(8, 0) if _r else 0,
+                ipadx=6, ipady=4)
+        # Le bouton Fermer reste actif même pendant un assemblage.
+        if _cmd is not win.destroy:
+            _boutons.append(_b)
+
+    if not _racine[0]:
+        win.after(150, lambda: (_assistant(), _rafraichir()))
+    else:
+        _rafraichir()
+
+    win.update_idletasks()
+    ww = max(880, win.winfo_reqwidth())
+    wh = max(620, win.winfo_reqheight())
+    win.geometry("%dx%d+%d+%d" % (ww, wh, (sw - ww) // 2, (sh - wh) // 2))
+    win.minsize(760, 520)

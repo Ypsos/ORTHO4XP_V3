@@ -471,4 +471,195 @@ T = {
                                         : "Batch done — {n} tile(s) skipped:",
 
 
+
+    # ── ALTIMÉTRIE / DEM ───────────────────────────────────────────
+    '⛰ Altimétrie / DEM'
+        : '⛰ Elevation / DEM',
+    'Altimétrie / DEM'
+        : 'Elevation / DEM',
+    'Altimétrie / DEM — Ortho4XP V3'
+        : 'Elevation / DEM — Ortho4XP V3',
+    'Le module O4_Altimetrie_Utils.py est introuvable dans le dossier src/.'
+        : 'Module O4_Altimetrie_Utils.py not found in the src/ folder.',
+    'Latitude / longitude invalides.'
+        : 'Invalid latitude / longitude.',
+    'Créer / choisir la structure'
+        : 'Create / choose folder structure',
+    'Ajouter un pays'
+        : 'Add a country',
+    'Rafraîchir'
+        : 'Refresh',
+    'Assembler'
+        : 'Assemble',
+    'Vérifier (auto-test)'
+        : 'Check (self-test)',
+    'Choisir QGIS'
+        : 'Choose QGIS',
+    'Ouvrir dans QGIS'
+        : 'Open in QGIS',
+    'Fermer'
+        : 'Close',
+    'QGIS :'
+        : 'QGIS:',
+    'Débord de chevauchement (°) :'
+        : 'Overlap margin (°):',
+    '(0.1 = 10 % de la tuile sur les 4 côtés)'
+        : '(0.1 = 10% of the tile on all 4 sides)',
+    'Tuile'
+        : 'Tile',
+    'emprise'
+        : 'extent',
+    'Racine :'
+        : 'Root:',
+    'Pays du stock :'
+        : 'Countries in store:',
+    '(aucun)'
+        : '(none)',
+    'stock'
+        : 'store',
+    'dossier de la tuile'
+        : 'tile folder',
+    '{n} source(s) trouvée(s) — origine : {o}'
+        : '{n} source(s) found — from: {o}',
+    'Cliquer sur « Assembler » pour lancer.'
+        : 'Click the Assemble button to start.',
+    'Prêt.'
+        : 'Ready.',
+    'Terminé.'
+        : 'Done.',
+    'TERMINÉ.'
+        : 'DONE.',
+    'Échec.'
+        : 'Failed.',
+    'ÉCHEC :'
+        : 'FAILED:',
+    'SUCCÈS'
+        : 'SUCCESS',
+    'ÉCHEC'
+        : 'FAILED',
+    'Recherche des sources…'
+        : 'Looking for sources…',
+    'Assemblage en cours… ne fermez pas la fenêtre.'
+        : 'Assembling… please do not close this window.',
+    'Auto-test en cours…'
+        : 'Self-test running…',
+    'Auto-test terminé.'
+        : 'Self-test finished.',
+    "Auto-test du moteur d'assemblage"
+        : 'Self-test of the assembly engine',
+    "(aucun de vos fichiers n'est touché)"
+        : '(none of your files are touched)',
+    "Auto-test réussi : le moteur d'assemblage fonctionne."
+        : 'Self-test passed: the assembly engine works.',
+    'Auto-test en échec — voir le détail dans la fenêtre.'
+        : 'Self-test failed — see details in the window.',
+    'Structure non créée.'
+        : 'Folder structure not created.',
+    'Structure créée.'
+        : 'Folder structure created.',
+    'Structure créée :'
+        : 'Folder structure created:',
+    'Création de la structure…'
+        : 'Creating folder structure…',
+    'Structure non configurée.'
+        : 'Folder structure not configured.',
+    "Aucune organisation d'altimétries n'est configurée."
+        : 'No elevation folder structure is configured.',
+    'Cliquez sur « Créer / choisir la structure ».'
+        : 'Click the Create / choose folder structure button.',
+    'Chemin mémorisé introuvable :'
+        : 'Saved path not found:',
+    'Si vos altimétries sont sur un disque externe,'
+        : 'If your elevation data is on an external drive,',
+    "vérifiez qu'il est branché."
+        : 'please check that it is plugged in.',
+    'Première utilisation : Ortho4XP va créer votre organisation des altimétries.\n\nChoisissez le disque ou le dossier de stockage (un disque externe convient).'
+        : 'First use: Ortho4XP will create your elevation folder structure.\n\nChoose the drive or folder where it will be stored (an external drive is fine).',
+    'Choisir le disque / dossier de stockage des altimétries'
+        : 'Choose the drive / folder for elevation storage',
+    'Nom du pays (ex. : France, Suisse, Allemagne) :'
+        : 'Country name (e.g. France, Switzerland, Germany):',
+    'À FAIRE MAINTENANT :'
+        : 'WHAT TO DO NOW:',
+    'Déposez les données altimétriques du pays dans :'
+        : "Put the country's elevation data into:",
+    'Elles doivent être en EPSG:4326 — X-Plane ne lit aucune'
+        : 'It must be in EPSG:4326 — X-Plane cannot read any',
+    'autre projection. Ortho4XP convertira au besoin, mais'
+        : 'other projection. Ortho4XP will convert if needed, but',
+    'préparez-les de préférence en 4326.'
+        : 'prepare your files in 4326 whenever possible.',
+    'Le résultat assemblé sera écrit dans :'
+        : 'The assembled result will be written to:',
+    'Structure créée.\n\nDéposez vos altimétries dans :\n{d}\n\nFormat requis : EPSG:4326.'
+        : 'Folder structure created.\n\nPut your elevation data into:\n{d}\n\nRequired format: EPSG:4326.',
+    'Déposez vos altimétries dans :\n{d}\n\nFormat requis : EPSG:4326.'
+        : 'Put your elevation data into:\n{d}\n\nRequired format: EPSG:4326.',
+    'Pays ajouté :'
+        : 'Country added:',
+    'Aucune source pour cette tuile.'
+        : 'No source for this tile.',
+    'Aucun fichier altimétrique ne recouvre cette tuile.'
+        : 'No elevation file covers this tile.',
+    'Déposez vos données dans le stock du pays, en EPSG:4326.'
+        : 'Put your data into the country store, in EPSG:4326.',
+    "rasterio est introuvable dans l'installation d'Ortho4XP."
+        : 'rasterio was not found in the Ortho4XP installation.',
+    '{f} existe déjà. Le remplacer ?'
+        : '{f} already exists. Replace it?',
+    'custom_dem renseigné dans le cfg de la tuile.'
+        : 'custom_dem set in the tile cfg.',
+    'custom_dem non écrit :'
+        : 'custom_dem not written:',
+    "Assemblage terminé.\n\n{f}\n\ncustom_dem est renseigné : la tuile est prête pour l'étape mesh."
+        : 'Assembly finished.\n\n{f}\n\ncustom_dem is set: the tile is ready for the mesh step.',
+    "Choisir l'application QGIS"
+        : 'Choose the QGIS application',
+    'Application QGIS enregistrée.'
+        : 'QGIS application saved.',
+    "Aucune application QGIS définie.\nCliquez d'abord sur « Choisir QGIS »."
+        : 'No QGIS application set.\nUse the Choose QGIS button first.',
+    'QGIS lancé.'
+        : 'QGIS launched.',
+    'Applications macOS'
+        : 'macOS applications',
+    'Exécutables Windows'
+        : 'Windows executables',
+    'Tous les fichiers'
+        : 'All files',
+
+    'Assemblage en cours… ne fermez pas la fenêtre'
+        : 'Assembling… please do not close this window',
+    'Aucun dossier PATCH pour cette tuile (Step 2.1 non lancé).'
+        : 'No PATCH folder for this tile (Step 2.1 not run).',
+    'Aucun patch JPG dans :'
+        : 'No JPG patch in:',
+    'Aucun fichier altimétrique lisible dans ce dossier.'
+        : 'No readable elevation file in this folder.',
+    'Destination :'
+        : 'Destination:',
+    'Dossier des données brutes (.asc, .tif…)'
+        : 'Folder with the raw data (.asc, .tif…)',
+    "Fichier préparé :\n\n{f}\n\nIl est maintenant dans le stock et sera utilisé automatiquement pour les tuiles qu'il recouvre."
+        : 'File prepared:\n\n{f}\n\nIt is now in the store and will be used automatically for the tiles it covers.',
+    'La source est déjà à {a} m. Réduire encore donnerait {b} m et ferait perdre du relief.\n\nContinuer quand même ?'
+        : 'The source is already at {a} m. Reducing further would give {b} m and lose terrain detail.\n\nContinue anyway?',
+    'Nom du fichier produit :'
+        : 'Name of the produced file:',
+    'Pays de destination ({p}) :'
+        : 'Destination country ({p}):',
+    'Préparation :'
+        : 'Preparing:',
+    'Préparation en cours… ne fermez pas la fenêtre'
+        : 'Preparing… please do not close this window',
+    'Préparer un pays'
+        : 'Prepare a country',
+    'Ratio :'
+        : 'Ratio:',
+    'Ratio invalide.'
+        : 'Invalid ratio.',
+    'Résolution source :'
+        : 'Source resolution:',
+    'Résolution source détectée : {r} m\n\nRatio de réduction en % (25 = diviser par 4) :\n100 = aucune réduction.'
+        : 'Detected source resolution: {r} m\n\nReduction ratio in % (25 = divide by 4):\n100 = no reduction.',
 }
