@@ -27,11 +27,15 @@ Cet espace a été créé afin que la version V3 soit **claire, indépendante et
 
 ## 🎯 L'idée directrice
 
-Ortho4XP est un outil puissant, mais son accès a longtemps été réservé à ceux qui acceptaient d'ouvrir un terminal, d'installer Python à la main et de modifier des fichiers de configuration.
+Ortho4XP est un outil puissant, mais son accès a longtemps été réservé à ceux qui acceptaient d'ouvrir un terminal, d'installer Python à la main et d'écrire des fichiers de configuration. La V3 repose sur trois partis pris.
 
-La V3 ne change pas le moteur : elle **enlève les barrières**. Installation en un clic, interface complète, et surtout des outils qui rendent accessibles des opérations autrefois réservées aux initiés — retouche des textures, gestion de l'altimétrie, édition des données OSM dans JOSM, préparation des données géographiques dans QGIS.
+**Le moteur d'origine est préservé.** Le calcul du mesh, le cœur du travail d'Oscar Pilote, n'a pas été touché. Tous les ajouts sont des modules autonomes : si l'un d'eux manque ou échoue, Ortho4XP démarre et fonctionne quand même.
 
-L'objectif est simple : **un simmer doit pouvoir fabriquer ses tuiles sans jamais écrire une ligne de code.**
+**Les barrières tombent.** Installation en un clic, aucun terminal, et des opérations autrefois réservées aux initiés devenues des boutons : retouche des textures, édition OSM dans JOSM, emprises de provider, nivellement, aéroports. L'exemple le plus parlant : la procédure altimétrique de **41 étapes manuelles dans QGIS, tableur `.ods` à l'appui**, tient désormais dans un seul clic.
+
+**Et des capacités entièrement nouvelles apparaissent.** Une mer photoréaliste conforme aux orthophotos, quel que soit le provider. Une correction colorimétrique **adaptée au niveau de zoom** et validée pour le HDR de X-Plane 12. Une notation automatique de la qualité de chaque image téléchargée — bruit, nuages, dérive, risque de jointure. Une surveillance de la mémoire qui évite l'effondrement des gros builds. Rien de tout cela n'existe dans les versions antérieures.
+
+**En résumé :** un simmer doit pouvoir fabriquer ses tuiles sans jamais écrire une ligne de code — et obtenir un meilleur résultat qu'auparavant, pas seulement plus facilement.
 
 ---
 
@@ -58,7 +62,10 @@ L'objectif est simple : **un simmer doit pouvoir fabriquer ses tuiles sans jamai
 | **Édition OSM (JOSM)** | Manipulation manuelle des fichiers | ✅ Module **Avancé** — JOSM détecté et lancé automatiquement, fichiers créés, protégés et rangés au bon endroit |
 | **Emprises / Extents** | Écriture manuelle des `.ext` | ✅ Dessin de l'emprise dans JOSM → publication automatique en `.ext` + archive OSM |
 | **Nivellement / Aéroports** | Patches à écrire à la main | ✅ Modèles générés automatiquement, code OACI lu dans les données de la tuile |
-| **QGIS** | — | ✅ Intégration prévue pour la préparation et le contrôle des données géographiques |
+| **Altimétrie : procédure QGIS** | 41 étapes manuelles dans QGIS + tableur `.ods` | ✅ Un seul bouton — reprojection, découpe, fusion et `custom_dem` renseigné automatiquement |
+| **QGIS** | — | ✅ Intégré au module Altimétrie — mémorisé et ouvert sur le résultat pour contrôle visuel |
+| **Qualité des providers** | Aucune mesure | ✅ Scoring automatique — bruit, compression, nuages, dérive colorimétrique, risque de jointure |
+| **Gestion mémoire** | Aucune | ✅ Surveillance RAM en temps réel et nettoyage automatique du cache |
 | **Previews** | Basique | ✅ Outil Previews avec curseurs et configuration visuelle |
 | **Console de log** | Fenêtre figée | ✅ Barre de défilement + navigation clavier (flèches, Page préc./suiv.) |
 | **Robustesse réseau** | Échec sur serveur occupé | ✅ Rotation des serveurs Overpass, reprise auto, gestion des dalles blanches |
@@ -71,7 +78,7 @@ L'objectif est simple : **un simmer doit pouvoir fabriquer ses tuiles sans jamai
 ## 🚀 Les points forts
 
 - 📦 **Zéro Terminal** — Installation, lancement et mises à jour entièrement automatisés
-- 🖱️ **Accessibilité** — Conçu pour les simmers qui veulent créer leurs tuiles sans manipuler de code
+- 🖱️ **Accessibilité** — Créer ses tuiles sans manipuler de code, sans rien perdre en contrôle : chaque automatisme reste réglable
 - 🛠️ **Fiabilité** — Base solide 1.40, optimisations modernes, environnement Python isolé
 - 🌊 **Eau photoréaliste XP12** — Générateur de patches mer intégré : une mer conforme aux orthophotos, sans damier bleu ni triangles transparents, quel que soit le provider et le niveau de zoom
 - 🎨 **Colorimétrie avancée** — Normalisation sRGB, contrôle visuel et correction par tuile
@@ -79,6 +86,8 @@ L'objectif est simple : **un simmer doit pouvoir fabriquer ses tuiles sans jamai
 - ⛰️ **Altimétrie assistée** — Structure de dossiers, préparation et conversion des données DEM
 - 🗺️ **JOSM et QGIS intégrés** — Édition des données géographiques depuis l'interface, sans jamais toucher à un chemin de fichier
 - 🌐 **Téléchargements plus fiables** — Rotation automatique des serveurs de données et reprise après incident
+- 📊 **Qualité mesurée** — Chaque image téléchargée est notée : bruit, compression, nuages, dérive colorimétrique, risque de jointure
+- 🧠 **Mémoire surveillée** — Nettoyage automatique avant saturation sur les grosses tuiles
 - 🖥️ **Console lisible** — Défilement à la souris et navigation au clavier dans le journal de traitement
 - 🌍 **Bilingue** — Interface complète en français et en anglais
 
@@ -105,11 +114,45 @@ C'est la nouveauté majeure de cette mise à jour. Un bouton **🛠 Avancé (JOS
 - **Récupération des fichiers égarés** : si un fichier a été enregistré au mauvais endroit, le module le repère et le remet en place.
 - **Lancement de JOSM automatique** sur macOS, Windows et Linux, avec détection du Remote Control et repli si l'application est déjà ouverte.
 
-### QGIS
+> ℹ️ **JOSM et QGIS ne sont pas fournis** avec Ortho4XP V3. Vous devez les installer depuis leurs sites officiels ; l'interface les mémorise et les lance ensuite automatiquement.
 
-Le cadre **QGIS** est en place dans l'interface, aux côtés de GIMP et de JOSM, pour la préparation et le contrôle des données géographiques (altimétrie, emprises, vérification des couches). Son intégration se poursuit.
+---
 
-> ℹ️ **JOSM et QGIS ne sont pas fournis** avec Ortho4XP V3. Vous devez les installer depuis leurs sites officiels ; l'interface vous guide et détecte ensuite l'application automatiquement.
+## ⛰️ Le module Altimétrie — la procédure QGIS en un bouton
+
+Intégrer un modèle numérique de terrain dans Ortho4XP demandait jusqu'ici de suivre dans QGIS une procédure de **41 étapes manuelles**, appuyée sur un tableur `.ods` pour calculer les coordonnées d'emprise. Une erreur de saisie, et la tuile était fausse.
+
+Le module Altimétrie fait ce travail à votre place, **sans aucune commande, en un clic** :
+
+| Étape de la procédure manuelle | Ce que fait le module |
+| --- | --- |
+| *Raster / Projections / Warp* | Reprojection automatique en EPSG:4326 — le système de coordonnées source est **lu dans le fichier**, jamais deviné |
+| Changement de la valeur NoData | Appliqué automatiquement |
+| Calcul de l'emprise dans le tableur | Découpe à l'emprise de la tuile, élargie du débord de chevauchement de 0,1° pour que les bords se raccordent sans couture avec la tuile voisine |
+| *Raster / Divers / Fusion* | Fusion des dalles |
+| Export puis saisie du champ DEM | Écriture du `.tif` final et **renseignement automatique de `custom_dem`** dans la configuration de la tuile |
+
+Le module crée aussi la **structure de dossiers** au premier lancement, ce qui supprime d'un coup toute la catégorie d'erreurs « chemin introuvable » chez les utilisateurs sans organisation particulière. Les fichiers sources ne sont jamais modifiés, et les liens symboliques sont acceptés au même titre que les fichiers réels.
+
+**QGIS reste à portée de main** : les boutons « Choisir QGIS » et « Ouvrir dans QGIS » mémorisent votre installation et ouvrent directement le `.tif` produit, pour vérifier le résultat à l'œil.
+
+---
+
+## 🧩 Les modules qui n'existaient pas en 1.40
+
+Tous suivent la même règle de conception : **un fichier autonome, qui ne modifie aucun fichier du moteur d'origine.** Si un module manque ou échoue, Ortho4XP démarre et fonctionne quand même.
+
+| Module | Ce qu'il apporte |
+| --- | --- |
+| **Patches mer** | Génère une mer conforme aux orthophotos, quel que soit le provider et le niveau de zoom — fin du damier bleu et des triangles transparents |
+| **Color Normalize** | Correction colorimétrique automatique vers un sRGB neutre, **adaptée au niveau de zoom** : forte en vue large, légère en ZL18+ pour préserver le détail. Validation HDR compatible X-Plane 12, recalage d'exposition, dégradé de jointure à rayon adaptatif |
+| **Color Check** | Interface de contrôle et de correction : comparaison avant/après, aperçu de fusion avec mesure de l'écart colorimétrique entre deux sources, correction par lot, masques de protection |
+| **Color Apply** | Applique les corrections enregistrées au bon moment de la chaîne — sur chaque image source avant assemblage, puis sur l'assemblage final. **Les fichiers sources ne sont jamais modifiés** |
+| **Correction d'imagerie** | Visualise les textures de la tuile, permet d'en sélectionner, de les retoucher dans l'éditeur de votre choix (GIMP…) et de relancer uniquement ce qui doit l'être |
+| **Altimétrie / DEM** | La procédure QGIS de 41 étapes réduite à un bouton (ci-dessus) |
+| **Avancé (JOSM)** | Édition des données géographiques, emprises, nivellement et aéroports (ci-dessus) |
+| **Provider Score** | Note automatiquement chaque image téléchargée : bruit, artefacts de compression, **couverture nuageuse**, dérive colorimétrique, risque de jointure — et désigne le meilleur provider pour une tuile donnée |
+| **Gestion mémoire** | Surveille la RAM en temps réel et nettoie le cache avant saturation, au lieu de laisser le build s'effondrer sur les grosses tuiles |
 
 ---
 
@@ -183,7 +226,7 @@ Choix de l'application de retouche d'image (exemple : GIMP)
 
 ## 🤝 Remerciements
 
-Ce projet avance grâce à la communauté. Merci en particulier à **Jojo**, référence technique sur Ortho4XP, QGIS et JOSM, dont les explications ont permis de comprendre le fonctionnement réel des emprises, des patches et des codes OACI ; et à **Cricri**, pour les tests et validations sous Windows et Linux, sans lesquels la compatibilité multiplateforme resterait une hypothèse.
+Ce projet avance grâce à la communauté. Merci en particulier à **Jojo**, référence technique sur Ortho4XP et JOSM, dont les explications ont permis de comprendre le fonctionnement réel des emprises, des patches et des codes OACI ; et à **Cricri**, pour les tests et validations sous Windows et Linux, sans lesquels la compatibilité multiplateforme resterait une hypothèse.
 
 Merci également à tous ceux qui remontent leurs retours sur les forums : chaque rapport précis fait gagner des heures.
 
@@ -238,11 +281,15 @@ This space was created so that the V3 version is **clear, independent and access
 
 ## 🎯 The guiding idea
 
-Ortho4XP is a powerful tool, but for a long time it was only within reach of those willing to open a terminal, install Python by hand and edit configuration files.
+Ortho4XP is a powerful tool, but for a long time it was only within reach of those willing to open a terminal, install Python by hand and write configuration files. V3 rests on three principles.
 
-V3 does not change the engine: it **removes the barriers**. One-click installation, a complete interface, and above all tools that open up operations previously reserved for experts — texture retouching, elevation data management, OSM editing in JOSM, geographic data preparation in QGIS.
+**The original engine is preserved.** The mesh computation, the heart of Oscar Pilote's work, has not been touched. Every addition is a self-contained module: if one of them is missing or fails, Ortho4XP still starts and works.
 
-The goal is simple: **a simmer should be able to build tiles without ever writing a line of code.**
+**The barriers come down.** One-click installation, no terminal, and operations once reserved for experts turned into buttons: texture retouching, OSM editing in JOSM, provider extents, terrain flattening, airports. The clearest example: the elevation workflow — **41 manual steps in QGIS, spreadsheet in hand** — now fits into a single click.
+
+**And entirely new capabilities appear.** A photorealistic sea matching the orthophotos, whatever the provider. Colour correction **adapted to the zoom level** and validated for X-Plane 12 HDR. Automatic quality rating of every downloaded image — noise, clouds, drift, seam risk. Memory monitoring that keeps large builds from collapsing. None of this exists in earlier versions.
+
+**In short:** a simmer should be able to build tiles without ever writing a line of code — and get a better result than before, not merely an easier one.
 
 ---
 
@@ -269,7 +316,10 @@ The goal is simple: **a simmer should be able to build tiles without ever writin
 | **OSM editing (JOSM)** | Manual file handling | ✅ **Advanced** module — JOSM detected and launched automatically, files created, protected and filed in the right place |
 | **Extents** | `.ext` files written by hand | ✅ Draw the extent in JOSM → automatic publication as `.ext` + OSM archive |
 | **Flattening / Airports** | Patches written by hand | ✅ Templates generated automatically, ICAO code read from the tile data |
-| **QGIS** | — | ✅ Integration under way for geographic data preparation and checking |
+| **Elevation: QGIS procedure** | 41 manual steps in QGIS + an `.ods` spreadsheet | ✅ A single button — reprojection, clipping, merging and `custom_dem` filled in automatically |
+| **QGIS** | — | ✅ Built into the Elevation module — remembered and opened on the result for visual checking |
+| **Provider quality** | No measurement | ✅ Automatic scoring — noise, compression, clouds, colour drift, seam risk |
+| **Memory management** | None | ✅ Real-time RAM monitoring and automatic cache cleanup |
 | **Previews** | Basic | ✅ Previews tool with sliders and visual configuration |
 | **Log console** | Frozen window | ✅ Scrollbar + keyboard navigation (arrows, Page up/down) |
 | **Network robustness** | Failure on busy server | ✅ Overpass server rotation, auto retry, white-tile handling |
@@ -282,7 +332,7 @@ The goal is simple: **a simmer should be able to build tiles without ever writin
 ## 🚀 Highlights
 
 - 📦 **Zero Terminal** — Fully automated installation, launch and updates
-- 🖱️ **Accessibility** — Designed for simmers who want to create their tiles without touching any code
+- 🖱️ **Accessibility** — Build your tiles without touching code, without giving up control: every automation remains adjustable
 - 🛠️ **Reliability** — Solid 1.40 base, modern optimizations, isolated Python environment
 - 🌊 **Photorealistic XP12 water** — Built-in sea patch generator: sea matching the orthophotos, no blue checkerboard, no transparent triangles, whatever the provider and zoom level
 - 🎨 **Advanced colorimetry** — sRGB normalization, visual checking and per-tile correction
@@ -290,6 +340,8 @@ The goal is simple: **a simmer should be able to build tiles without ever writin
 - ⛰️ **Assisted elevation workflow** — Folder structure, preparation and conversion of DEM data
 - 🗺️ **JOSM and QGIS built in** — Edit geographic data from the interface, without ever dealing with a file path
 - 🌐 **More reliable downloads** — Automatic data-server rotation and recovery after an incident
+- 📊 **Measured quality** — Every downloaded image is scored: noise, compression, clouds, colour drift, seam risk
+- 🧠 **Monitored memory** — Automatic cleanup before saturation on large tiles
 - 🖥️ **Readable console** — Mouse scrolling and keyboard navigation in the processing log
 - 🌍 **Bilingual** — Complete interface in French and English
 
@@ -316,11 +368,45 @@ This is the main addition in this update. A **🛠 Advanced (JOSM)** button open
 - **Stray file recovery**: if a file was saved in the wrong place, the module finds it and puts it back.
 - **Automatic JOSM launch** on macOS, Windows and Linux, with Remote Control detection and a fallback when the application is already running.
 
-### QGIS
+> ℹ️ **JOSM and QGIS are not bundled** with Ortho4XP V3. Install them from their official websites; the interface remembers them and launches them automatically afterwards.
 
-The **QGIS** panel is in place in the interface, next to GIMP and JOSM, for preparing and checking geographic data (elevation, extents, layer verification). Its integration is ongoing.
+---
 
-> ℹ️ **JOSM and QGIS are not bundled** with Ortho4XP V3. Install them from their official websites; the interface then guides you and detects the application automatically.
+## ⛰️ The Elevation module — the QGIS procedure in one button
+
+Until now, adding a digital elevation model to Ortho4XP meant following a **41-step manual procedure** in QGIS, backed by an `.ods` spreadsheet to work out the bounding coordinates. One typing mistake and the tile was wrong.
+
+The Elevation module does that work for you, **with no commands, in one click**:
+
+| Step of the manual procedure | What the module does |
+| --- | --- |
+| *Raster / Projections / Warp* | Automatic reprojection to EPSG:4326 — the source coordinate system is **read from the file**, never guessed |
+| Changing the NoData value | Applied automatically |
+| Working out the extent in the spreadsheet | Clipping to the tile extent, widened by the 0.1° overlap margin so edges join seamlessly with the neighbouring tile |
+| *Raster / Miscellaneous / Merge* | Tiles merged |
+| Export then filling in the DEM field | The final `.tif` is written and **`custom_dem` is filled in automatically** in the tile configuration |
+
+The module also creates the **folder structure** on first launch, which removes at a stroke the whole category of "path not found" errors for users without a particular filing system. Source files are never modified, and symbolic links are accepted just like real files.
+
+**QGIS stays within reach**: the "Choose QGIS" and "Open in QGIS" buttons remember your installation and open the produced `.tif` directly, so you can check the result visually.
+
+---
+
+## 🧩 The modules that did not exist in 1.40
+
+They all follow the same design rule: **a self-contained file that modifies no part of the original engine.** If a module is missing or fails, Ortho4XP still starts and works.
+
+| Module | What it brings |
+| --- | --- |
+| **Sea patches** | Generates a sea matching the orthophotos, whatever the provider and zoom level — no more blue checkerboard, no more transparent triangles |
+| **Color Normalize** | Automatic colour correction toward neutral sRGB, **adapted to the zoom level**: strong at wide zoom, light at ZL18+ to preserve detail. X-Plane 12 HDR validation, exposure realignment, seam blending with an adaptive radius |
+| **Color Check** | Checking and correction interface: before/after comparison, fusion preview measuring the colour gap between two sources, batch correction, protection masks |
+| **Color Apply** | Applies the saved corrections at the right point in the chain — on each source image before assembly, then on the final assembly. **Source files are never modified** |
+| **Imagery correction** | Displays the tile textures, lets you select them, retouch them in the editor of your choice (GIMP…) and regenerate only what needs it |
+| **Elevation / DEM** | The 41-step QGIS procedure reduced to one button (above) |
+| **Advanced (JOSM)** | Geographic data editing, extents, terrain flattening and airports (above) |
+| **Provider Score** | Automatically rates every downloaded image: noise, compression artefacts, **cloud cover**, colour drift, seam risk — and points to the best provider for a given tile |
+| **Memory management** | Monitors RAM in real time and clears the cache before saturation, instead of letting the build collapse on large tiles |
 
 ---
 
@@ -394,7 +480,7 @@ Choosing the image editor (example: GIMP)
 
 ## 🤝 Acknowledgements
 
-This project moves forward thanks to the community. Special thanks to **Jojo**, the technical reference on Ortho4XP, QGIS and JOSM, whose explanations made it possible to understand how extents, patches and ICAO codes actually work; and to **Cricri**, for testing and validating on Windows and Linux, without whom cross-platform compatibility would remain a theory.
+This project moves forward thanks to the community. Special thanks to **Jojo**, the technical reference on Ortho4XP and JOSM, whose explanations made it possible to understand how extents, patches and ICAO codes actually work; and to **Cricri**, for testing and validating on Windows and Linux, without whom cross-platform compatibility would remain a theory.
 
 Thanks as well to everyone posting feedback on the forums: every precise report saves hours of work.
 
