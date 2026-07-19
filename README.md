@@ -84,7 +84,29 @@ L'objectif est de lever définitivement la barrière technique du terminal. Cett
 [![Color Check](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/04_Color%20Check_01.jpeg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/04_Color%20Check_01.jpeg)
 
 ---
+Correction Patche et Visualisation DDs de la tuile
+<img width="1916" height="1816" alt="Correction Visualisation5" src="https://github.com/user-attachments/assets/687af058-4b87-4a36-8dad-2aee3239d82c" />
 
+Fenêtre de sélection des DDS à modifier
+<img width="1316" height="1152" alt="Correction Visualisation2" src="https://github.com/user-attachments/assets/f652075c-ed0e-4ff0-a655-18ecada7901d" />
+ 
+Fenêtre de sélection de l'appication de retouche d'image exemple "GIMP"
+
+<img width="1610" height="462" alt="Correction Visualisation6" src="https://github.com/user-attachments/assets/3f650975-a479-4f39-ba3f-f30a51dd1d1e" />
+-------
+Intégration de la gestion des données Altimétriques et mise en place des dossiers de structures 
+<img width="1598" height="320" alt="Altimétrie 1" src="https://github.com/user-attachments/assets/e2d810d0-5557-404e-80e4-bada1680db86" />
+
+<img width="1162" height="160" alt="Altimétrie 2" src="https://github.com/user-attachments/assets/e5e8ca06-43a8-4efe-b216-1411f7632c7e" />
+
+----
+Intégration de la gestion des données et traitement dans Josm avec sauvegarde sécurisée
+
+<img width="1650" height="1356" alt="Josm 2" src="https://github.com/user-attachments/assets/b7e6e635-e09d-4096-b99a-b65fa5bb9dbf" />
+
+<img width="848" height="564" alt="Josm 3" src="https://github.com/user-attachments/assets/1f984c4d-2f28-4df1-94d7-5cc0ac5dd955" />
+
+---
 ## 🛠 Utilisation rapide
 
 ### 🍎 Mac
