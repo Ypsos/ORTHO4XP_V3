@@ -1025,4 +1025,58 @@ T = {
         : '── JPG à corriger ──',
     '🌊 Mer & Côte'
         : '🌊 Mer & Côte',
+
+    # ── Altimétrie / DEM — dossiers désignés par l'utilisateur ─────
+    '(non configurée)'
+        : '(non configurée)',
+    "Aucun dossier d'altimétries n'est configuré."
+        : "Aucun dossier d'altimétries n'est configuré.",
+    'Choisissez le disque ou le dossier où créer votre organisation des altimétries (un disque externe convient).'
+        : 'Choisissez le disque ou le dossier où créer votre organisation des altimétries (un disque externe convient).',
+    'Cliquez sur « Dossier des sources ».'
+        : 'Cliquez sur « Dossier des sources ».',
+    'Créer la structure'
+        : 'Créer la structure',
+    "Deux dossiers sont nécessaires :\n\n1) celui où se trouvent vos altimétries sources ;\n2) celui où écrire les altimétries assemblées.\n\nVoulez-vous qu'Ortho4XP crée cette organisation pour vous ?\n\nOUI  →  la structure est créée automatiquement.\nNON  →  vous désignez vos propres dossiers, qui sont utilisés tels quels."
+        : "Deux dossiers sont nécessaires :\n\n1) celui où se trouvent vos altimétries sources ;\n2) celui où écrire les altimétries assemblées.\n\nVoulez-vous qu'Ortho4XP crée cette organisation pour vous ?\n\nOUI  →  la structure est créée automatiquement.\nNON  →  vous désignez vos propres dossiers, qui sont utilisés tels quels.",
+    'Dossier de destination des altimétries assemblées'
+        : 'Dossier de destination des altimétries assemblées',
+    'Dossier de sortie'
+        : 'Dossier de sortie',
+    'Dossier de sortie :'
+        : 'Dossier de sortie :',
+    'Dossier de vos altimétries sources (.tif, .asc…)'
+        : 'Dossier de vos altimétries sources (.tif, .asc…)',
+    'Dossier des sources'
+        : 'Dossier des sources',
+    'Dossier des sources :'
+        : 'Dossier des sources :',
+    'Dossiers enregistrés.'
+        : 'Dossiers enregistrés.',
+    'Dossiers enregistrés.\n\nSources :\n{s}\n\nSortie :\n{d}'
+        : 'Dossiers enregistrés.\n\nSources :\n{s}\n\nSortie :\n{d}',
+    'Dossiers non configurés.'
+        : 'Dossiers non configurés.',
+    'Déposez vos données dans le dossier des sources, en EPSG:4326.'
+        : 'Déposez vos données dans le dossier des sources, en EPSG:4326.',
+    'Les sources doivent être en EPSG:4326 — X-Plane ne lit'
+        : 'Les sources doivent être en EPSG:4326 — X-Plane ne lit',
+    "Où créer l'organisation des altimétries"
+        : "Où créer l'organisation des altimétries",
+    'Sortie :'
+        : 'Sortie :',
+    'Sources :'
+        : 'Sources :',
+    'aucune autre projection. Ortho4XP convertira au besoin,'
+        : 'aucune autre projection. Ortho4XP convertira au besoin,',
+    'dossier des sources'
+        : 'dossier des sources',
+    'mais préparez-les de préférence en 4326.'
+        : 'mais préparez-les de préférence en 4326.',
+
+    # ── Altimétrie / DEM — rappel des dossiers ─────────────────────
+    '(non configuré)'
+        : '(non configuré)',
+    'Le fichier assemblé sera écrit ici :\n\n{f}\n\nEst-ce le bon emplacement ?\n\nNON  →  utilisez le bouton « Dossier de sortie ».'
+        : 'Le fichier assemblé sera écrit ici :\n\n{f}\n\nEst-ce le bon emplacement ?\n\nNON  →  utilisez le bouton « Dossier de sortie ».',
 }

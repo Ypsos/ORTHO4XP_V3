@@ -57,8 +57,10 @@ DOSSIER_STOCK = "Altimétrie TIFF"
 DOSSIER_ASSEMBLE = "Altimétrie assemble"
 PREFIXE_PAYS_ASSEMBLE = "Assemble "
 
-CFG_RACINE = "dem_root_dir"      # racine <...>/Altimétrie
-CFG_PAYS = "dem_last_country"    # dernier pays utilisé
+CFG_RACINE = "dem_root_dir"      # ANCIEN — conservé pour la reprise
+CFG_PAYS = "dem_last_country"    # ANCIEN — conservé pour la reprise
+CFG_STOCK = "dem_stock_dir"      # dossier des sources, choisi par l'utilisateur
+CFG_SORTIE = "dem_output_dir"    # dossier du résultat assemblé
 CFG_QGIS = "qgis_app"            # application QGIS (comme patch_editor_app)
 
 
@@ -164,15 +166,21 @@ def lister_sources(dossier, sortie_exclue=None):
 
 
 def sources_depuis_stock(racine, lat, lon, debord=DEBORD_DEFAUT):
-    """Étape B — parcourt TOUS les pays du stock et retourne les fichiers
-    dont l'emprise intersecte la tuile élargie. L'utilisateur n'a plus ni
-    dossier à peupler, ni lien à créer, ni département à deviner.
+    """Compatibilité : ancienne structure imposée <racine>/Altimétrie TIFF.
+    Se contente de désigner le dossier de stock puis délègue."""
+    stock, _a = chemins_structure(racine)
+    return sources_depuis_dossier(stock, lat, lon, debord)
+
+
+def sources_depuis_dossier(stock, lat, lon, debord=DEBORD_DEFAUT):
+    """Étape B — parcourt le dossier des sources DÉSIGNÉ PAR L'UTILISATEUR
+    (sous-dossiers compris) et retourne les fichiers dont l'emprise
+    intersecte la tuile élargie. Aucun nom de dossier n'est imposé.
 
     Nécessite rasterio pour lire les emprises. Les fichiers dont
     l'emprise n'est pas lisible en degrés sont retournés quand même :
     assembler_tuile() refera le test après reprojection.
     """
-    stock, _a = chemins_structure(racine)
     res = []
     if not os.path.isdir(stock):
         return res
@@ -707,7 +715,7 @@ def open_altimetrie_window(gui):
     le module trouve seul les sources qui recouvrent la tuile.
     """
     import tkinter as tk
-    from tkinter import ttk, filedialog, messagebox, simpledialog
+    from tkinter import ttk, filedialog, messagebox
     import subprocess
     import sys
 
@@ -796,6 +804,76 @@ def open_altimetrie_window(gui):
             win.after(300, lambda: win.attributes("-topmost", False))
         except Exception:
             pass
+    def _saisie(titre, message, parent=None, initialvalue=""):
+        """Saisie de texte au thème du projet.
+
+        Remplace tkinter.simpledialog.askstring : ce dernier n'hérite pas
+        du thème sombre et affichait un bouton « Cancel » blanc sur fond
+        blanc, donc illisible. Même signature que askstring, retourne la
+        chaîne saisie ou None si l'utilisateur annule.
+        """
+        res = {"v": None}
+        par = parent if parent is not None else win
+
+        dlg = tk.Toplevel(par)
+        dlg.title(titre)
+        dlg.configure(bg=BG)
+        try:
+            dlg.transient(par)
+        except Exception:
+            pass
+        dlg.resizable(False, False)
+        dlg.columnconfigure(0, weight=1)
+
+        tk.Label(dlg, text=message, bg=BG, fg=FG, font=FONT,
+                 justify="left", anchor="w").grid(
+            row=0, column=0, padx=14, pady=(14, 6), sticky="w")
+
+        var = tk.StringVar(value=initialvalue or "")
+        ent = tk.Entry(dlg, textvariable=var, width=46, bg=PREV_BG, fg=FG2,
+                       bd=0, insertbackground=FG, highlightthickness=1,
+                       highlightbackground=FG, highlightcolor=FG,
+                       font=("TkFixedFont", 12))
+        ent.grid(row=1, column=0, padx=14, pady=(0, 12), sticky="ew")
+
+        bar = tk.Frame(dlg, bg=BG)
+        bar.grid(row=2, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        def _ok(_e=None):
+            res["v"] = var.get()
+            dlg.destroy()
+
+        def _annuler(_e=None):
+            res["v"] = None
+            dlg.destroy()
+
+        ttk.Button(bar, text=_tr("Valider"), command=_ok).pack(side="left")
+        ttk.Button(bar, text=_tr("Annuler"),
+                   command=_annuler).pack(side="right")
+
+        dlg.bind("<Return>", _ok)
+        dlg.bind("<Escape>", _annuler)
+        dlg.protocol("WM_DELETE_WINDOW", _annuler)
+        ent.focus_set()
+        try:
+            ent.selection_range(0, "end")
+        except Exception:
+            pass
+        try:
+            dlg.update_idletasks()
+            _x = par.winfo_rootx() + max(
+                0, (par.winfo_width() - dlg.winfo_reqwidth()) // 2)
+            _y = par.winfo_rooty() + 120
+            dlg.geometry("+%d+%d" % (_x, _y))
+        except Exception:
+            pass
+        try:
+            dlg.grab_set()
+        except Exception:
+            pass
+        dlg.wait_window()
+        return res["v"]
+
     sw = win.winfo_screenwidth()
     sh = win.winfo_screenheight()
 
@@ -871,32 +949,92 @@ def open_altimetrie_window(gui):
         _pomper()
         win.after(400, lambda: _animer(message))
 
-    _racine = [_cfg_get(CFG_RACINE)]
-    _pays = [_cfg_get(CFG_PAYS)]
+    # ── Les deux seuls chemins du module ─────────────────────────────
+    # AUCUN nom de dossier n'est imposé : l'utilisateur désigne son
+    # dossier de sources et son dossier de sortie, tels qu'ils existent
+    # chez lui. Les deux sont mémorisés dans Ortho4XP.cfg.
+    _stock = [_cfg_get(CFG_STOCK)]
+    _sortie = [_cfg_get(CFG_SORTIE)]
     _dossier_tuile = [""]
+    _src_var = tk.StringVar()
+    _out_var = tk.StringVar()
 
-    # ── Assistant de création de la structure ────────────────────────
-    def _assistant(force=False):
-        if _racine[0] and os.path.isdir(_racine[0]) and not force:
-            return True
+    def _maj_bandeaux():
+        """Rappel permanent des deux dossiers, en bas de la fenêtre."""
+        _src_var.set(_stock[0] or _tr("(non configuré)"))
+        _out_var.set(os.path.join(_sortie[0], cle) if _sortie[0]
+                     else _tr("(non configurée)"))
+
+    # Reprise d'une configuration faite avec l'ancienne structure
+    # imposée : on retrouve les dossiers réels sans rien redemander.
+    if not _stock[0]:
+        _anc_r = _cfg_get(CFG_RACINE)
+        _anc_p = _cfg_get(CFG_PAYS)
+        if _anc_r and os.path.isdir(_anc_r):
+            _s_anc, _a_anc = chemins_structure(_anc_r)
+            _cand_s = os.path.join(_s_anc, _anc_p) if _anc_p else _s_anc
+            _cand_a = os.path.join(_a_anc, PREFIXE_PAYS_ASSEMBLE + _anc_p) \
+                if _anc_p else _a_anc
+            _stock[0] = _cand_s if os.path.isdir(_cand_s) else _s_anc
+            _sortie[0] = _cand_a if os.path.isdir(_cand_a) else _a_anc
+            _cfg_set(CFG_STOCK, _stock[0])
+            _cfg_set(CFG_SORTIE, _sortie[0])
+
+    # ── Assistant : désignation des deux dossiers ────────────────────
+    def _choisir_stock():
+        """Dossier où l'utilisateur dépose ses altimétries sources."""
+        d = filedialog.askdirectory(
+            parent=win, initialdir=_stock[0] or os.path.expanduser("~"),
+            title=_tr("Dossier de vos altimétries sources (.tif, .asc…)"))
+        _remonter()
+        if not d:
+            return False
+        _stock[0] = d
+        _cfg_set(CFG_STOCK, d)
+        _maj_bandeaux()
+        return True
+
+    def _choisir_sortie():
+        """Dossier où sera écrit le fichier assemblé de la tuile."""
+        d = filedialog.askdirectory(
+            parent=win,
+            initialdir=_sortie[0] or _stock[0] or os.path.expanduser("~"),
+            title=_tr("Dossier de destination des altimétries assemblées"))
+        _remonter()
+        if not d:
+            return False
+        _sortie[0] = d
+        _cfg_set(CFG_SORTIE, d)
+        _maj_bandeaux()
+        return True
+
+    def _creer_structure():
+        """Premier usage sans organisation existante : crée l'arborescence
+        par défaut et renseigne les deux dossiers. Personne n'est obligé
+        de s'en servir : ceux qui ont déjà leurs dossiers utilisent les
+        boutons « Dossier des sources » et « Dossier de sortie »."""
         messagebox.showinfo(
             _tr("Altimétrie / DEM"),
-            _tr("Première utilisation : Ortho4XP va créer votre "
-                "organisation des altimétries.\n\n"
-                "Choisissez le disque ou le dossier de stockage "
-                "(un disque externe convient)."), parent=win)
+            _tr("Choisissez le disque ou le dossier où créer votre "
+                "organisation des altimétries (un disque externe "
+                "convient)."), parent=win)
         _remonter()
         base = filedialog.askdirectory(
             parent=win,
-            title=_tr("Choisir le disque / dossier de stockage des "
-                      "altimétries"))
+            title=_tr("Où créer l'organisation des altimétries"))
         _remonter()
         if not base:
             return False
-        pays = simpledialog.askstring(
+        # Garde-fou : si le dossier choisi est DÉJÀ dans une structure
+        # existante, on remonte à sa racine au lieu d'en empiler une
+        # seconde (c'est ce qui produisait des chemins en doublon).
+        _parts = os.path.normpath(base).split(os.sep)
+        if DOSSIER_RACINE in _parts:
+            base = os.sep.join(_parts[:_parts.index(DOSSIER_RACINE)]) or os.sep
+        pays = _saisie(
             _tr("Altimétrie / DEM"),
             _tr("Nom du pays (ex. : France, Suisse, Allemagne) :"),
-            parent=win, initialvalue=_pays[0] or "France")
+            parent=win, initialvalue="France")
         _remonter()
         if not pays:
             return False
@@ -911,85 +1049,132 @@ def open_altimetrie_window(gui):
             messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
             _remonter()
             return False
-        _racine[0] = racine
-        _pays[0] = pays
-        _cfg_set(CFG_RACINE, racine)
-        _cfg_set(CFG_PAYS, pays)
+        _stock[0] = stock_pays
+        _sortie[0] = assemble_pays
+        _cfg_set(CFG_STOCK, stock_pays)
+        _cfg_set(CFG_SORTIE, assemble_pays)
+        _maj_bandeaux()
         _etat(_tr("Structure créée."), FG)
         txt.delete("1.0", tk.END)
         _log(_tr("Structure créée :"))
         _log("   " + racine)
-        _log("   ├── " + DOSSIER_STOCK + os.sep + pays)
-        _log("   └── " + DOSSIER_ASSEMBLE + os.sep
-             + PREFIXE_PAYS_ASSEMBLE + pays)
         _log()
-        _log(_tr("À FAIRE MAINTENANT :"))
-        _log(_tr("Déposez les données altimétriques du pays dans :"))
+        _log(_tr("Dossier des sources :"))
         _log("   " + stock_pays)
+        _log(_tr("Dossier de sortie :"))
+        _log("   " + assemble_pays)
         _log()
-        _log(_tr("Elles doivent être en EPSG:4326 — X-Plane ne lit aucune"))
-        _log(_tr("autre projection. Ortho4XP convertira au besoin, mais"))
-        _log(_tr("préparez-les de préférence en 4326."))
+        _log(_tr("Les sources doivent être en EPSG:4326 — X-Plane ne lit"))
+        _log(_tr("aucune autre projection. Ortho4XP convertira au besoin,"))
+        _log(_tr("mais préparez-les de préférence en 4326."))
         _log()
         _log(_tr("Le résultat assemblé sera écrit dans :"))
         _log("   " + os.path.join(assemble_pays, cle, cle + ".tif"))
         messagebox.showinfo(
             _tr("Altimétrie / DEM"),
-            _tr("Structure créée.\n\nDéposez vos altimétries dans :\n{d}\n\n"
-                "Format requis : EPSG:4326.").format(d=stock_pays),
+            _tr("Structure créée.\n\nDéposez vos altimétries dans :\n{d}"
+                "\n\nFormat requis : EPSG:4326.").format(d=stock_pays),
             parent=win)
         _remonter()
         return True
 
-    def _ajouter_pays():
-        if not _racine[0]:
-            if not _assistant():
-                return
-            return
-        pays = simpledialog.askstring(
+    def _assistant(force=False):
+        """Première utilisation : demande les deux dossiers, sans jamais
+        imposer de nom ni créer d'arborescence. L'organisation existante
+        de l'utilisateur est reprise telle quelle."""
+        if _stock[0] and os.path.isdir(_stock[0]) and _sortie[0] \
+                and not force:
+            return True
+        # Deux profils d'utilisateurs : celui qui a déjà ses dossiers et
+        # celui qui part de zéro. On lui demande lequel il est plutôt que
+        # d'imposer une organisation à tout le monde.
+        _neuf = messagebox.askyesno(
             _tr("Altimétrie / DEM"),
-            _tr("Nom du pays (ex. : France, Suisse, Allemagne) :"),
-            parent=win)
+            _tr("Deux dossiers sont nécessaires :\n\n"
+                "1) celui où se trouvent vos altimétries sources ;\n"
+                "2) celui où écrire les altimétries assemblées.\n\n"
+                "Voulez-vous qu'Ortho4XP crée cette organisation pour "
+                "vous ?\n\n"
+                "OUI  →  la structure est créée automatiquement.\n"
+                "NON  →  vous désignez vos propres dossiers, qui sont "
+                "utilisés tels quels."), parent=win)
         _remonter()
-        if not pays:
-            return
-        pays = pays.strip().replace("/", "-").replace("\\", "-")
-        if not pays:
-            return
-        try:
-            _r, stock_pays, assemble_pays = creer_structure(_racine[0], pays)
-        except Exception as e:
-            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
-            _remonter()
-            return
-        _pays[0] = pays
-        _cfg_set(CFG_PAYS, pays)
-        _log(_tr("Pays ajouté :") + " " + pays)
-        _log("   " + stock_pays)
+        if _neuf:
+            return _creer_structure()
+        if not _choisir_stock():
+            return False
+        if not _choisir_sortie():
+            return False
+        txt.delete("1.0", tk.END)
+        _etat(_tr("Dossiers enregistrés."), FG)
+        _log(_tr("Dossier des sources :"))
+        _log("   " + _stock[0])
+        _log(_tr("Dossier de sortie :"))
+        _log("   " + _sortie[0])
+        _log()
+        _log(_tr("Les sources doivent être en EPSG:4326 — X-Plane ne lit"))
+        _log(_tr("aucune autre projection. Ortho4XP convertira au besoin,"))
+        _log(_tr("mais préparez-les de préférence en 4326."))
+        _log()
+        _log(_tr("Le résultat assemblé sera écrit dans :"))
+        _log("   " + os.path.join(_sortie[0], cle, cle + ".tif"))
         messagebox.showinfo(
             _tr("Altimétrie / DEM"),
-            _tr("Déposez vos altimétries dans :\n{d}\n\n"
-                "Format requis : EPSG:4326.").format(d=stock_pays),
+            _tr("Dossiers enregistrés.\n\nSources :\n{s}\n\n"
+                "Sortie :\n{d}").format(s=_stock[0], d=_sortie[0]),
             parent=win)
         _remonter()
-        _rafraichir()
+        return True
 
     # ── Dossier de sortie de la tuile ────────────────────────────────
+    # Le cfg de la tuile doit être EXACTEMENT celui que lit Ortho4XP,
+    # c'est-à-dire FNAMES.build_dir(lat, lon, custom_build_dir) +
+    # "Ortho4XP_<short_latlon>.cfg" — même calcul que
+    # O4_Config_Utils.load_tile_cfg(). L'ancien chemin
+    # (Tile_dir/<tuile>/…) désignait un fichier que personne ne lit :
+    # custom_dem y était écrit sans jamais apparaître dans le champ
+    # « custom_dem » du GUI, qui restait sur une autre altimétrie.
+    def _custom_build_dir():
+        for _att in ("custom_build_dir_entry", "custom_build_dir"):
+            try:
+                _v = getattr(gui, _att).get()
+                if _v:
+                    return _v
+            except Exception:
+                pass
+        return ""
+
     try:
-        tile_cfg = os.path.join(FNAMES.Tile_dir, cle, "Ortho4XP_%s.cfg" % cle)
+        _bdir = FNAMES.build_dir(lat, lon, _custom_build_dir())
+        tile_cfg = os.path.join(
+            _bdir, "Ortho4XP_%s.cfg" % FNAMES.short_latlon(lat, lon))
+        # Repli sur le nom générique quand c'est celui qui existe déjà :
+        # load_tile_cfg() applique le même repli.
+        if not os.path.isfile(tile_cfg) and \
+                os.path.isfile(os.path.join(_bdir, "Ortho4XP.cfg")):
+            tile_cfg = os.path.join(_bdir, "Ortho4XP.cfg")
     except Exception:
-        tile_cfg = ""
+        try:
+            tile_cfg = os.path.join(FNAMES.Tile_dir, cle,
+                                    "Ortho4XP_%s.cfg" % cle)
+        except Exception:
+            tile_cfg = ""
 
     def _dossier_sortie():
-        # Priorité au custom_dem existant : l'organisation déjà en place
-        # (celle de Roland) est respectée sans être interprétée.
+        """Dossier où écrire le fichier assemblé de la tuile.
+
+        Le dossier de sortie CHOISI par l'utilisateur est prioritaire :
+        le module y crée le sous-dossier au nom de la tuile (+49-002),
+        puis y écrit +49-002.tif. Un custom_dem déjà présent dans le cfg
+        n'est qu'un repli, pour les tuiles configurées avant que les
+        dossiers ne soient désignés — sinon la sortie repartirait vers
+        l'altimétrie d'une autre tuile.
+        """
+        if _sortie[0]:
+            return os.path.join(_sortie[0], cle)
         dem = _lire_cfg_valeur(tile_cfg, "custom_dem") if tile_cfg else ""
         if dem and os.path.isdir(os.path.dirname(dem)):
             return os.path.dirname(dem)
-        if _racine[0] and _pays[0]:
-            _s, assemble = chemins_structure(_racine[0])
-            return os.path.join(assemble, PREFIXE_PAYS_ASSEMBLE + _pays[0],
-                                cle)
         return ""
 
     _deb_var = None
@@ -1010,9 +1195,9 @@ def open_altimetrie_window(gui):
            (compatibilité avec les tuiles préparées à la main)"""
         srcs = []
         origine = ""
-        if _racine[0] and os.path.isdir(_racine[0]):
-            srcs = sources_depuis_stock(_racine[0], lat, lon, _debord())
-            origine = _tr("stock")
+        if _stock[0] and os.path.isdir(_stock[0]):
+            srcs = sources_depuis_dossier(_stock[0], lat, lon, _debord())
+            origine = _tr("dossier des sources")
         if not srcs:
             d = _dossier_sortie()
             srcs = lister_sources(d, sortie_exclue=cle + ".tif")
@@ -1021,24 +1206,24 @@ def open_altimetrie_window(gui):
 
     def _rafraichir():
         txt.delete("1.0", tk.END)
-        if not _racine[0] or not os.path.isdir(_racine[0]):
-            _etat(_tr("Structure non créée."), "#ffaa00")
-            _log(_tr("Aucune organisation d'altimétries n'est configurée."))
-            _log(_tr("Cliquez sur « Créer / choisir la structure »."))
-            if _racine[0]:
+        _maj_bandeaux()
+        if not _stock[0] or not os.path.isdir(_stock[0]):
+            _etat(_tr("Dossiers non configurés."), "#ffaa00")
+            _log(_tr("Aucun dossier d'altimétries n'est configuré."))
+            _log(_tr("Cliquez sur « Dossier des sources »."))
+            if _stock[0]:
                 _log()
                 _log(_tr("Chemin mémorisé introuvable :"))
-                _log("   " + _racine[0])
+                _log("   " + _stock[0])
                 _log(_tr("Si vos altimétries sont sur un disque externe,"))
                 _log(_tr("vérifiez qu'il est branché."))
             return
         b = tile_bounds(lat, lon, _debord())
         _log(_tr("Tuile") + " %s — %s %.3f %.3f %.3f %.3f"
              % (cle, _tr("emprise"), b[0], b[1], b[2], b[3]))
-        _log(_tr("Racine :") + " " + _racine[0])
-        pays = lister_pays(_racine[0])
-        _log(_tr("Pays du stock :") + " "
-             + (", ".join(pays) if pays else _tr("(aucun)")))
+        _log(_tr("Sources :") + " " + _stock[0])
+        _log(_tr("Sortie :") + " "
+             + (_sortie[0] or _tr("(non configurée)")))
         _log()
         _etat(_tr("Recherche des sources…"), FG)
         srcs, origine = _sources()
@@ -1046,7 +1231,7 @@ def open_altimetrie_window(gui):
         if not srcs:
             _etat(_tr("Aucune source pour cette tuile."), "#ffaa00")
             _log(_tr("Aucun fichier altimétrique ne recouvre cette tuile."))
-            _log(_tr("Déposez vos données dans le stock du pays, "
+            _log(_tr("Déposez vos données dans le dossier des sources, "
                      "en EPSG:4326."))
             return
         _log(_tr("{n} source(s) trouvée(s) — origine : {o}").format(
@@ -1077,7 +1262,7 @@ def open_altimetrie_window(gui):
         dest = _dossier_sortie()
         if not dest:
             messagebox.showinfo(_tr("Altimétrie / DEM"),
-                                _tr("Structure non configurée."), parent=win)
+                                _tr("Dossiers non configurés."), parent=win)
             _remonter()
             return
         try:
@@ -1087,6 +1272,18 @@ def open_altimetrie_window(gui):
             _remonter()
             return
         sortie = os.path.join(dest, cle + ".tif")
+        # Confirmation de la DESTINATION avant de travailler : un dossier
+        # de sortie mémorisé mais devenu faux ferait écrire le fichier
+        # ailleurs, et on ne s'en apercevrait qu'à la fin.
+        if not messagebox.askyesno(
+                _tr("Altimétrie / DEM"),
+                _tr("Le fichier assemblé sera écrit ici :\n\n{f}\n\n"
+                    "Est-ce le bon emplacement ?\n\n"
+                    "NON  →  utilisez le bouton « Dossier de sortie ».")
+                .format(f=sortie), parent=win):
+            _remonter()
+            return
+        _remonter()
         if os.path.isfile(sortie):
             if not messagebox.askyesno(
                     _tr("Altimétrie / DEM"),
@@ -1145,8 +1342,19 @@ def open_altimetrie_window(gui):
                     ecrire_custom_dem(tile_cfg, chemin)
                     _log()
                     _log(_tr("custom_dem renseigné dans le cfg de la tuile."))
+                    _log(tile_cfg)
                 except Exception as _e:
                     _log(_tr("custom_dem non écrit :") + " " + str(_e))
+            # Le fichier ne suffit pas : si la fenêtre de configuration est
+            # déjà ouverte, son champ « custom_dem » garde en mémoire la
+            # valeur chargée au départ (une autre altimétrie). On la met
+            # à jour directement pour que l'affichage corresponde au cfg.
+            try:
+                _cw = getattr(gui, "_config_win", None)
+                if _cw is not None and _cw.winfo_exists():
+                    _cw.v_["custom_dem"].set(chemin)
+            except Exception:
+                pass
             _etat(_tr("Terminé."), FG)
             _log()
             _log(_tr("TERMINÉ."))
@@ -1233,9 +1441,9 @@ def open_altimetrie_window(gui):
                     "d'Ortho4XP."), parent=win)
             _remonter()
             return
-        if not _racine[0] or not os.path.isdir(_racine[0]):
+        if not _stock[0] or not os.path.isdir(_stock[0]):
             messagebox.showinfo(_tr("Altimétrie / DEM"),
-                                _tr("Structure non configurée."), parent=win)
+                                _tr("Dossiers non configurés."), parent=win)
             _remonter()
             return
         src = filedialog.askdirectory(
@@ -1269,7 +1477,7 @@ def open_altimetrie_window(gui):
         # Ratio proposé : 25 % pour du 1 m (procédure IGN), 100 % si la
         # source est déjà grossière.
         defaut = "25" if res_m <= 2.0 else "100"
-        rep_ratio = simpledialog.askstring(
+        rep_ratio = _saisie(
             _tr("Altimétrie / DEM"),
             _tr("Résolution source détectée : {r} m\n\n"
                 "Ratio de réduction en % (25 = diviser par 4) :\n"
@@ -1299,23 +1507,10 @@ def open_altimetrie_window(gui):
                 return
             _remonter()
 
-        pays_dispo = lister_pays(_racine[0])
-        pays = simpledialog.askstring(
-            _tr("Altimétrie / DEM"),
-            _tr("Pays de destination ({p}) :").format(
-                p=", ".join(pays_dispo) if pays_dispo else _tr("(aucun)")),
-            parent=win, initialvalue=_pays[0] or "France")
-        _remonter()
-        if not pays:
-            return
-        pays = pays.strip().replace("/", "-").replace("\\", "-")
-        if not pays:
-            return
-
         suffixe = "%dM" % int(round(res_finale)) if res_finale >= 1 else "1M"
         nom_def = "%s-%s-reduit.tif" % (os.path.basename(
             os.path.normpath(src)), suffixe)
-        nom = simpledialog.askstring(
+        nom = _saisie(
             _tr("Altimétrie / DEM"),
             _tr("Nom du fichier produit :"),
             parent=win, initialvalue=nom_def)
@@ -1325,8 +1520,9 @@ def open_altimetrie_window(gui):
         if not nom.lower().endswith(".tif"):
             nom += ".tif"
 
-        _r, stock_pays, _a = creer_structure(_racine[0], pays)
-        dest = os.path.join(stock_pays, nom)
+        # Le fichier réduit est écrit dans le dossier des sources choisi
+        # par l'utilisateur : aucun sous-dossier n'est créé.
+        dest = os.path.join(_stock[0], nom)
         if os.path.isfile(dest):
             if not messagebox.askyesno(
                     _tr("Altimétrie / DEM"),
@@ -1416,6 +1612,27 @@ def open_altimetrie_window(gui):
              justify="left").pack(side=tk.LEFT, fill=tk.X, expand=True,
                                   padx=(8, 0))
 
+    # ── Rappel permanent des deux dossiers ───────────────────────────
+    # La destination doit être visible AVANT d'assembler, pas découverte
+    # après coup dans le message de fin.
+    frm_src = tk.Frame(win, bg=BG)
+    frm_src.pack(fill=tk.X, padx=14, pady=(0, 4))
+    tk.Label(frm_src, text=_tr("Sources :"), font=FONT, bg=BG,
+             fg=FG).pack(side=tk.LEFT)
+    tk.Label(frm_src, textvariable=_src_var, font=("TkFixedFont", 10),
+             bg=BG, fg=FG2, anchor="w", wraplength=560,
+             justify="left").pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                  padx=(8, 0))
+
+    frm_out = tk.Frame(win, bg=BG)
+    frm_out.pack(fill=tk.X, padx=14, pady=(0, 4))
+    tk.Label(frm_out, text=_tr("Sortie :"), font=FONT, bg=BG,
+             fg=FG).pack(side=tk.LEFT)
+    tk.Label(frm_out, textvariable=_out_var, font=("TkFixedFont", 10),
+             bg=BG, fg=FG2, anchor="w", wraplength=560,
+             justify="left").pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                  padx=(8, 0))
+
     frm_bot = tk.Frame(win, bg=BG)
     frm_bot.pack(pady=(6, 12))
     # Ordre des boutons = ordre réel du travail :
@@ -1423,15 +1640,18 @@ def open_altimetrie_window(gui):
     # Ligne 1 : les trois étapes, dans l'ordre.
     # Ligne 2 : outils et configuration.
     _defs = [
-        (_tr("Créer / choisir la structure"),
-         lambda: (_assistant(force=True), _rafraichir()), 0, 0),
+        (_tr("Créer la structure"),
+         lambda: (_creer_structure(), _rafraichir()), 0, 0),
         (_tr("Préparer les données (EPSG → réduit)"), _preparer, 0, 1),
         (_tr("Assembler"), _assembler, 0, 2),
         (_tr("Rafraîchir"), _rafraichir, 0, 3),
-        (_tr("Ajouter un pays"), _ajouter_pays, 1, 0),
+        (_tr("Dossier des sources"),
+         lambda: (_choisir_stock(), _rafraichir()), 1, 0),
         (_tr("Vérifier (auto-test)"), _auto_test, 1, 1),
         (_tr("Choisir QGIS"), _choisir_qgis, 1, 2),
         (_tr("Ouvrir dans QGIS"), _ouvrir_qgis, 1, 3),
+        (_tr("Dossier de sortie"),
+         lambda: (_choisir_sortie(), _rafraichir()), 2, 0),
         (_tr("Fermer"), win.destroy, 2, 3),
     ]
     for _txt, _cmd, _r, _c in _defs:
@@ -1442,13 +1662,49 @@ def open_altimetrie_window(gui):
         if _cmd is not win.destroy:
             _boutons.append(_b)
 
-    if not _racine[0]:
+    if not _stock[0] or not _sortie[0]:
         win.after(150, lambda: (_assistant(), _rafraichir()))
     else:
         _rafraichir()
+
+    # ── Ancrage des barres du bas ────────────────────────────────────
+    # Le journal est packé avant les barres du bas et occupe tout
+    # l'espace disponible (expand=True) : si la fenêtre est réduite,
+    # c'est lui qui garde la place et les barres du bas (dont les
+    # boutons) sortent du cadre. On repacke donc les barres du bas
+    # EN PREMIER, ancrées en bas, puis le journal : Tk sert les barres
+    # avant le journal, qui se comprime seul. Les boutons restent
+    # toujours visibles.
+    try:
+        for _f in (frm_log, frm_deb, frm_q, frm_src, frm_out, frm_bot):
+            _f.pack_forget()
+        frm_bot.pack(side=tk.BOTTOM, pady=(6, 12))
+        frm_out.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=(0, 4))
+        frm_src.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=(0, 4))
+        frm_q.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=(0, 4))
+        frm_deb.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=(0, 4))
+        frm_log.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 4))
+    except Exception:
+        pass
 
     win.update_idletasks()
     ww = max(880, win.winfo_reqwidth())
     wh = max(620, win.winfo_reqheight())
     win.geometry("%dx%d+%d+%d" % (ww, wh, (sw - ww) // 2, (sh - wh) // 2))
-    win.minsize(760, 520)
+
+    # ── Taille minimale réelle ───────────────────────────────────────
+    # La taille minimale doit être celle dont l'interface a réellement
+    # besoin (largeur des 4 colonnes de boutons + hauteur des libellés,
+    # des deux barres et des trois lignes de boutons), avec juste un
+    # reste de journal. Sinon l'utilisateur peut réduire la fenêtre
+    # jusqu'à masquer les boutons. Bornée à l'écran pour rester
+    # utilisable sur les petits écrans.
+    try:
+        _min_w = min(win.winfo_reqwidth(), sw - 40)
+        # hauteur requise moins la place « en trop » du journal :
+        # on garde au minimum 120 px de journal.
+        _log_h = max(0, frm_log.winfo_reqheight() - 120)
+        _min_h = min(max(480, win.winfo_reqheight() - _log_h), sh - 80)
+        win.minsize(int(_min_w), int(_min_h))
+    except Exception:
+        win.minsize(880, 560)

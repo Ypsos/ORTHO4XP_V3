@@ -1024,4 +1024,58 @@ T = {
         : '── JPG to correct ──',
     '🌊 Mer & Côte'
         : '🌊 Sea & Coast',
+
+    # ── Altimétrie / DEM — dossiers désignés par l'utilisateur ─────
+    '(non configurée)'
+        : '(not set)',
+    "Aucun dossier d'altimétries n'est configuré."
+        : 'No elevation folder is set.',
+    'Choisissez le disque ou le dossier où créer votre organisation des altimétries (un disque externe convient).'
+        : 'Choose the drive or folder where your elevation data structure should be created (an external drive works fine).',
+    'Cliquez sur « Dossier des sources ».'
+        : 'Click « Source folder ».',
+    'Créer la structure'
+        : 'Create the structure',
+    "Deux dossiers sont nécessaires :\n\n1) celui où se trouvent vos altimétries sources ;\n2) celui où écrire les altimétries assemblées.\n\nVoulez-vous qu'Ortho4XP crée cette organisation pour vous ?\n\nOUI  →  la structure est créée automatiquement.\nNON  →  vous désignez vos propres dossiers, qui sont utilisés tels quels."
+        : 'Two folders are required:\n\n1) the one holding your source elevation files;\n2) the one where assembled elevation files are written.\n\nDo you want Ortho4XP to create this structure for you?\n\nYES  →  the structure is created automatically.\nNO   →  you pick your own folders, used exactly as they are.',
+    'Dossier de destination des altimétries assemblées'
+        : 'Destination folder for assembled elevation files',
+    'Dossier de sortie'
+        : 'Output folder',
+    'Dossier de sortie :'
+        : 'Output folder:',
+    'Dossier de vos altimétries sources (.tif, .asc…)'
+        : 'Folder holding your source elevation files (.tif, .asc…)',
+    'Dossier des sources'
+        : 'Source folder',
+    'Dossier des sources :'
+        : 'Source folder:',
+    'Dossiers enregistrés.'
+        : 'Folders saved.',
+    'Dossiers enregistrés.\n\nSources :\n{s}\n\nSortie :\n{d}'
+        : 'Folders saved.\n\nSources:\n{s}\n\nOutput:\n{d}',
+    'Dossiers non configurés.'
+        : 'Folders not set.',
+    'Déposez vos données dans le dossier des sources, en EPSG:4326.'
+        : 'Put your data in the source folder, in EPSG:4326.',
+    'Les sources doivent être en EPSG:4326 — X-Plane ne lit'
+        : 'Sources must be in EPSG:4326 — X-Plane reads no',
+    "Où créer l'organisation des altimétries"
+        : 'Where to create the elevation data structure',
+    'Sortie :'
+        : 'Output:',
+    'Sources :'
+        : 'Sources:',
+    'aucune autre projection. Ortho4XP convertira au besoin,'
+        : 'other projection. Ortho4XP will convert if needed,',
+    'dossier des sources'
+        : 'source folder',
+    'mais préparez-les de préférence en 4326.'
+        : 'but preparing them in 4326 is preferable.',
+
+    # ── Altimétrie / DEM — rappel des dossiers ─────────────────────
+    '(non configuré)'
+        : '(not set)',
+    'Le fichier assemblé sera écrit ici :\n\n{f}\n\nEst-ce le bon emplacement ?\n\nNON  →  utilisez le bouton « Dossier de sortie ».'
+        : 'The assembled file will be written here:\n\n{f}\n\nIs this the right location?\n\nNO  →  use the « Output folder » button.',
 }
