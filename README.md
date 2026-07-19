@@ -78,7 +78,8 @@ L'objectif est de lever définitivement la barrière technique du terminal. Cett
 
 ### Interface principale et Color Check
 
-[![Interface principale](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/03_Nouvelle_interface.jpg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/03_Nouvelle_interface.jpg)
+[![Interface principale]<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/fb49ffbb-3bc8-466c-a32d-622aaecdf3db" />
+
 
 [![Color Check](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/04_Color%20Check_01.jpeg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/04_Color%20Check_01.jpeg)
 
