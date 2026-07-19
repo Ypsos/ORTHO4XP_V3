@@ -801,6 +801,10 @@ def open_altimetrie_window(gui):
 
     tk.Label(win, text=_tr("Altimétrie / DEM") + "  —  " + cle,
              font=FONT_T, bg=BG, fg=FG).pack(pady=(12, 2))
+    tk.Label(win,
+             text=_tr("Structure  →  Préparer les données (une fois par "
+                      "pays)  →  Assembler la tuile"),
+             font=FONT, bg=BG, fg="#888888").pack(pady=(0, 2))
     lbl_etat = tk.Label(win, text="", font=FONT, bg=BG, fg="#888888")
     lbl_etat.pack(pady=(0, 6))
 
@@ -1414,13 +1418,17 @@ def open_altimetrie_window(gui):
 
     frm_bot = tk.Frame(win, bg=BG)
     frm_bot.pack(pady=(6, 12))
+    # Ordre des boutons = ordre réel du travail :
+    #   structure  →  préparation des données  →  assemblage de la tuile
+    # Ligne 1 : les trois étapes, dans l'ordre.
+    # Ligne 2 : outils et configuration.
     _defs = [
         (_tr("Créer / choisir la structure"),
          lambda: (_assistant(force=True), _rafraichir()), 0, 0),
-        (_tr("Ajouter un pays"), _ajouter_pays, 0, 1),
-        (_tr("Rafraîchir"), _rafraichir, 0, 2),
-        (_tr("Assembler"), _assembler, 0, 3),
-        (_tr("Préparer un pays"), _preparer, 1, 0),
+        (_tr("Préparer les données (EPSG → réduit)"), _preparer, 0, 1),
+        (_tr("Assembler"), _assembler, 0, 2),
+        (_tr("Rafraîchir"), _rafraichir, 0, 3),
+        (_tr("Ajouter un pays"), _ajouter_pays, 1, 0),
         (_tr("Vérifier (auto-test)"), _auto_test, 1, 1),
         (_tr("Choisir QGIS"), _choisir_qgis, 1, 2),
         (_tr("Ouvrir dans QGIS"), _ouvrir_qgis, 1, 3),

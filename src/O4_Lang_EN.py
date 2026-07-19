@@ -662,4 +662,10 @@ T = {
         : 'Source resolution:',
     'Résolution source détectée : {r} m\n\nRatio de réduction en % (25 = diviser par 4) :\n100 = aucune réduction.'
         : 'Detected source resolution: {r} m\n\nReduction ratio in % (25 = divide by 4):\n100 = no reduction.',
+    'Préparer (EPSG → réduit)'
+        : 'Prepare (EPSG → reduced)',
+    'Structure  →  Préparer les données (une fois par pays)  →  Assembler la tuile'
+        : 'Structure  →  Prepare the data (once per country)  →  Assemble the tile',
+    'Préparer les données (EPSG → réduit)'
+        : 'Prepare the data (EPSG → reduced)',
 }

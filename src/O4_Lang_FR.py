@@ -663,4 +663,10 @@ T = {
         : 'Résolution source :',
     'Résolution source détectée : {r} m\n\nRatio de réduction en % (25 = diviser par 4) :\n100 = aucune réduction.'
         : 'Résolution source détectée : {r} m\n\nRatio de réduction en % (25 = diviser par 4) :\n100 = aucune réduction.',
+    'Préparer (EPSG → réduit)'
+        : 'Préparer (EPSG → réduit)',
+    'Structure  →  Préparer les données (une fois par pays)  →  Assembler la tuile'
+        : 'Structure  →  Préparer les données (une fois par pays)  →  Assembler la tuile',
+    'Préparer les données (EPSG → réduit)'
+        : 'Préparer les données (EPSG → réduit)',
 }
