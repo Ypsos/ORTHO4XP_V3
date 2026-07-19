@@ -226,7 +226,7 @@ Choix de l'application de retouche d'image (exemple : GIMP)
 
 ## 🤝 Remerciements
 
-Ce projet avance grâce à la communauté. Merci en particulier à **Jojo**, référence technique sur Ortho4XP et JOSM, dont les explications ont permis de comprendre le fonctionnement réel des emprises, des patches et des codes OACI ; et à **Cricri**, pour les tests et validations sous Windows et Linux, sans lesquels la compatibilité multiplateforme resterait une hypothèse.
+Ce projet avance grâce à la communauté. Merci en particulier à **Jojo**, référence technique sur Ortho4XP, QGIS et JOSM, dont les explications ont permis de comprendre le fonctionnement réel des emprises, des patches et des codes OACI ; et à **Cricri**, pour les tests et validations sous Windows et Linux, sans lesquels la compatibilité multiplateforme resterait une hypothèse.
 
 Merci également à tous ceux qui remontent leurs retours sur les forums : chaque rapport précis fait gagner des heures.
 
@@ -480,7 +480,7 @@ Choosing the image editor (example: GIMP)
 
 ## 🤝 Acknowledgements
 
-This project moves forward thanks to the community. Special thanks to **Jojo**, the technical reference on Ortho4XP and JOSM, whose explanations made it possible to understand how extents, patches and ICAO codes actually work; and to **Cricri**, for testing and validating on Windows and Linux, without whom cross-platform compatibility would remain a theory.
+This project moves forward thanks to the community. Special thanks to **Jojo**, the technical reference on Ortho4XP, QGIS and JOSM, whose explanations made it possible to understand how extents, patches and ICAO codes actually work; and to **Cricri**, for testing and validating on Windows and Linux, without whom cross-platform compatibility would remain a theory.
 
 Thanks as well to everyone posting feedback on the forums: every precise report saves hours of work.
 
