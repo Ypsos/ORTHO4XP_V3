@@ -73,7 +73,8 @@ L'objectif est de lever définitivement la barrière technique du terminal. Cett
 
 [![Lanceur Ortho4XP V3 — installation](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)
 
-[![Lanceur Ortho4XP V3](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/02_Lanceur_Ortho4xp_V2.jpg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/02_Lanceur_Ortho4xp_V2.jpg)
+[![Lanceur Ortho4XP V3]<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/b678f804-cff4-4cdb-86f2-a6a794e3ac79" />
+
 
 ### Interface principale et Color Check
 
