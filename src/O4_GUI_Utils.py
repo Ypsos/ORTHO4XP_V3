@@ -46,6 +46,18 @@ except Exception:
     _ALTIMOD = None
     _altimod_enabled = False
 
+# ── Module Avancé / JOSM (non bloquant) ──────────────────────────────────
+#  Fichier autonome : fenêtre « Avancé » regroupant les couches JOSM
+#  (Extents/, Patches/, OSM_data/). Import non bloquant : si le module est
+#  absent ou défaillant, le GUI démarre normalement et le bouton le signale.
+#  AUCUN fichier du pipeline n'est concerné par ce module.
+try:
+    import O4_Avance_Utils as _AVANCEMOD
+    _avancemod_enabled = True
+except Exception:
+    _AVANCEMOD = None
+    _avancemod_enabled = False
+
 # ── Nouveaux modules Phase 3 (non bloquants) ─────────────────────────────
 try:
     from O4_Benchmark import Timeline as _Timeline
@@ -436,6 +448,13 @@ class Ortho4XP_GUI(tk.Tk):
         self._ram_label.grid(row=2, column=5, padx=8, sticky=W)
         self._update_ram_label()
 
+        # ── LIGNE 4 :  Avancé (couches JOSM)
+        ttk.Button(self.frame_cnorm,
+            text=tr("🛠 Avancé (JOSM)"),
+            command=self.open_avance_module,
+            width=22).grid(row=3, column=0, columnspan=2, padx=5,
+                           pady=(4,8), sticky=W+E)
+
         # ── CONSOLE (row=1 principal — extensible) ─────────────────────
         self.frame_console = tk.Frame(self, border=4, relief=RIDGE, bg=_BG)
         self.frame_console.grid(row=1, column=0, sticky=N+S+W+E, padx=4, pady=4)
@@ -624,6 +643,33 @@ class Ortho4XP_GUI(tk.Tk):
             except Exception:
                 pass
             messagebox.showerror(tr("Altimétrie / DEM"), str(_e))
+
+    def open_avance_module(self):
+        """Point d'entrée du bouton « Avancé (JOSM) ».
+
+        Délègue au module autonome O4_Avance_Utils, qui regroupe les
+        couches JOSM : emprises de provider (Extents/), patches
+        d'altitude (Patches/) et données OSM téléchargées (OSM_data/).
+        Aucun fichier du pipeline n'est modifié par ce bouton.
+
+        Si le module est absent ou lève une erreur, le GUI reste
+        parfaitement fonctionnel : on se contente d'informer.
+        """
+        from tkinter import messagebox
+        if not (_avancemod_enabled and _AVANCEMOD is not None):
+            messagebox.showinfo(
+                tr("Avancé (JOSM)"),
+                tr("Le module O4_Avance_Utils.py est introuvable "
+                   "dans le dossier src/."))
+            return
+        try:
+            _AVANCEMOD.open_avance_window(self)
+        except Exception as _e:
+            try:
+                UI.vprint(1, "[Avance] " + str(_e))
+            except Exception:
+                pass
+            messagebox.showerror(tr("Avancé (JOSM)"), str(_e))
 
     def open_correction_module(self):
         """Point d'entrée du bouton « Correction imagerie/zone ».

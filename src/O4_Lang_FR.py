@@ -669,4 +669,360 @@ T = {
         : 'Structure  →  Préparer les données (une fois par pays)  →  Assembler la tuile',
     'Préparer les données (EPSG → réduit)'
         : 'Préparer les données (EPSG → réduit)',
+
+    # ── FENÊTRE « AVANCÉ » (JOSM) — module O4_Avance_Utils ─────────
+    '\n\nOuvrir quand même le fichier dans JOSM ?'
+        : '\n\nOuvrir quand même le fichier dans JOSM ?',
+    "\n\npar sa copie d'origine ?"
+        : "\n\npar sa copie d'origine ?",
+    'Aide JOSM'
+        : 'Aide JOSM',
+    "Après l'édition dans JOSM"
+        : "Après l'édition dans JOSM",
+    'Aucun dossier de données OSM pour cette tuile.'
+        : 'Aucun dossier de données OSM pour cette tuile.',
+    "Aucun dossier de données OSM pour cette tuile.\n\nLancez d'abord l'étape 1 (Assemble Vector data) : Ortho4XP téléchargera les données OpenStreetMap, qui pourront ensuite être retouchées ici."
+        : "Aucun dossier de données OSM pour cette tuile.\n\nLancez d'abord l'étape 1 (Assemble Vector data) : Ortho4XP téléchargera les données OpenStreetMap, qui pourront ensuite être retouchées ici.",
+    "Aucune copie « .original » n'existe pour cette tuile : aucun fichier n'a encore été ouvert dans JOSM."
+        : "Aucune copie « .original » n'existe pour cette tuile : aucun fichier n'a encore été ouvert dans JOSM.",
+    'Avancé (JOSM)'
+        : 'Avancé (JOSM)',
+    'Avancé — Couches JOSM'
+        : 'Avancé — Couches JOSM',
+    'Aéroport & Runways'
+        : 'Aéroport & Runways',
+    'Copie de sécurité créée : '
+        : 'Copie de sécurité créée : ',
+    'Copie de sécurité déjà présente, conservée : '
+        : 'Copie de sécurité déjà présente, conservée : ',
+    'Copie de sécurité impossible'
+        : 'Copie de sécurité impossible',
+    'Données OSM de la tuile'
+        : 'Données OSM de la tuile',
+    'Dossier absent : '
+        : 'Dossier absent : ',
+    "Enregistrez régulièrement votre travail dans JOSM (une copie « .original » a été créée avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement."
+        : "Enregistrez régulièrement votre travail dans JOSM (une copie « .original » a été créée avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement.",
+    "Extents/  —  définit où s'applique tel ou tel provider,\nen bord de mer, de lac, ou en pleine terre.\nProduit une paire .ext + _osm.bz2."
+        : "Extents/  —  définit où s'applique tel ou tel provider,\nen bord de mer, de lac, ou en pleine terre.\nProduit une paire .ext + _osm.bz2.",
+    'Fichier envoyé à la fenêtre JOSM déjà ouverte.'
+        : 'Fichier envoyé à la fenêtre JOSM déjà ouverte.',
+    "Fichier restauré. Relancez l'étape 1 pour que la tuile reparte de la donnée d'origine."
+        : "Fichier restauré. Relancez l'étape 1 pour que la tuile reparte de la donnée d'origine.",
+    'JOSM :'
+        : 'JOSM :',
+    'JOSM introuvable'
+        : 'JOSM introuvable',
+    'JOSM introuvable.'
+        : 'JOSM introuvable.',
+    'JOSM lancé avec le fichier.'
+        : 'JOSM lancé avec le fichier.',
+    "JOSM n'a pas été trouvé sur cet ordinateur.\n\nJOSM est l'éditeur OpenStreetMap officiel, gratuit et multiplateforme.\nIl se télécharge sur le site officiel : josm.openstreetmap.de\n\nInstallation :\n  • macOS : télécharger la version macOS et glisser JOSM dans le dossier Applications.\n  • Windows : télécharger l'installeur et l'exécuter.\n  • Linux : installer le paquet josm de la distribution.\n\nUne fois JOSM installé, activez le Remote Control :\n  Menu Édition → Préférences → Remote Control → cocher « Activer le Remote Control ».\nOrtho4XP pourra alors ouvrir les fichiers directement dans la fenêtre JOSM déjà lancée, sans en relancer une seconde."
+        : "JOSM n'a pas été trouvé sur cet ordinateur.\n\nJOSM est l'éditeur OpenStreetMap officiel, gratuit et multiplateforme.\nIl se télécharge sur le site officiel : josm.openstreetmap.de\n\nInstallation :\n  • macOS : télécharger la version macOS et glisser JOSM dans le dossier Applications.\n  • Windows : télécharger l'installeur et l'exécuter.\n  • Linux : installer le paquet josm de la distribution.\n\nUne fois JOSM installé, activez le Remote Control :\n  Menu Édition → Préférences → Remote Control → cocher « Activer le Remote Control ».\nOrtho4XP pourra alors ouvrir les fichiers directement dans la fenêtre JOSM déjà lancée, sans en relancer une seconde.",
+    'JOSM répond mais a refusé le fichier.'
+        : 'JOSM répond mais a refusé le fichier.',
+    'Java est introuvable : JOSM ne peut pas être lancé depuis le fichier .jar.'
+        : 'Java est introuvable : JOSM ne peut pas être lancé depuis le fichier .jar.',
+    "La copie de sécurité n'a pas pu être créée :\n"
+        : "La copie de sécurité n'a pas pu être créée :\n",
+    "La tuile active n'est pas déterminée : renseignez la latitude et la longitude dans la fenêtre principale."
+        : "La tuile active n'est pas déterminée : renseignez la latitude et la longitude dans la fenêtre principale.",
+    "Le dossier existe mais ne contient aucun fichier .osm.bz2. Lancez d'abord l'étape 1."
+        : "Le dossier existe mais ne contient aucun fichier .osm.bz2. Lancez d'abord l'étape 1.",
+    "Le fichier choisi sera remplacé par sa copie d'origine.\nLes modifications faites dans JOSM seront perdues."
+        : "Le fichier choisi sera remplacé par sa copie d'origine.\nLes modifications faites dans JOSM seront perdues.",
+    'Le module O4_Avance_Utils.py est introuvable dans le dossier src/.'
+        : 'Le module O4_Avance_Utils.py est introuvable dans le dossier src/.',
+    'Nivellement & Terrain'
+        : 'Nivellement & Terrain',
+    'OSM_data/  —  bords de lac, trait de côte, aéroports.\nOn ouvre le fichier existant ; une copie « .original »\nest créée avant, pour pouvoir revenir en arrière.'
+        : 'OSM_data/  —  bords de lac, trait de côte, aéroports.\nOn ouvre le fichier existant ; une copie « .original »\nest créée avant, pour pouvoir revenir en arrière.',
+    'Original restauré : '
+        : 'Original restauré : ',
+    'Ouverture : '
+        : 'Ouverture : ',
+    'Ouvrir dans JOSM'
+        : 'Ouvrir dans JOSM',
+    'Patches/  —  altitude du mesh : aplanir un plateau,\ncreuser une vallée, corriger une bosse du DEM.\nProduit un fichier .patch.osm.'
+        : 'Patches/  —  altitude du mesh : aplanir un plateau,\ncreuser une vallée, corriger une bosse du DEM.\nProduit un fichier .patch.osm.',
+    'Patches/  —  profil de piste et abords.\nLe nom du fichier doit commencer par le code OACI,\nfaute de quoi le patch reste sans effet.'
+        : 'Patches/  —  profil de piste et abords.\nLe nom du fichier doit commencer par le code OACI,\nfaute de quoi le patch reste sans effet.',
+    'Provider & Emprises'
+        : 'Provider & Emprises',
+    'Quel fichier ouvrir ?'
+        : 'Quel fichier ouvrir ?',
+    'Remplacer définitivement :\n'
+        : 'Remplacer définitivement :\n',
+    'Restaurer'
+        : 'Restaurer',
+    "Restaurer l'original"
+        : "Restaurer l'original",
+    'Tuile active :'
+        : 'Tuile active :',
+    "Une copie « .original » sera créée si elle n'existe pas encore,\npuis le fichier sera ouvert dans JOSM.\nC'est bien le fichier réel que vous modifiez : Ortho4XP le reprendra tel quel."
+        : "Une copie « .original » sera créée si elle n'existe pas encore,\npuis le fichier sera ouvert dans JOSM.\nC'est bien le fichier réel que vous modifiez : Ortho4XP le reprendra tel quel.",
+    'bords de lac, étangs, rivières'
+        : 'bords de lac, étangs, rivières',
+    'bâtiments'
+        : 'bâtiments',
+    'emprises aéroportuaires'
+        : 'emprises aéroportuaires',
+    "en cours d'exécution (Remote Control actif)"
+        : "en cours d'exécution (Remote Control actif)",
+    'indéterminée'
+        : 'indéterminée',
+    'installé, non lancé'
+        : 'installé, non lancé',
+    'introuvable'
+        : 'introuvable',
+    'patches'
+        : 'patches',
+    'recherche…'
+        : 'recherche…',
+    'routes principales'
+        : 'routes principales',
+    'routes secondaires'
+        : 'routes secondaires',
+    'trait de côte'
+        : 'trait de côte',
+    'Échec du lancement : '
+        : 'Échec du lancement : ',
+    '🛠 Avancé (JOSM)'
+        : '🛠 Avancé (JOSM)',
+
+    # ── FENÊTRE « AVANCÉ » (JOSM) — boutons Extents / Patches ──────
+    'Application JOSM enregistrée : '
+        : 'Application JOSM enregistrée : ',
+    'Archives Java'
+        : 'Archives Java',
+    "Aucun aérodrome n'a été trouvé dans les données OSM de la tuile.\nZZZZ est le code officiel des aérodromes non répertoriés : le patch s'appliquera normalement, mais l'aplanissement automatique ne sera pas désactivé."
+        : "Aucun aérodrome n'a été trouvé dans les données OSM de la tuile.\nZZZZ est le code officiel des aérodromes non répertoriés : le patch s'appliquera normalement, mais l'aplanissement automatique ne sera pas désactivé.",
+    'Aucun nœud lisible dans ce fichier.'
+        : 'Aucun nœud lisible dans ce fichier.',
+    'Aucune emprise dans le dossier Extents/.'
+        : 'Aucune emprise dans le dossier Extents/.',
+    "Aérodromes trouvés dans les données OSM de la tuile.\nLe nom du fichier reprend le code OACI : c'est lui qui désactive l'aplanissement automatique."
+        : "Aérodromes trouvés dans les données OSM de la tuile.\nLe nom du fichier reprend le code OACI : c'est lui qui désactive l'aplanissement automatique.",
+    "Choisir l'application JOSM"
+        : "Choisir l'application JOSM",
+    'Créer et ouvrir'
+        : 'Créer et ouvrir',
+    'Emprise mise à jour :\n'
+        : 'Emprise mise à jour :\n',
+    'Emprise recalculée : '
+        : 'Emprise recalculée : ',
+    'Fichier .ext créé : '
+        : 'Fichier .ext créé : ',
+    "Fichier déjà présent, ouverture de l'existant : "
+        : "Fichier déjà présent, ouverture de l'existant : ",
+    "Le dossier Extents/ n'existe pas encore."
+        : "Le dossier Extents/ n'existe pas encore.",
+    "Le fichier .ext sera réécrit d'après le tracé réellement enregistré dans JOSM."
+        : "Le fichier .ext sera réécrit d'après le tracé réellement enregistré dans JOSM.",
+    'Modèle créé : '
+        : 'Modèle créé : ',
+    'Nom du fichier :'
+        : 'Nom du fichier :',
+    'Recalculer'
+        : 'Recalculer',
+    "Recalculer l'emprise"
+        : "Recalculer l'emprise",
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Recalculer l'emprise » : le fichier .ext sera mis à jour d'après votre tracé. Sans cela l'emprise reste celle du rectangle d'origine."
+        : "Un rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Recalculer l'emprise » : le fichier .ext sera mis à jour d'après votre tracé. Sans cela l'emprise reste celle du rectangle d'origine.",
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM.\n\nPlacez-le sur la piste, puis renseignez altitude_low et altitude_high en MÈTRES aux deux extrémités. Pour une piste plate, mettez la même valeur des deux côtés, ou remplacez les deux tags par un seul tag altitude."
+        : "Un rectangle pré-tagué va s'ouvrir dans JOSM.\n\nPlacez-le sur la piste, puis renseignez altitude_low et altitude_high en MÈTRES aux deux extrémités. Pour une piste plate, mettez la même valeur des deux côtés, ou remplacez les deux tags par un seul tag altitude.",
+    "Un rectangle pré-tagué « altitude=0 » va s'ouvrir dans JOSM.\n\nDéplacez ses nœuds sur la zone à corriger, puis remplacez la valeur d'altitude par l'altitude voulue, en MÈTRES.\n\nPour une pente, remplacez le tag altitude par altitude_low et altitude_high, et ajoutez si besoin profile=spline."
+        : "Un rectangle pré-tagué « altitude=0 » va s'ouvrir dans JOSM.\n\nDéplacez ses nœuds sur la zone à corriger, puis remplacez la valeur d'altitude par l'altitude voulue, en MÈTRES.\n\nPour une pente, remplacez le tag altitude par altitude_low et altitude_high, et ajoutez si besoin profile=spline.",
+    'aérodrome non répertorié'
+        : 'aérodrome non répertorié',
+
+    # ── Avancé (JOSM) — boutons de couches ─────────────────────────
+    "Aucune donnée — lancer l'étape 1"
+        : "Aucune donnée — lancer l'étape 1",
+
+    # ── Avancé (JOSM) — sauvegarde fichier source ──────────────────
+    "Aucune copie d'origine pour cette tuile : aucun fichier n'a encore été ouvert dans JOSM."
+        : "Aucune copie d'origine pour cette tuile : aucun fichier n'a encore été ouvert dans JOSM.",
+    "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement."
+        : "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement.",
+    'OSM_data/  —  bords de lac, trait de côte, aéroports.\nOn ouvre le fichier existant ; une copie est rangée dans\n« Sauvegarde fichier source » pour revenir en arrière.'
+        : 'OSM_data/  —  bords de lac, trait de côte, aéroports.\nOn ouvre le fichier existant ; une copie est rangée dans\n« Sauvegarde fichier source » pour revenir en arrière.',
+    "Une copie d'origine sera rangée dans « Sauvegarde fichier source »\nsi elle n'existe pas encore, puis le fichier sera ouvert dans JOSM.\nC'est bien le fichier réel que vous modifiez : Ortho4XP le reprendra tel quel."
+        : "Une copie d'origine sera rangée dans « Sauvegarde fichier source »\nsi elle n'existe pas encore, puis le fichier sera ouvert dans JOSM.\nC'est bien le fichier réel que vous modifiez : Ortho4XP le reprendra tel quel.",
+
+    # ── Avancé (JOSM) — sauvegarde / réapplication ─────────────────
+    "\n\nRelancez ensuite l'étape 1."
+        : "\n\nRelancez ensuite l'étape 1.",
+    'Aucune modification sauvegardée pour cette tuile.'
+        : 'Aucune modification sauvegardée pour cette tuile.',
+    "Aucune modification à sauvegarder : les fichiers sont identiques à l'original."
+        : "Aucune modification à sauvegarder : les fichiers sont identiques à l'original.",
+    "Deux copies vivent dans « Sauvegarde fichier source », hors\ndu dossier de la tuile : elles survivent donc à sa suppression.\n\n• l'original, tel qu'Ortho4XP l'avait téléchargé\n• vos modifications, à réappliquer sur une tuile reconstruite"
+        : "Deux copies vivent dans « Sauvegarde fichier source », hors\ndu dossier de la tuile : elles survivent donc à sa suppression.\n\n• l'original, tel qu'Ortho4XP l'avait téléchargé\n• vos modifications, à réappliquer sur une tuile reconstruite",
+    "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nQuand votre édition sera terminée et enregistrée, cliquez sur « Sauvegardes… » puis « Sauvegarder mes modifications » : votre travail sera alors protégé même si la tuile est supprimée ou reconstruite.\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement."
+        : "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nQuand votre édition sera terminée et enregistrée, cliquez sur « Sauvegardes… » puis « Sauvegarder mes modifications » : votre travail sera alors protégé même si la tuile est supprimée ou reconstruite.\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement.",
+    'Fichiers sauvegardés : '
+        : 'Fichiers sauvegardés : ',
+    'Modifications réappliquées : '
+        : 'Modifications réappliquées : ',
+    "Modifications réappliquées. Relancez l'étape 1 pour que la tuile les prenne en compte."
+        : "Modifications réappliquées. Relancez l'étape 1 pour que la tuile les prenne en compte.",
+    'Modifications sauvegardées : '
+        : 'Modifications sauvegardées : ',
+    'Remplacer les données OSM de la tuile par vos modifications sauvegardées ?\n\nFichiers concernés : '
+        : 'Remplacer les données OSM de la tuile par vos modifications sauvegardées ?\n\nFichiers concernés : ',
+    'Réappliquer mes modifications'
+        : 'Réappliquer mes modifications',
+    'Sauvegarder mes modifications'
+        : 'Sauvegarder mes modifications',
+    'Sauvegarder mes modifications maintenant'
+        : 'Sauvegarder mes modifications maintenant',
+    'Sauvegardes'
+        : 'Sauvegardes',
+    'Sauvegardes…'
+        : 'Sauvegardes…',
+
+    # ── Avancé (JOSM) — sauvegarde à la fermeture ──────────────────
+    'Modifications sauvegardées à la fermeture : '
+        : 'Modifications sauvegardées à la fermeture : ',
+
+    # ── Avancé (JOSM) — état de l'application ──────────────────────
+    "non sélectionné — cliquez sur « Choisir l'application JOSM »"
+        : "non sélectionné — cliquez sur « Choisir l'application JOSM »",
+
+    # ── Avancé (JOSM) — lancement de l'application ─────────────────
+    'Démarrage de JOSM, veuillez patienter…'
+        : 'Démarrage de JOSM, veuillez patienter…',
+    'Fichier transmis à JOSM.'
+        : 'Fichier transmis à JOSM.',
+    "JOSM a été lancé. Si le fichier ne s'ouvre pas, activez le Remote Control dans les préférences de JOSM (voir « Aide JOSM »)."
+        : "JOSM a été lancé. Si le fichier ne s'ouvre pas, activez le Remote Control dans les préférences de JOSM (voir « Aide JOSM »).",
+
+    # ── Avancé (JOSM) — publication d'emprise ──────────────────────
+    'Emprise publiée : '
+        : 'Emprise publiée : ',
+    'Emprise publiée et mise à jour :\n'
+        : 'Emprise publiée et mise à jour :\n',
+    "Le fichier compressé attendu par Ortho4XP et l'emprise .ext\nseront écrits d'après le tracé réellement enregistré dans JOSM."
+        : "Le fichier compressé attendu par Ortho4XP et l'emprise .ext\nseront écrits d'après le tracé réellement enregistré dans JOSM.",
+    'Publier'
+        : 'Publier',
+    "Publier l'emprise"
+        : "Publier l'emprise",
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Publier l'emprise » : Ortho4XP attend un fichier compressé au nom particulier, que JOSM ne sait pas ouvrir. La publication écrit ce fichier et met l'emprise à jour d'après votre tracé.\n\nSans cette publication, votre emprise ne sera pas prise en compte."
+        : "Un rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Publier l'emprise » : Ortho4XP attend un fichier compressé au nom particulier, que JOSM ne sait pas ouvrir. La publication écrit ce fichier et met l'emprise à jour d'après votre tracé.\n\nSans cette publication, votre emprise ne sera pas prise en compte.",
+
+    # ── Avancé (JOSM) — avertissement téléversement ────────────────
+    "Dans JOSM, utilisez toujours ENREGISTRER, jamais ENVOYER : « Envoyer » téléverse vers les serveurs publics d'OpenStreetMap.\n\nUn rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Publier l'emprise » : Ortho4XP attend un fichier compressé au nom particulier, que JOSM ne sait pas ouvrir. La publication écrit ce fichier et met l'emprise à jour d'après votre tracé.\n\nSans cette publication, votre emprise ne sera pas prise en compte."
+        : "Dans JOSM, utilisez toujours ENREGISTRER, jamais ENVOYER : « Envoyer » téléverse vers les serveurs publics d'OpenStreetMap.\n\nUn rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Publier l'emprise » : Ortho4XP attend un fichier compressé au nom particulier, que JOSM ne sait pas ouvrir. La publication écrit ce fichier et met l'emprise à jour d'après votre tracé.\n\nSans cette publication, votre emprise ne sera pas prise en compte.",
+
+    # ── Avancé (JOSM) — récupération de fichier égaré ──────────────
+    'Fichier récupéré et rangé dans Extents/ : '
+        : 'Fichier récupéré et rangé dans Extents/ : ',
+
+    # ── Avancé (JOSM) — fichiers au mauvais endroit ────────────────
+    "\n\nRanger maintenant ? Aucun doublon ne subsistera : chaque fichier rejoint Extents/ ou disparaît s'il y fait doublon."
+        : "\n\nRanger maintenant ? Aucun doublon ne subsistera : chaque fichier rejoint Extents/ ou disparaît s'il y fait doublon.",
+    ' fichier(s) laissé(s) en place.'
+        : ' fichier(s) laissé(s) en place.',
+    "Des fichiers d'emprise ont été enregistrés ailleurs que dans Extents/.\nOrtho4XP ne les voit pas à cet endroit.\n\n"
+        : "Des fichiers d'emprise ont été enregistrés ailleurs que dans Extents/.\nOrtho4XP ne les voit pas à cet endroit.\n\n",
+    'Doublon supprimé : '
+        : 'Doublon supprimé : ',
+    'DÉPLACER vers Extents/'
+        : 'DÉPLACER vers Extents/',
+    'Déplacé dans Extents/ : '
+        : 'Déplacé dans Extents/ : ',
+    'Fichiers enregistrés au mauvais endroit'
+        : 'Fichiers enregistrés au mauvais endroit',
+    'Rangement refusé : '
+        : 'Rangement refusé : ',
+    'SUPPRIMER'
+        : 'SUPPRIMER',
+    'absent de Extents/'
+        : 'absent de Extents/',
+    'identique à celui de Extents/'
+        : 'identique à celui de Extents/',
+    'plus ancien que celui de Extents/'
+        : 'plus ancien que celui de Extents/',
+    'plus récent que celui de Extents/'
+        : 'plus récent que celui de Extents/',
+    'Échec : '
+        : 'Échec : ',
+
+    # ── Avancé (JOSM) — consigne d'enregistrement ──────────────────
+    ", ou menu Fichier puis Enregistrer.\n\nLe fichier repart directement au bon endroit : JOSM a retenu son emplacement, il n'y a aucun dossier à choisir.\n\nÉvitez « Enregistrer sous » et « Enregistrer la session » : ce sont les deux commandes qui font atterrir le fichier au mauvais endroit. Raccourcis équivalents : Cmd+S sur macOS, Ctrl+S sur Windows et Linux."
+        : ", ou menu Fichier puis Enregistrer.\n\nLe fichier repart directement au bon endroit : JOSM a retenu son emplacement, il n'y a aucun dossier à choisir.\n\nÉvitez « Enregistrer sous » et « Enregistrer la session » : ce sont les deux commandes qui font atterrir le fichier au mauvais endroit. Raccourcis équivalents : Cmd+S sur macOS, Ctrl+S sur Windows et Linux.",
+    "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nQuand votre édition sera terminée et enregistrée, cliquez sur « Sauvegardes… » puis « Sauvegarder mes modifications » : votre travail sera alors protégé même si la tuile est supprimée ou reconstruite.\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement.\n\n"
+        : "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nQuand votre édition sera terminée et enregistrée, cliquez sur « Sauvegardes… » puis « Sauvegarder mes modifications » : votre travail sera alors protégé même si la tuile est supprimée ou reconstruite.\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement.\n\n",
+    'POUR ENREGISTRER dans JOSM : '
+        : 'POUR ENREGISTRER dans JOSM : ',
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM.\n\nPlacez-le sur la piste, puis renseignez altitude_low et altitude_high en MÈTRES aux deux extrémités. Pour une piste plate, mettez la même valeur des deux côtés, ou remplacez les deux tags par un seul tag altitude.\n\n"
+        : "Un rectangle pré-tagué va s'ouvrir dans JOSM.\n\nPlacez-le sur la piste, puis renseignez altitude_low et altitude_high en MÈTRES aux deux extrémités. Pour une piste plate, mettez la même valeur des deux côtés, ou remplacez les deux tags par un seul tag altitude.\n\n",
+    "Un rectangle pré-tagué « altitude=0 » va s'ouvrir dans JOSM.\n\nDéplacez ses nœuds sur la zone à corriger, puis remplacez la valeur d'altitude par l'altitude voulue, en MÈTRES.\n\nPour une pente, remplacez le tag altitude par altitude_low et altitude_high, et ajoutez si besoin profile=spline.\n\n"
+        : "Un rectangle pré-tagué « altitude=0 » va s'ouvrir dans JOSM.\n\nDéplacez ses nœuds sur la zone à corriger, puis remplacez la valeur d'altitude par l'altitude voulue, en MÈTRES.\n\nPour une pente, remplacez le tag altitude par altitude_low et altitude_high, et ajoutez si besoin profile=spline.\n\n",
+    'sur Linux'
+        : 'sur Linux',
+    'sur Windows'
+        : 'sur Windows',
+    'sur macOS'
+        : 'sur macOS',
+
+    # ── Avancé (JOSM) — saisie de nom ──────────────────────────────
+    'Valider'
+        : 'Valider',
+
+    # ── Avancé (JOSM) — publication automatique ────────────────────
+    "Dans JOSM, utilisez toujours ENREGISTRER, jamais ENVOYER : « Envoyer » téléverse vers les serveurs publics d'OpenStreetMap.\n\nUn rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nDès que vous enregistrerez dans JOSM, Ortho4XP recevra automatiquement votre tracé : vous n'avez aucune autre manipulation à faire.\n\n"
+        : "Dans JOSM, utilisez toujours ENREGISTRER, jamais ENVOYER : « Envoyer » téléverse vers les serveurs publics d'OpenStreetMap.\n\nUn rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nDès que vous enregistrerez dans JOSM, Ortho4XP recevra automatiquement votre tracé : vous n'avez aucune autre manipulation à faire.\n\n",
+
+    # ── Lacunes anterieures comblees le 19/07/2026 (GUI + Correction) ──
+    '0%=gris  100%=réf.48753JPG  200%=×2'
+        : '0%=gris  100%=réf.48753JPG  200%=×2',
+    'Application :'
+        : 'Application :',
+    "Aucun dossier PATCH trouvé pour cette tuile.\nLancer d'abord le Step 2.1 — Sea Patches."
+        : "Aucun dossier PATCH trouvé pour cette tuile.\nLancer d'abord le Step 2.1 — Sea Patches.",
+    'Aucun patch JPG trouvé dans :\n'
+        : 'Aucun patch JPG trouvé dans :\n',
+    'Aucun patch sélectionné.'
+        : 'Aucun patch sélectionné.',
+    "Aucune application définie.\nCliquer d'abord sur 'Correction' pour choisir l'application."
+        : "Aucune application définie.\nCliquer d'abord sur 'Correction' pour choisir l'application.",
+    'Boost:'
+        : 'Boost:',
+    "Choisir l'application de correction (GIMP, Photoshop…)"
+        : "Choisir l'application de correction (GIMP, Photoshop…)",
+    'Cocher les patches à traiter'
+        : 'Cocher les patches à traiter',
+    'Confirmation'
+        : 'Confirmation',
+    'Correction Patches'
+        : 'Correction Patches',
+    'Correction imagerie/zone'
+        : 'Correction imagerie/zone',
+    'Correction patches'
+        : 'Correction patches',
+    'Correction patches — Ortho4XP V3'
+        : 'Correction patches — Ortho4XP V3',
+    'Erreur'
+        : 'Erreur',
+    'Erreur ouverture'
+        : 'Erreur ouverture',
+    "Impossible d'ouvrir l'application"
+        : "Impossible d'ouvrir l'application",
+    'Impossible de sauvegarder le chemin éditeur'
+        : 'Impossible de sauvegarder le chemin éditeur',
+    'Impossible de supprimer'
+        : 'Impossible de supprimer',
+    'Lacs & Rivières'
+        : 'Lacs & Rivières',
+    'Saturation:'
+        : 'Saturation:',
+    'Supprimer {n} patch(es) sélectionné(s) ?'
+        : 'Supprimer {n} patch(es) sélectionné(s) ?',
+    '── JPG à corriger ──'
+        : '── JPG à corriger ──',
+    '🌊 Mer & Côte'
+        : '🌊 Mer & Côte',
 }

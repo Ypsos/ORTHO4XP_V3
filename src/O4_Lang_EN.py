@@ -668,4 +668,360 @@ T = {
         : 'Structure  →  Prepare the data (once per country)  →  Assemble the tile',
     'Préparer les données (EPSG → réduit)'
         : 'Prepare the data (EPSG → reduced)',
+
+    # ── FENÊTRE « AVANCÉ » (JOSM) — module O4_Avance_Utils ─────────
+    '\n\nOuvrir quand même le fichier dans JOSM ?'
+        : '\n\nOpen the file in JOSM anyway?',
+    "\n\npar sa copie d'origine ?"
+        : '\n\nwith its original copy?',
+    'Aide JOSM'
+        : 'JOSM help',
+    "Après l'édition dans JOSM"
+        : 'After editing in JOSM',
+    'Aucun dossier de données OSM pour cette tuile.'
+        : 'No OSM data folder for this tile.',
+    "Aucun dossier de données OSM pour cette tuile.\n\nLancez d'abord l'étape 1 (Assemble Vector data) : Ortho4XP téléchargera les données OpenStreetMap, qui pourront ensuite être retouchées ici."
+        : 'No OSM data folder for this tile.\n\nRun step 1 (Assemble Vector data) first: Ortho4XP will download the OpenStreetMap data, which can then be edited here.',
+    "Aucune copie « .original » n'existe pour cette tuile : aucun fichier n'a encore été ouvert dans JOSM."
+        : 'No « .original » copy exists for this tile: no file has been opened in JOSM yet.',
+    'Avancé (JOSM)'
+        : 'Advanced (JOSM)',
+    'Avancé — Couches JOSM'
+        : 'Advanced — JOSM layers',
+    'Aéroport & Runways'
+        : 'Airport & Runways',
+    'Copie de sécurité créée : '
+        : 'Safety copy created: ',
+    'Copie de sécurité déjà présente, conservée : '
+        : 'Safety copy already present, kept: ',
+    'Copie de sécurité impossible'
+        : 'Safety copy failed',
+    'Données OSM de la tuile'
+        : 'Tile OSM data',
+    'Dossier absent : '
+        : 'Missing folder: ',
+    "Enregistrez régulièrement votre travail dans JOSM (une copie « .original » a été créée avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement."
+        : 'Save your work in JOSM regularly (an « .original » copy was created before opening: the « Restore the original » button lets you roll back at any time).\n\nOnce editing is finished and saved, run step 1 (Assemble Vector data) again in Ortho4XP: the modified data will be reused as is, with no new download.',
+    "Extents/  —  définit où s'applique tel ou tel provider,\nen bord de mer, de lac, ou en pleine terre.\nProduit une paire .ext + _osm.bz2."
+        : 'Extents/  —  defines where a given provider applies,\nalong the sea, a lake, or fully inland.\nProduces an .ext + _osm.bz2 pair.',
+    'Fichier envoyé à la fenêtre JOSM déjà ouverte.'
+        : 'File sent to the already running JOSM window.',
+    "Fichier restauré. Relancez l'étape 1 pour que la tuile reparte de la donnée d'origine."
+        : 'File restored. Run step 1 again so the tile starts from the original data.',
+    'JOSM :'
+        : 'JOSM:',
+    'JOSM introuvable'
+        : 'JOSM not found',
+    'JOSM introuvable.'
+        : 'JOSM not found.',
+    'JOSM lancé avec le fichier.'
+        : 'JOSM launched with the file.',
+    "JOSM n'a pas été trouvé sur cet ordinateur.\n\nJOSM est l'éditeur OpenStreetMap officiel, gratuit et multiplateforme.\nIl se télécharge sur le site officiel : josm.openstreetmap.de\n\nInstallation :\n  • macOS : télécharger la version macOS et glisser JOSM dans le dossier Applications.\n  • Windows : télécharger l'installeur et l'exécuter.\n  • Linux : installer le paquet josm de la distribution.\n\nUne fois JOSM installé, activez le Remote Control :\n  Menu Édition → Préférences → Remote Control → cocher « Activer le Remote Control ».\nOrtho4XP pourra alors ouvrir les fichiers directement dans la fenêtre JOSM déjà lancée, sans en relancer une seconde."
+        : 'JOSM was not found on this computer.\n\nJOSM is the official OpenStreetMap editor, free and cross-platform.\nIt can be downloaded from the official site: josm.openstreetmap.de\n\nInstallation:\n  • macOS: download the macOS build and drag JOSM into the Applications folder.\n  • Windows: download the installer and run it.\n  • Linux: install the josm package of your distribution.\n\nOnce JOSM is installed, enable Remote Control:\n  Edit menu → Preferences → Remote Control → tick « Enable remote control ».\nOrtho4XP will then open files directly in the already running JOSM window, instead of starting a second one.',
+    'JOSM répond mais a refusé le fichier.'
+        : 'JOSM answered but refused the file.',
+    'Java est introuvable : JOSM ne peut pas être lancé depuis le fichier .jar.'
+        : 'Java not found: JOSM cannot be started from the .jar file.',
+    "La copie de sécurité n'a pas pu être créée :\n"
+        : 'The safety copy could not be created:\n',
+    "La tuile active n'est pas déterminée : renseignez la latitude et la longitude dans la fenêtre principale."
+        : 'The active tile is undefined: please set latitude and longitude in the main window.',
+    "Le dossier existe mais ne contient aucun fichier .osm.bz2. Lancez d'abord l'étape 1."
+        : 'The folder exists but contains no .osm.bz2 file. Run step 1 first.',
+    "Le fichier choisi sera remplacé par sa copie d'origine.\nLes modifications faites dans JOSM seront perdues."
+        : 'The selected file will be replaced by its original copy.\nChanges made in JOSM will be lost.',
+    'Le module O4_Avance_Utils.py est introuvable dans le dossier src/.'
+        : 'Module O4_Avance_Utils.py was not found in the src/ folder.',
+    'Nivellement & Terrain'
+        : 'Levelling & Terrain',
+    'OSM_data/  —  bords de lac, trait de côte, aéroports.\nOn ouvre le fichier existant ; une copie « .original »\nest créée avant, pour pouvoir revenir en arrière.'
+        : 'OSM_data/  —  lake shores, coastline, airports.\nThe existing file is opened; an « .original » copy\nis created first, so you can roll back.',
+    'Original restauré : '
+        : 'Original restored: ',
+    'Ouverture : '
+        : 'Opening: ',
+    'Ouvrir dans JOSM'
+        : 'Open in JOSM',
+    'Patches/  —  altitude du mesh : aplanir un plateau,\ncreuser une vallée, corriger une bosse du DEM.\nProduit un fichier .patch.osm.'
+        : 'Patches/  —  mesh altitude: flatten a plateau,\ncarve a valley, fix a DEM bump.\nProduces a .patch.osm file.',
+    'Patches/  —  profil de piste et abords.\nLe nom du fichier doit commencer par le code OACI,\nfaute de quoi le patch reste sans effet.'
+        : 'Patches/  —  runway profile and surroundings.\nThe file name must start with the ICAO code,\notherwise the patch has no effect.',
+    'Provider & Emprises'
+        : 'Provider & Extents',
+    'Quel fichier ouvrir ?'
+        : 'Which file to open?',
+    'Remplacer définitivement :\n'
+        : 'Permanently replace:\n',
+    'Restaurer'
+        : 'Restore',
+    "Restaurer l'original"
+        : 'Restore the original',
+    'Tuile active :'
+        : 'Active tile:',
+    "Une copie « .original » sera créée si elle n'existe pas encore,\npuis le fichier sera ouvert dans JOSM.\nC'est bien le fichier réel que vous modifiez : Ortho4XP le reprendra tel quel."
+        : 'An « .original » copy will be created if it does not exist yet,\nthen the file will be opened in JOSM.\nYou are editing the real file: Ortho4XP will use it as is.',
+    'bords de lac, étangs, rivières'
+        : 'lake shores, ponds, rivers',
+    'bâtiments'
+        : 'buildings',
+    'emprises aéroportuaires'
+        : 'airport areas',
+    "en cours d'exécution (Remote Control actif)"
+        : 'running (Remote Control active)',
+    'indéterminée'
+        : 'undefined',
+    'installé, non lancé'
+        : 'installed, not running',
+    'introuvable'
+        : 'not found',
+    'patches'
+        : 'patches',
+    'recherche…'
+        : 'searching…',
+    'routes principales'
+        : 'main roads',
+    'routes secondaires'
+        : 'minor roads',
+    'trait de côte'
+        : 'coastline',
+    'Échec du lancement : '
+        : 'Launch failed: ',
+    '🛠 Avancé (JOSM)'
+        : '🛠 Advanced (JOSM)',
+
+    # ── FENÊTRE « AVANCÉ » (JOSM) — boutons Extents / Patches ──────
+    'Application JOSM enregistrée : '
+        : 'JOSM application saved: ',
+    'Archives Java'
+        : 'Java archives',
+    "Aucun aérodrome n'a été trouvé dans les données OSM de la tuile.\nZZZZ est le code officiel des aérodromes non répertoriés : le patch s'appliquera normalement, mais l'aplanissement automatique ne sera pas désactivé."
+        : 'No aerodrome was found in the tile OSM data.\nZZZZ is the official code for unlisted aerodromes: the patch will apply normally, but automatic flattening will not be disabled.',
+    'Aucun nœud lisible dans ce fichier.'
+        : 'No readable node in this file.',
+    'Aucune emprise dans le dossier Extents/.'
+        : 'No extent in the Extents/ folder.',
+    "Aérodromes trouvés dans les données OSM de la tuile.\nLe nom du fichier reprend le code OACI : c'est lui qui désactive l'aplanissement automatique."
+        : 'Aerodromes found in the tile OSM data.\nThe file name uses the ICAO code: that is what disables automatic flattening.',
+    "Choisir l'application JOSM"
+        : 'Choose the JOSM application',
+    'Créer et ouvrir'
+        : 'Create and open',
+    'Emprise mise à jour :\n'
+        : 'Extent updated:\n',
+    'Emprise recalculée : '
+        : 'Extent recomputed: ',
+    'Fichier .ext créé : '
+        : '.ext file created: ',
+    "Fichier déjà présent, ouverture de l'existant : "
+        : 'File already present, opening the existing one: ',
+    "Le dossier Extents/ n'existe pas encore."
+        : 'The Extents/ folder does not exist yet.',
+    "Le fichier .ext sera réécrit d'après le tracé réellement enregistré dans JOSM."
+        : 'The .ext file will be rewritten from the outline actually saved in JOSM.',
+    'Modèle créé : '
+        : 'Template created: ',
+    'Nom du fichier :'
+        : 'File name:',
+    'Recalculer'
+        : 'Recompute',
+    "Recalculer l'emprise"
+        : 'Recompute the extent',
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Recalculer l'emprise » : le fichier .ext sera mis à jour d'après votre tracé. Sans cela l'emprise reste celle du rectangle d'origine."
+        : 'A pre-tagged rectangle will open in JOSM: move its nodes to match the area you want.\n\nONCE SAVED in JOSM, come back here and click « Recompute the extent »: the .ext file will be updated from your outline. Otherwise the extent stays that of the original rectangle.',
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM.\n\nPlacez-le sur la piste, puis renseignez altitude_low et altitude_high en MÈTRES aux deux extrémités. Pour une piste plate, mettez la même valeur des deux côtés, ou remplacez les deux tags par un seul tag altitude."
+        : 'A pre-tagged rectangle will open in JOSM.\n\nPlace it over the runway, then set altitude_low and altitude_high in METRES at both ends. For a flat runway, use the same value on both sides, or replace both tags with a single altitude tag.',
+    "Un rectangle pré-tagué « altitude=0 » va s'ouvrir dans JOSM.\n\nDéplacez ses nœuds sur la zone à corriger, puis remplacez la valeur d'altitude par l'altitude voulue, en MÈTRES.\n\nPour une pente, remplacez le tag altitude par altitude_low et altitude_high, et ajoutez si besoin profile=spline."
+        : 'A rectangle pre-tagged « altitude=0 » will open in JOSM.\n\nMove its nodes over the area to fix, then replace the altitude value with the one you want, in METRES.\n\nFor a slope, replace the altitude tag with altitude_low and altitude_high, and add profile=spline if needed.',
+    'aérodrome non répertorié'
+        : 'unlisted aerodrome',
+
+    # ── Avancé (JOSM) — boutons de couches ─────────────────────────
+    "Aucune donnée — lancer l'étape 1"
+        : 'No data — run step 1',
+
+    # ── Avancé (JOSM) — sauvegarde fichier source ──────────────────
+    "Aucune copie d'origine pour cette tuile : aucun fichier n'a encore été ouvert dans JOSM."
+        : 'No original copy for this tile: no file has been opened in JOSM yet.',
+    "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement."
+        : 'Save your work in JOSM regularly (an original copy was stored in « Sauvegarde fichier source » before opening: the « Restore the original » button lets you roll back at any time).\n\nOnce editing is finished and saved, run step 1 (Assemble Vector data) again in Ortho4XP: the modified data will be reused as is, with no new download.',
+    'OSM_data/  —  bords de lac, trait de côte, aéroports.\nOn ouvre le fichier existant ; une copie est rangée dans\n« Sauvegarde fichier source » pour revenir en arrière.'
+        : 'OSM_data/  —  lake shores, coastline, airports.\nThe existing file is opened; a copy is stored in\n« Sauvegarde fichier source » so you can roll back.',
+    "Une copie d'origine sera rangée dans « Sauvegarde fichier source »\nsi elle n'existe pas encore, puis le fichier sera ouvert dans JOSM.\nC'est bien le fichier réel que vous modifiez : Ortho4XP le reprendra tel quel."
+        : 'An original copy will be stored in « Sauvegarde fichier source »\nif it does not exist yet, then the file will be opened in JOSM.\nYou are editing the real file: Ortho4XP will use it as is.',
+
+    # ── Avancé (JOSM) — sauvegarde / réapplication ─────────────────
+    "\n\nRelancez ensuite l'étape 1."
+        : '\n\nThen run step 1 again.',
+    'Aucune modification sauvegardée pour cette tuile.'
+        : 'No saved changes for this tile.',
+    "Aucune modification à sauvegarder : les fichiers sont identiques à l'original."
+        : 'Nothing to save: the files are identical to the original.',
+    "Deux copies vivent dans « Sauvegarde fichier source », hors\ndu dossier de la tuile : elles survivent donc à sa suppression.\n\n• l'original, tel qu'Ortho4XP l'avait téléchargé\n• vos modifications, à réappliquer sur une tuile reconstruite"
+        : 'Two copies live in « Sauvegarde fichier source », outside\nthe tile folder: they therefore survive its deletion.\n\n• the original, as Ortho4XP downloaded it\n• your changes, to reapply on a rebuilt tile',
+    "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nQuand votre édition sera terminée et enregistrée, cliquez sur « Sauvegardes… » puis « Sauvegarder mes modifications » : votre travail sera alors protégé même si la tuile est supprimée ou reconstruite.\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement."
+        : 'Save your work in JOSM regularly (an original copy was stored in « Sauvegarde fichier source » before opening: the « Restore the original » button lets you roll back at any time).\n\nWhen your editing is finished and saved, click « Backups… » then « Save my changes »: your work will then be protected even if the tile is deleted or rebuilt.\n\nOnce editing is finished and saved, run step 1 (Assemble Vector data) again in Ortho4XP: the modified data will be reused as is, with no new download.',
+    'Fichiers sauvegardés : '
+        : 'Files saved: ',
+    'Modifications réappliquées : '
+        : 'Changes reapplied: ',
+    "Modifications réappliquées. Relancez l'étape 1 pour que la tuile les prenne en compte."
+        : 'Changes reapplied. Run step 1 again so the tile takes them into account.',
+    'Modifications sauvegardées : '
+        : 'Changes saved: ',
+    'Remplacer les données OSM de la tuile par vos modifications sauvegardées ?\n\nFichiers concernés : '
+        : 'Replace the tile OSM data with your saved changes?\n\nFiles concerned: ',
+    'Réappliquer mes modifications'
+        : 'Reapply my changes',
+    'Sauvegarder mes modifications'
+        : 'Save my changes',
+    'Sauvegarder mes modifications maintenant'
+        : 'Save my changes now',
+    'Sauvegardes'
+        : 'Backups',
+    'Sauvegardes…'
+        : 'Backups…',
+
+    # ── Avancé (JOSM) — sauvegarde à la fermeture ──────────────────
+    'Modifications sauvegardées à la fermeture : '
+        : 'Changes saved on closing: ',
+
+    # ── Avancé (JOSM) — état de l'application ──────────────────────
+    "non sélectionné — cliquez sur « Choisir l'application JOSM »"
+        : 'not selected — click « Choose the JOSM application »',
+
+    # ── Avancé (JOSM) — lancement de l'application ─────────────────
+    'Démarrage de JOSM, veuillez patienter…'
+        : 'Starting JOSM, please wait…',
+    'Fichier transmis à JOSM.'
+        : 'File sent to JOSM.',
+    "JOSM a été lancé. Si le fichier ne s'ouvre pas, activez le Remote Control dans les préférences de JOSM (voir « Aide JOSM »)."
+        : 'JOSM has been launched. If the file does not open, enable Remote Control in the JOSM preferences (see « JOSM help »).',
+
+    # ── Avancé (JOSM) — publication d'emprise ──────────────────────
+    'Emprise publiée : '
+        : 'Extent published: ',
+    'Emprise publiée et mise à jour :\n'
+        : 'Extent published and updated:\n',
+    "Le fichier compressé attendu par Ortho4XP et l'emprise .ext\nseront écrits d'après le tracé réellement enregistré dans JOSM."
+        : 'The compressed file expected by Ortho4XP and the .ext extent\nwill be written from the outline actually saved in JOSM.',
+    'Publier'
+        : 'Publish',
+    "Publier l'emprise"
+        : 'Publish the extent',
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Publier l'emprise » : Ortho4XP attend un fichier compressé au nom particulier, que JOSM ne sait pas ouvrir. La publication écrit ce fichier et met l'emprise à jour d'après votre tracé.\n\nSans cette publication, votre emprise ne sera pas prise en compte."
+        : 'A pre-tagged rectangle will open in JOSM: move its nodes to match the area you want.\n\nONCE SAVED in JOSM, come back here and click « Publish the extent »: Ortho4XP expects a compressed file with a particular name that JOSM cannot open. Publishing writes that file and updates the extent from your outline.\n\nWithout publishing, your extent will not be taken into account.',
+
+    # ── Avancé (JOSM) — avertissement téléversement ────────────────
+    "Dans JOSM, utilisez toujours ENREGISTRER, jamais ENVOYER : « Envoyer » téléverse vers les serveurs publics d'OpenStreetMap.\n\nUn rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nUNE FOIS ENREGISTRÉ dans JOSM, revenez ici et cliquez sur « Publier l'emprise » : Ortho4XP attend un fichier compressé au nom particulier, que JOSM ne sait pas ouvrir. La publication écrit ce fichier et met l'emprise à jour d'après votre tracé.\n\nSans cette publication, votre emprise ne sera pas prise en compte."
+        : 'In JOSM, always use SAVE, never UPLOAD: « Upload » sends your data to the public OpenStreetMap servers.\n\nA pre-tagged rectangle will open in JOSM: move its nodes to match the area you want.\n\nONCE SAVED in JOSM, come back here and click « Publish the extent »: Ortho4XP expects a compressed file with a particular name that JOSM cannot open. Publishing writes that file and updates the extent from your outline.\n\nWithout publishing, your extent will not be taken into account.',
+
+    # ── Avancé (JOSM) — récupération de fichier égaré ──────────────
+    'Fichier récupéré et rangé dans Extents/ : '
+        : 'File recovered and filed into Extents/: ',
+
+    # ── Avancé (JOSM) — fichiers au mauvais endroit ────────────────
+    "\n\nRanger maintenant ? Aucun doublon ne subsistera : chaque fichier rejoint Extents/ ou disparaît s'il y fait doublon."
+        : '\n\nFile them now? No duplicate will remain: each file either joins Extents/ or is removed if it duplicates what is already there.',
+    ' fichier(s) laissé(s) en place.'
+        : ' file(s) left in place.',
+    "Des fichiers d'emprise ont été enregistrés ailleurs que dans Extents/.\nOrtho4XP ne les voit pas à cet endroit.\n\n"
+        : 'Some extent files were saved outside Extents/.\nOrtho4XP does not see them there.\n\n',
+    'Doublon supprimé : '
+        : 'Duplicate deleted: ',
+    'DÉPLACER vers Extents/'
+        : 'MOVE to Extents/',
+    'Déplacé dans Extents/ : '
+        : 'Moved to Extents/: ',
+    'Fichiers enregistrés au mauvais endroit'
+        : 'Files saved in the wrong place',
+    'Rangement refusé : '
+        : 'Filing declined: ',
+    'SUPPRIMER'
+        : 'DELETE',
+    'absent de Extents/'
+        : 'missing from Extents/',
+    'identique à celui de Extents/'
+        : 'identical to the one in Extents/',
+    'plus ancien que celui de Extents/'
+        : 'older than the one in Extents/',
+    'plus récent que celui de Extents/'
+        : 'newer than the one in Extents/',
+    'Échec : '
+        : 'Failed: ',
+
+    # ── Avancé (JOSM) — consigne d'enregistrement ──────────────────
+    ", ou menu Fichier puis Enregistrer.\n\nLe fichier repart directement au bon endroit : JOSM a retenu son emplacement, il n'y a aucun dossier à choisir.\n\nÉvitez « Enregistrer sous » et « Enregistrer la session » : ce sont les deux commandes qui font atterrir le fichier au mauvais endroit. Raccourcis équivalents : Cmd+S sur macOS, Ctrl+S sur Windows et Linux."
+        : ', or the File menu then Save.\n\nThe file goes straight back to the right place: JOSM remembers its location, there is no folder to choose.\n\nAvoid « Save as » and « Save session »: those are the two commands that make the file land in the wrong place. Equivalent shortcuts: Cmd+S on macOS, Ctrl+S on Windows and Linux.',
+    "Enregistrez régulièrement votre travail dans JOSM (une copie d'origine a été rangée dans « Sauvegarde fichier source » avant ouverture : le bouton « Restaurer l'original » permet de revenir en arrière à tout moment).\n\nQuand votre édition sera terminée et enregistrée, cliquez sur « Sauvegardes… » puis « Sauvegarder mes modifications » : votre travail sera alors protégé même si la tuile est supprimée ou reconstruite.\n\nUne fois l'édition terminée et enregistrée, relancez l'étape 1 (Assemble Vector data) dans Ortho4XP : les données modifiées seront reprises telles quelles, sans nouveau téléchargement.\n\n"
+        : 'Save your work in JOSM regularly (an original copy was stored in « Sauvegarde fichier source » before opening: the « Restore the original » button lets you roll back at any time).\n\nWhen your editing is finished and saved, click « Backups… » then « Save my changes »: your work will then be protected even if the tile is deleted or rebuilt.\n\nOnce editing is finished and saved, run step 1 (Assemble Vector data) again in Ortho4XP: the modified data will be reused as is, with no new download.\n\n',
+    'POUR ENREGISTRER dans JOSM : '
+        : 'TO SAVE in JOSM: ',
+    "Un rectangle pré-tagué va s'ouvrir dans JOSM.\n\nPlacez-le sur la piste, puis renseignez altitude_low et altitude_high en MÈTRES aux deux extrémités. Pour une piste plate, mettez la même valeur des deux côtés, ou remplacez les deux tags par un seul tag altitude.\n\n"
+        : 'A pre-tagged rectangle will open in JOSM.\n\nPlace it over the runway, then set altitude_low and altitude_high in METRES at both ends. For a flat runway, use the same value on both sides, or replace both tags with a single altitude tag.\n\n',
+    "Un rectangle pré-tagué « altitude=0 » va s'ouvrir dans JOSM.\n\nDéplacez ses nœuds sur la zone à corriger, puis remplacez la valeur d'altitude par l'altitude voulue, en MÈTRES.\n\nPour une pente, remplacez le tag altitude par altitude_low et altitude_high, et ajoutez si besoin profile=spline.\n\n"
+        : 'A rectangle pre-tagged « altitude=0 » will open in JOSM.\n\nMove its nodes over the area to fix, then replace the altitude value with the one you want, in METRES.\n\nFor a slope, replace the altitude tag with altitude_low and altitude_high, and add profile=spline if needed.\n\n',
+    'sur Linux'
+        : 'on Linux',
+    'sur Windows'
+        : 'on Windows',
+    'sur macOS'
+        : 'on macOS',
+
+    # ── Avancé (JOSM) — saisie de nom ──────────────────────────────
+    'Valider'
+        : 'OK',
+
+    # ── Avancé (JOSM) — publication automatique ────────────────────
+    "Dans JOSM, utilisez toujours ENREGISTRER, jamais ENVOYER : « Envoyer » téléverse vers les serveurs publics d'OpenStreetMap.\n\nUn rectangle pré-tagué va s'ouvrir dans JOSM : déplacez ses nœuds pour épouser la zone souhaitée.\n\nDès que vous enregistrerez dans JOSM, Ortho4XP recevra automatiquement votre tracé : vous n'avez aucune autre manipulation à faire.\n\n"
+        : 'In JOSM, always use SAVE, never UPLOAD: « Upload » sends your data to the public OpenStreetMap servers.\n\nA pre-tagged rectangle will open in JOSM: move its nodes to match the area you want.\n\nAs soon as you save in JOSM, Ortho4XP automatically receives your outline: there is nothing else for you to do.\n\n',
+
+    # ── Lacunes anterieures comblees le 19/07/2026 (GUI + Correction) ──
+    '0%=gris  100%=réf.48753JPG  200%=×2'
+        : '0%=grey  100%=ref.48753JPG  200%=×2',
+    'Application :'
+        : 'Application:',
+    "Aucun dossier PATCH trouvé pour cette tuile.\nLancer d'abord le Step 2.1 — Sea Patches."
+        : 'No PATCH folder found for this tile.\nRun Step 2.1 — Sea Patches first.',
+    'Aucun patch JPG trouvé dans :\n'
+        : 'No JPG patch found in:\n',
+    'Aucun patch sélectionné.'
+        : 'No patch selected.',
+    "Aucune application définie.\nCliquer d'abord sur 'Correction' pour choisir l'application."
+        : "No application set.\nClick 'Correction' first to choose the application.",
+    'Boost:'
+        : 'Boost:',
+    "Choisir l'application de correction (GIMP, Photoshop…)"
+        : 'Choose the editing application (GIMP, Photoshop…)',
+    'Cocher les patches à traiter'
+        : 'Tick the patches to process',
+    'Confirmation'
+        : 'Confirmation',
+    'Correction Patches'
+        : 'Patch correction',
+    'Correction imagerie/zone'
+        : 'Imagery / area correction',
+    'Correction patches'
+        : 'Patch correction',
+    'Correction patches — Ortho4XP V3'
+        : 'Patch correction — Ortho4XP V3',
+    'Erreur'
+        : 'Error',
+    'Erreur ouverture'
+        : 'Opening error',
+    "Impossible d'ouvrir l'application"
+        : 'Could not open the application',
+    'Impossible de sauvegarder le chemin éditeur'
+        : 'Could not save the editor path',
+    'Impossible de supprimer'
+        : 'Could not delete',
+    'Lacs & Rivières'
+        : 'Lakes & Rivers',
+    'Saturation:'
+        : 'Saturation:',
+    'Supprimer {n} patch(es) sélectionné(s) ?'
+        : 'Delete {n} selected patch(es)?',
+    '── JPG à corriger ──'
+        : '── JPG to correct ──',
+    '🌊 Mer & Côte'
+        : '🌊 Sea & Coast',
 }

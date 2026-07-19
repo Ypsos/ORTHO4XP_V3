@@ -8,7 +8,8 @@
 #      toute la logique de correction dans un seul fichier isolé.
 #    - « Visualiser la tuile » : preview des DDS (mosaïque, un carré par
 #      DDS) — ajouté à l'étape suivante.
-#    - « JOSM » : traitement de zone — ajouté ultérieurement.
+#    - JOSM : traité dans la fenêtre « Avancé (JOSM) »,
+#      module autonome O4_Avance_Utils.
 #
 #  ÉTAT ACTUEL (transfert fidèle — comportement identique) :
 #    La fenêtre _open_correction_window ci-dessous est la COPIE FIDÈLE de
@@ -916,7 +917,7 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
             messagebox.showerror(
                 _tr("Suppression dossier Preview"), str(_e), parent=corr)
 
-    # ── Ligne 1 : actions génériques (communes GIMP + JOSM) ──────────
+    # ── Ligne 1 : actions génériques ─────────────────────────────────
     ttk.Button(frm_bot, text=_tr("Visualiser la tuile"),
                command=_visualiser_tuile).grid(row=0, column=0, padx=6,
                                                ipadx=10, ipady=4)
@@ -938,28 +939,25 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                command=_supprimer_preview).grid(row=1, column=2, padx=6,
                                                 pady=(8, 0), ipadx=8, ipady=4)
 
-    # ── Ligne 3 : deux colonnes — GIMP / JOSM ────────────────────────
+    # ── Ligne 3 : GIMP ───────────────────────────────────────────────
     # Le cadre QGIS a été retiré : QGIS est désormais géré dans la
     # fenêtre « Altimétrie / DEM » (choix de l'application + ouverture
     # du .tif assemblé). Un seul endroit pour QGIS, pas deux.
+    # Le cadre JOSM « à venir » a lui aussi été retiré : les couches JOSM
+    # sont désormais regroupées dans la fenêtre « Avancé (JOSM) »
+    # (module O4_Avance_Utils). Un seul endroit pour JOSM, pas deux.
     frm_tools = tk.Frame(frm_bot, bg=BG)
     frm_tools.grid(row=2, column=0, columnspan=3, pady=(12, 0), sticky="ew")
 
     gimp_lf = tk.LabelFrame(frm_tools, text=_tr("GIMP"),
                             bg=BG, fg=FG, font=FONT)
-    gimp_lf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
+    gimp_lf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
     ttk.Button(gimp_lf, text=_tr("Correction (choisir application)"),
                command=_choose_editor).pack(fill=tk.X, padx=8, pady=(6, 3),
                                             ipady=3)
     ttk.Button(gimp_lf, text=_tr("Ouvrir dans l'éditeur"),
                command=_open_in_editor).pack(fill=tk.X, padx=8, pady=(3, 8),
                                              ipady=3)
-
-    josm_lf = tk.LabelFrame(frm_tools, text=_tr("JOSM"),
-                            bg=BG, fg=FG, font=FONT)
-    josm_lf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(6, 0))
-    tk.Label(josm_lf, text=_tr("à venir"),
-             bg=BG, fg="#888888", font=FONT).pack(padx=16, pady=16)
 
     corr.update_idletasks()
     ww = max(960, corr.winfo_reqwidth())
