@@ -1,10 +1,12 @@
 [![ORTHO4XP V3 Banner](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/BanniereGithub.png)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/BanniereGithub.png)
 
-**[🇫🇷 Français](#ortho4xp-v3)  |  [🇬🇧 English](#ortho4xp-v3-english)**
+**[🇫🇷 Français](#ortho4xp-v3) | [🇬🇧 English](#ortho4xp-v3-english)**
 
-# ORTHO4XP V3
+# ORTHO4XP V3 — **Version Officielle**
 
-**La version moderne d'Ortho4XP**
+**Créée et maintenue par Roland (Ypsos)**
+
+**La version moderne d'Ortho4XP**  
 Installation automatique • Sans terminal • Pour X-Plane 12
 
 [![TÉLÉCHARGER LA DERNIÈRE VERSION](https://img.shields.io/badge/T%C3%89L%C3%89CHARGER%20LA%20DERNI%C3%88RE%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
@@ -17,11 +19,26 @@ Installation automatique • Sans terminal • Pour X-Plane 12
 | --- | --- |
 | **Logiciel original** | Créé par Oscar Pilote → [github.com/oscarpilote/Ortho4XP](https://github.com/oscarpilote/Ortho4XP) |
 | **Version 1.40 maintenue** | Fork par Shred86 → [github.com/shred86/Ortho4XP](https://github.com/shred86/Ortho4XP) |
-| **Cette V3** | Refonte complète par **Roland (Ypsos)** avec **Claude (Anthropic AI)** |
+| **Cette V3** | **Refonte complète par Roland (Ypsos)** avec l’aide de Claude (Anthropic AI) |
 
-En mars 2026, j'ai contacté Oscar Pilote et la communauté (Issue GitHub #299, Topic X-Plane.org).
-Réponse : *« Tu fais ce que tu veux, tu es libre »*.
-Cet espace a été créé afin que la version V3 soit **claire, indépendante et accessible à tous**.
+**Je suis l’auteur principal de l’architecture moderne V3** (Event Bus, Pipeline, Memory Manager, Provider Scoring, Altimétrie, JOSM, Correction image, Visualisateur, etc.).
+
+**Ma version reste la référence officielle et la plus à jour du projet original.**
+
+---
+
+## Clarification importante
+
+**OrthoForge** (xbard) est un excellent fork qui est parti de ma V3.2 et qui a apporté de nombreuses améliorations de confort (multilingue étendu, coastal progressif, etc.). Certaines de ses options sont intégrées dans cette version officielle.
+
+Cependant, pour bénéficier de **la version principale développée par l’auteur originel**, utilisez ce dépôt :
+
+→ **https://github.com/Ypsos/ORTHO4XP_V3**
+
+Je continue d’intégrer les meilleures idées tout en maintenant la stabilité et l’évolution du cœur du projet.
+
+**Toute contribution sur ce dépôt est la bienvenue.**  
+Par contre, merci de ne plus me contacter pour corriger les bugs d’OrthoForge.
 
 ---
 
@@ -242,6 +259,7 @@ Merci également à tous ceux qui remontent leurs retours sur les forums : chaqu
 | **Adaptation 1.40** | Shred86 |
 | **Référence technique** | Jojo |
 | **Tests Windows / Linux** | Cricri |
+| **Intégration d’éléments de confort** | OrthoForge (xbard) |
 | **Documentation** | English wiki : <https://xpconnect.me/ortho4xp/> |
 
 ---
@@ -253,29 +271,47 @@ Voir `AVERTISSEMENT_LICENCE_LEGAL.md` pour les détails complets.
 
 JOSM, QGIS et GIMP sont des logiciels tiers indépendants, distribués sous leurs propres licences.
 
----
----
+[![ORTHO4XP V3 Banner](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/BanniereGithub.png)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/BanniereGithub.png)
 
-# ORTHO4XP V3 (English)
+**[🇫🇷 Français](#ortho4xp-v3) | [🇬🇧 English](#ortho4xp-v3-english)**
 
-**The modern version of Ortho4XP**
+# ORTHO4XP V3 — **Official Version**
+
+**Created and maintained by Roland (Ypsos)**
+
+**The modern version of Ortho4XP**  
 Automatic installation • No terminal • For X-Plane 12
 
 [![DOWNLOAD LATEST VERSION](https://img.shields.io/badge/DOWNLOAD%20LATEST%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
 
 ---
 
-## 🧭 Project origin
+## 🧭 Project Origin
 
 |  |  |
 | --- | --- |
 | **Original software** | Created by Oscar Pilote → [github.com/oscarpilote/Ortho4XP](https://github.com/oscarpilote/Ortho4XP) |
 | **Maintained 1.40 version** | Fork by Shred86 → [github.com/shred86/Ortho4XP](https://github.com/shred86/Ortho4XP) |
-| **This V3** | Complete rework by **Roland (Ypsos)** with **Claude (Anthropic AI)** |
+| **This V3** | **Complete rework by Roland (Ypsos)** with the help of Claude (Anthropic AI) |
 
-In March 2026, I contacted Oscar Pilote and the community (GitHub Issue #299, X-Plane.org topic).
-Answer: *"Do whatever you want, you are free"*.
-This space was created so that the V3 version is **clear, independent and accessible to everyone**.
+**I am the main author of the modern V3 architecture** (Event Bus, Pipeline, Memory Manager, Provider Scoring, Elevation, JOSM, Imagery Correction, Visualizer, etc.).
+
+**My version remains the official reference and the most up-to-date version of the original project.**
+
+---
+
+## Important Clarification
+
+**OrthoForge** (xbard) is an excellent fork that started from my V3.2 and added many quality-of-life improvements (extended multilingual support, progressive coastal mask, etc.). Some of its options have been integrated into this official version.
+
+However, to use **the main version developed by the original author**, please use this repository:
+
+→ **https://github.com/Ypsos/ORTHO4XP_V3**
+
+I continue to integrate the best ideas while maintaining stability and the evolution of the core project.
+
+**All contributions to this repository are welcome.**  
+However, please stop contacting me to fix bugs related to OrthoForge.
 
 ---
 
@@ -496,7 +532,8 @@ Thanks as well to everyone posting feedback on the forums: every precise report 
 | **1.40 adaptation** | Shred86 |
 | **Technical reference** | Jojo |
 | **Windows / Linux testing** | Cricri |
-| **Documentation** | English wiki: <https://xpconnect.me/ortho4xp/> |
+| **Integration of quality-of-life features** | OrthoForge (xbard) |
+| **Documentation** | English wiki : <https://xpconnect.me/ortho4xp/> |
 
 ---
 
