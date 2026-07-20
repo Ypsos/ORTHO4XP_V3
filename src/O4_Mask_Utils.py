@@ -278,6 +278,68 @@ def delete_old_masks_in_tile(tile, dest_dir):
 ################################################################################
     
 ################################################################################
+def _extend_unknown_from_edges(img_array, valid):
+    """Prolonge le contenu du bord de la zone connue vers la zone inconnue.
+
+    La zone inconnue est celle qui n'est couverte par aucun mesh disponible
+    (typiquement le debordement de 1024 px sur une tuile voisine jamais
+    construite). Sans ce traitement elle reste noire, donc interpretee comme
+    mer, ce qui produit une ligne droite parasite exactement sur la limite de
+    tuile. On y recopie ici la valeur connue la plus proche : la terre reste
+    terre et l'eau reste eau de part et d'autre de la frontiere.
+    """
+    if valid.all() or not valid.any():
+        return img_array
+    # Fast path: the known area is a rectangle (which is what a union of
+    # aligned 1 degree mesh boxes gives in practice). Plain edge replication
+    # is then enough and costs almost nothing.
+    rows = numpy.flatnonzero(valid.any(axis=1))
+    cols = numpy.flatnonzero(valid.any(axis=0))
+    r0, r1 = int(rows[0]), int(rows[-1])
+    c0, c1 = int(cols[0]), int(cols[-1])
+    if int(valid.sum()) == (r1 - r0 + 1) * (c1 - c0 + 1):
+        out = img_array.copy()
+        if c0 > 0:
+            out[r0:r1 + 1, :c0] = out[r0:r1 + 1, c0:c0 + 1]
+        if c1 < out.shape[1] - 1:
+            out[r0:r1 + 1, c1 + 1:] = out[r0:r1 + 1, c1:c1 + 1]
+        if r0 > 0:
+            out[:r0, :] = out[r0:r0 + 1, :]
+        if r1 < out.shape[0] - 1:
+            out[r1 + 1:, :] = out[r1:r1 + 1, :]
+        return out
+    out = img_array
+    v = valid
+    for axis in (1, 0):
+        if v.all():
+            break
+        out_t = out if axis == 1 else out.T
+        v_t = v if axis == 1 else v.T
+        n = out_t.shape[1]
+        cols = numpy.arange(n, dtype=numpy.int32)[None, :]
+        # remplissage depuis la gauche
+        idx_f = numpy.where(v_t, cols, numpy.int32(-1))
+        numpy.maximum.accumulate(idx_f, axis=1, out=idx_f)
+        ok_f = idx_f >= 0
+        fwd = numpy.take_along_axis(out_t, numpy.maximum(idx_f, 0), axis=1)
+        # remplissage depuis la droite
+        idx_b = numpy.where(v_t, cols, numpy.int32(n))
+        idx_b = numpy.minimum.accumulate(idx_b[:, ::-1], axis=1)[:, ::-1]
+        ok_b = idx_b < n
+        bwd = numpy.take_along_axis(
+            out_t, numpy.minimum(idx_b, n - 1), axis=1
+        )
+        filled = numpy.where(ok_f, fwd, numpy.where(ok_b, bwd, out_t))
+        res = numpy.where(v_t, out_t, filled)
+        new_v = v_t | ok_f | ok_b
+        if axis == 1:
+            out, v = res, new_v
+        else:
+            out, v = res.T, new_v.T
+    return numpy.ascontiguousarray(out.astype(numpy.uint8))
+################################################################################
+
+################################################################################
 def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
                          sea_level, tile):
     (latm0, lonm0) = GEO.gtile_to_wgs84(til_x, til_y, tile.mask_zl)
@@ -287,6 +349,10 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
     # 1) We start with a black mask
     mask_im = Image.new("L", (4096 + 2 * 1024, 4096 + 2 * 1024), "black")
     mask_draw = ImageDraw.Draw(mask_im)
+    # 1bis) Same canvas used only to record which pixels are covered by an
+    # available mesh (i.e. which pixels carry real information).
+    cov_im = Image.new("L", (4096 + 2 * 1024, 4096 + 2 * 1024), "black")
+    cov_draw = ImageDraw.Draw(cov_im)
     # 2) We fill it with white over the extent of each tile around for 
     # which we had a mesh available
     for mesh_file_name in mesh_list:
@@ -308,6 +374,9 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
         py3 -= py0
         py4 -= py0
         mask_draw.polygon(
+            [(px1, py1), (px2, py2), (px3, py3), (px4, py4)], fill="white"
+        )
+        cov_draw.polygon(
             [(px1, py1), (px2, py2), (px3, py3), (px4, py4)], fill="white"
         )
     # 3a)  We overwrite the white part of the mask with grey (ratio_water 
@@ -344,8 +413,15 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
             [(px1, py1), (px2, py2), (px3, py3)], fill="black"
         )
     del mask_draw
+    del cov_draw
     # mask_im=mask_im.convert("L")
     img_array = numpy.array(mask_im, dtype=numpy.uint8)
+    # 4) The area not covered by any available mesh carries no information.
+    # Leaving it black would make it read as open water and would draw a
+    # dead-straight artefact right on the tile boundary. We rather continue
+    # there whatever the known edge contains.
+    cov_array = numpy.array(cov_im, dtype=numpy.uint8) > 0
+    img_array = _extend_unknown_from_edges(img_array, cov_array)
     return img_array
 ################################################################################
 
