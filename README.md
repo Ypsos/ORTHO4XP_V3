@@ -188,7 +188,9 @@ Tous suivent la même règle de conception : **un fichier autonome, qui ne modif
 ### Installation et Lanceur
 
 [![Lanceur Ortho4XP V3 — installation]<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/8af30d11-dd03-400f-8056-990217b6c15b" />
-(https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)
+
+<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/9f8da485-ec79-4aff-a332-5d934d66ca5c" />
+
 
 ### Personalisation couleurs Interface
 Plusieurs couleurs de l'interfaces sont déjà disponibles
