@@ -190,6 +190,12 @@ Tous suivent la même règle de conception : **un fichier autonome, qui ne modif
 [![Lanceur Ortho4XP V3 — installation]<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/8af30d11-dd03-400f-8056-990217b6c15b" />
 (https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)
 
+### Personalisation couleurs Interface
+Plusieurs couleurs de l'interfaces sont déjà disponibles
+
+L'utilisateur peut soit modifier les couleurs dans un tableau existant ou fabriquer des couleurs personalisées au départ d'une roue de couleur 
+<img width="2966" height="2044" alt="Thème Couleur " src="https://github.com/user-attachments/assets/e4f11a47-7e1f-43df-b8be-d9d370397a9a" />
+
 
 ### Interface principale et Color Check
 
@@ -472,6 +478,10 @@ They all follow the same design rule: **a self-contained file that modifies no p
 [![Ortho4XP V3 Launcher — installation](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)
 
 <img width="1826" height="1936" alt="Launcher" src="https://github.com/user-attachments/assets/b678f804-cff4-4cdb-86f2-a6a794e3ac79" />
+
+### Interface Color Customization
+Several interface colors are already available.
+Users can either modify colors within an existing palette or create custom colors using a color wheel.
 
 ### Main interface and Color Check
 
