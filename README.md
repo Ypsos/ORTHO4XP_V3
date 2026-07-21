@@ -4,11 +4,20 @@
 
 # ORTHO4XP V3 — **Version Officielle**
 
-**Créée et maintenue par Roland (Ypsos)**
+> ## ✅ DÉPÔT OFFICIEL
+>
+> Ce dépôt GitHub est le **dépôt officiel d'ORTHO4XP V3**.
+>
+> **ORTHO4XP V3** est développé et maintenu par **Roland (Ypsos)**, dans le respect du projet original **Ortho4XP**, créé par **Oscar Pilote**.
+>
+> Les forks, versions renommées ou projets dérivés sont des projets **indépendants** et ne constituent **pas** le dépôt officiel d'ORTHO4XP V3.
+>
+> **Pour télécharger la version officielle et obtenir les dernières mises à jour, utilisez toujours ce dépôt GitHub.**
+
+**Développée et maintenue par Roland (Ypsos) avec l'assistance de Claude IA (Anthropic)**
 
 **La version moderne d'Ortho4XP**  
 Installation automatique • Sans terminal • Pour X-Plane 12
-
 [![TÉLÉCHARGER LA DERNIÈRE VERSION](https://img.shields.io/badge/T%C3%89L%C3%89CHARGER%20LA%20DERNI%C3%88RE%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
 
 ---
@@ -27,19 +36,19 @@ Installation automatique • Sans terminal • Pour X-Plane 12
 
 ---
 
-## Clarification importante
+## 📌 Dépôt officiel
 
-**OrthoForge** (xbard) est un excellent fork qui est parti de ma V3.2 et qui a apporté de nombreuses améliorations de confort (multilingue étendu, coastal progressif, etc.). Certaines de ses options sont intégrées dans cette version officielle.
+Ce dépôt constitue la **source officielle de développement d'ORTHO4XP V3**.
 
-Cependant, pour bénéficier de **la version principale développée par l’auteur originel**, utilisez ce dépôt :
+Il centralise les versions officielles, les mises à jour, la documentation, le suivi des anomalies et les contributions au projet.
 
-→ **https://github.com/Ypsos/ORTHO4XP_V3**
+Au fil des années, plusieurs forks, versions renommées ou projets dérivés ont été publiés par la communauté. Ces projets sont **indépendants** et suivent leur propre évolution.
 
-Je continue d’intégrer les meilleures idées tout en maintenant la stabilité et l’évolution du cœur du projet.
+Pour télécharger la version officielle, signaler un problème, proposer une amélioration ou contribuer au développement, utilisez toujours ce dépôt :
 
-**Toute contribution sur ce dépôt est la bienvenue.**  
-Par contre, merci de ne plus me contacter pour corriger les bugs d’OrthoForge.
+➡ **https://github.com/Ypsos/ORTHO4XP_V3**
 
+**Toutes les contributions sont les bienvenues.** Merci d'utiliser exclusivement ce dépôt pour les rapports de bugs, les demandes d'évolution et les discussions concernant **ORTHO4XP V3**.
 ---
 
 ## 🎯 L'idée directrice
@@ -259,8 +268,6 @@ Merci également à tous ceux qui remontent leurs retours sur les forums : chaqu
 | **Adaptation 1.40** | Shred86 |
 | **Référence technique** | Jojo |
 | **Tests Windows / Linux** | Cricri |
-| **Intégration d’éléments de confort** | OrthoForge (xbard) |
-| **Documentation** | English wiki : <https://xpconnect.me/ortho4xp/> |
 
 ---
 
@@ -277,9 +284,19 @@ JOSM, QGIS et GIMP sont des logiciels tiers indépendants, distribués sous leur
 
 # ORTHO4XP V3 — **Official Version**
 
-**Created and maintained by Roland (Ypsos)**
+> ## ✅ OFFICIAL REPOSITORY
+>
+> This GitHub repository is the **official repository of ORTHO4XP V3**.
+>
+> **ORTHO4XP V3** is developed and maintained by **Roland (Ypsos)**, in accordance with the original **Ortho4XP** project created by **Oscar Pilote**.
+>
+> Forks, renamed versions, or derivative projects are **independent projects** and are **not** the official ORTHO4XP V3 repository.
+>
+> **To download the official version and receive the latest updates, always use this GitHub repository.**
 
-**The modern version of Ortho4XP**  
+**Developed and maintained by Roland (Ypsos) with the assistance of Claude AI (Anthropic)**
+
+**The modern evolution of Ortho4XP**  
 Automatic installation • No terminal • For X-Plane 12
 
 [![DOWNLOAD LATEST VERSION](https://img.shields.io/badge/DOWNLOAD%20LATEST%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
@@ -300,19 +317,19 @@ Automatic installation • No terminal • For X-Plane 12
 
 ---
 
-## Important Clarification
+## 📌 Official Repository
 
-**OrthoForge** (xbard) is an excellent fork that started from my V3.2 and added many quality-of-life improvements (extended multilingual support, progressive coastal mask, etc.). Some of its options have been integrated into this official version.
+This repository is the **official development source for ORTHO4XP V3**.
 
-However, to use **the main version developed by the original author**, please use this repository:
+It is the central location for official releases, updates, documentation, issue tracking, and project contributions.
 
-→ **https://github.com/Ypsos/ORTHO4XP_V3**
+Over the years, several forks, renamed versions, and derivative projects have been created by the community. These are **independent projects** and follow their own development paths.
 
-I continue to integrate the best ideas while maintaining stability and the evolution of the core project.
+To download the official version, report an issue, suggest an improvement, or contribute to the development of ORTHO4XP V3, please always use this repository:
 
-**All contributions to this repository are welcome.**  
-However, please stop contacting me to fix bugs related to OrthoForge.
+➡ **https://github.com/Ypsos/ORTHO4XP_V3**
 
+**All contributions are welcome.** Please use this repository exclusively for bug reports, feature requests, and discussions related to **ORTHO4XP V3**.
 ---
 
 ## 🎯 The guiding idea
@@ -531,9 +548,7 @@ Thanks as well to everyone posting feedback on the forums: every precise report 
 | **Original work** | Oscar Pilote (Ortho4XP) |
 | **1.40 adaptation** | Shred86 |
 | **Technical reference** | Jojo |
-| **Windows / Linux testing** | Cricri |
-| **Integration of quality-of-life features** | OrthoForge (xbard) |
-| **Documentation** | English wiki : <https://xpconnect.me/ortho4xp/> |
+
 
 ---
 
