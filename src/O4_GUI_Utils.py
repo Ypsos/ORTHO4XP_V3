@@ -58,6 +58,19 @@ except Exception:
     _AVANCEMOD = None
     _avancemod_enabled = False
 
+# ── Module Cache OSM local .pbf (non bloquant) ───────────────────────────
+#  Fichier autonome : remplit OSM_data/ a partir d'un extrait .pbf local,
+#  de sorte que le Step 1 recycle les donnees au lieu de les telecharger.
+#  Import non bloquant : si le module est absent ou defaillant, le GUI
+#  demarre normalement et le bouton le signale.
+#  AUCUN fichier du pipeline n'est concerne par ce module.
+try:
+    import O4_PBF_Utils as _PBFMOD
+    _pbfmod_enabled = True
+except Exception:
+    _PBFMOD = None
+    _pbfmod_enabled = False
+
 # ── Nouveaux modules Phase 3 (non bloquants) ─────────────────────────────
 try:
     from O4_Benchmark import Timeline as _Timeline
@@ -397,7 +410,7 @@ class Ortho4XP_GUI(tk.Tk):
             font=("TkFixedFont", fs(11)), bg=_BG)
         self.cnorm_sat_checkbox.grid(row=1, column=1, padx=8, sticky=W)
 
-        tk.Label(self.frame_cnorm, text=tr("Boost:"), bg=_BG, fg=_FG,
+        tk.Label(self.frame_cnorm, text=tr("Sat +/-:"), bg=_BG, fg=_FG,
                  font=("TkFixedFont", fs(11))).grid(row=1, column=2, padx=6, sticky=E)
 
         self.cnorm_sat_value = tk.IntVar(value=100)
@@ -454,6 +467,12 @@ class Ortho4XP_GUI(tk.Tk):
             command=self.open_avance_module,
             width=22).grid(row=3, column=0, columnspan=2, padx=5,
                            pady=(4,8), sticky=W+E)
+
+        # ── LIGNE 4 :  Cache OSM local (.pbf)
+        ttk.Button(self.frame_cnorm,
+            text=tr("🗺 Cache OSM local (.pbf)"),
+            command=self.open_pbf_module,
+            width=22).grid(row=3, column=2, padx=5, pady=(4,8), sticky=E)
 
         # ── CONSOLE (row=1 principal — extensible) ─────────────────────
         self.frame_console = tk.Frame(self, border=4, relief=RIDGE, bg=_BG)
@@ -670,6 +689,33 @@ class Ortho4XP_GUI(tk.Tk):
             except Exception:
                 pass
             messagebox.showerror(tr("Avancé (JOSM)"), str(_e))
+
+    def open_pbf_module(self):
+        """Point d'entrée du bouton « Cache OSM local (.pbf) ».
+
+        Délègue au module autonome O4_PBF_Utils, qui remplit OSM_data/ à
+        partir d'un extrait .pbf local (Geofabrik ou équivalent). Le Step 1
+        recycle ensuite ces fichiers au lieu d'interroger Overpass.
+        Aucun fichier du pipeline n'est modifié par ce bouton.
+
+        Si le module est absent ou lève une erreur, le GUI reste
+        parfaitement fonctionnel : on se contente d'informer.
+        """
+        from tkinter import messagebox
+        if not (_pbfmod_enabled and _PBFMOD is not None):
+            messagebox.showinfo(
+                tr("Cache OSM local (.pbf)"),
+                tr("Le module O4_PBF_Utils.py est introuvable "
+                   "dans le dossier src/."))
+            return
+        try:
+            _PBFMOD.open_pbf_window(self)
+        except Exception as _e:
+            try:
+                UI.vprint(1, "[PBF] " + str(_e))
+            except Exception:
+                pass
+            messagebox.showerror(tr("Cache OSM local (.pbf)"), str(_e))
 
     def open_correction_module(self):
         """Point d'entrée du bouton « Correction imagerie/zone ».

@@ -1079,4 +1079,40 @@ T = {
         : '(non configuré)',
     'Le fichier assemblé sera écrit ici :\n\n{f}\n\nEst-ce le bon emplacement ?\n\nNON  →  utilisez le bouton « Dossier de sortie ».'
         : 'Le fichier assemblé sera écrit ici :\n\n{f}\n\nEst-ce le bon emplacement ?\n\nNON  →  utilisez le bouton « Dossier de sortie ».',
+
+    # ── CACHE OSM LOCAL (.pbf) — module O4_PBF_Utils ─────
+    'Cache OSM local (.pbf)'
+        : 'Cache OSM local (.pbf)',
+    '🗺 Cache OSM local (.pbf)'
+        : '🗺 Cache OSM local (.pbf)',
+    "Remplit OSM_data/ à partir d'un extrait .pbf local afin que l'étape 1 ne télécharge plus rien."
+        : "Remplit OSM_data/ à partir d'un extrait .pbf local afin que l'étape 1 ne télécharge plus rien.",
+    'Fichier PBF :'
+        : 'Fichier PBF :',
+    'Parcourir...'
+        : 'Parcourir...',
+    'De latitude / longitude :'
+        : 'De latitude / longitude :',
+    'À latitude / longitude :'
+        : 'À latitude / longitude :',
+    'Niveau de routes (0 = aucun) :'
+        : 'Niveau de routes (0 = aucun) :',
+    'Écraser les fichiers de cache existants'
+        : 'Écraser les fichiers de cache existants',
+    'Construire le cache OSM local'
+        : 'Construire le cache OSM local',
+    'La latitude et la longitude doivent être des nombres entiers.'
+        : 'La latitude et la longitude doivent être des nombres entiers.',
+    'Fichier PBF introuvable.'
+        : 'Fichier PBF introuvable.',
+    'Nombre de tuiles demandé très important. Continuer ?'
+        : 'Nombre de tuiles demandé très important. Continuer ?',
+    'Cache OSM local terminé. Fichiers écrits :'
+        : 'Cache OSM local terminé. Fichiers écrits :',
+    'Erreur pendant la lecture du fichier PBF.'
+        : 'Erreur pendant la lecture du fichier PBF.',
+    'Le fichier est relu 5 fois : comptez quelques minutes par lot de tuiles.'
+        : 'Le fichier est relu 5 fois : comptez quelques minutes par lot de tuiles.',
+    'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.'
+        : 'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.',
 }

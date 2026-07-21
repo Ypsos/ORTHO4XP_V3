@@ -1078,4 +1078,40 @@ T = {
         : '(not set)',
     'Le fichier assemblé sera écrit ici :\n\n{f}\n\nEst-ce le bon emplacement ?\n\nNON  →  utilisez le bouton « Dossier de sortie ».'
         : 'The assembled file will be written here:\n\n{f}\n\nIs this the right location?\n\nNO  →  use the « Output folder » button.',
+
+    # ── LOCAL OSM CACHE (.pbf) — O4_PBF_Utils module ─────
+    'Cache OSM local (.pbf)'
+        : 'Local OSM cache (.pbf)',
+    '🗺 Cache OSM local (.pbf)'
+        : '🗺 Local OSM cache (.pbf)',
+    "Remplit OSM_data/ à partir d'un extrait .pbf local afin que l'étape 1 ne télécharge plus rien."
+        : 'Fills OSM_data/ from a local .pbf extract so that Step 1 no longer downloads anything.',
+    'Fichier PBF :'
+        : 'PBF file:',
+    'Parcourir...'
+        : 'Browse...',
+    'De latitude / longitude :'
+        : 'From latitude / longitude:',
+    'À latitude / longitude :'
+        : 'To latitude / longitude:',
+    'Niveau de routes (0 = aucun) :'
+        : 'Road level (0 = none):',
+    'Écraser les fichiers de cache existants'
+        : 'Overwrite existing cache files',
+    'Construire le cache OSM local'
+        : 'Build local OSM cache',
+    'La latitude et la longitude doivent être des nombres entiers.'
+        : 'Latitude and longitude must be whole numbers.',
+    'Fichier PBF introuvable.'
+        : 'PBF file not found.',
+    'Nombre de tuiles demandé très important. Continuer ?'
+        : 'A very large number of tiles was requested. Continue?',
+    'Cache OSM local terminé. Fichiers écrits :'
+        : 'Local OSM cache completed. Files written:',
+    'Erreur pendant la lecture du fichier PBF.'
+        : 'Error while reading the PBF file.',
+    'Le fichier est relu 5 fois : comptez quelques minutes par lot de tuiles.'
+        : 'The file is read 5 times: allow a few minutes per batch of tiles.',
+    'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.'
+        : 'Module O4_PBF_Utils.py not found in the src/ folder.',
 }
