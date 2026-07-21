@@ -1,4 +1,5 @@
-[![ORTHO4XP V3 Banner](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/BanniereGithub.png)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/BanniereGithub.png)
+[![ORTHO4XP V3 Banner]<img width="1536" height="1024" alt="BanniereGithub" src="https://github.com/user-attachments/assets/3e1d4da4-c585-4476-8657-34843d364f30" />
+
 
 **[🇫🇷 Français](#ortho4xp-v3) | [🇬🇧 English](#ortho4xp-v3-english)**
 
@@ -186,15 +187,22 @@ Tous suivent la même règle de conception : **un fichier autonome, qui ne modif
 
 ### Installation et Lanceur
 
-[![Lanceur Ortho4XP V3 — installation](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)
+[![Lanceur Ortho4XP V3 — installation]<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/8af30d11-dd03-400f-8056-990217b6c15b" />
 
-<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/b678f804-cff4-4cdb-86f2-a6a794e3ac79" />
+<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/9f8da485-ec79-4aff-a332-5d934d66ca5c" />
+
+
+### Personalisation couleurs Interface
+Plusieurs couleurs de l'interfaces sont déjà disponibles
+
+L'utilisateur peut soit modifier les couleurs dans un tableau existant ou fabriquer des couleurs personalisées au départ d'une roue de couleur 
+<img width="2966" height="2044" alt="Thème Couleur " src="https://github.com/user-attachments/assets/e4f11a47-7e1f-43df-b8be-d9d370397a9a" />
+
 
 ### Interface principale et Color Check
 
-<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/fb49ffbb-3bc8-466c-a32d-622aaecdf3db" />
+<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/e18294fd-4dbf-42f6-8eda-4f003645844b" />
 
-[![Color Check](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/04_Color%20Check_01.jpeg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/04_Color%20Check_01.jpeg)
 
 ### Correction d'imagerie — visualisation des textures de la tuile
 
@@ -467,13 +475,25 @@ They all follow the same design rule: **a self-contained file that modifies no p
 
 ### Installation and Launcher
 
-[![Ortho4XP V3 Launcher — installation](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/01_Lanceur_installation_python%2C_%20venv.jpg)
+[![Ortho4XP V3 Launcher — installation]
+<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/308e6b64-2253-4dc6-a77a-20119d5f1902" />
 
-<img width="1826" height="1936" alt="Launcher" src="https://github.com/user-attachments/assets/b678f804-cff4-4cdb-86f2-a6a794e3ac79" />
+
+<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/fa421364-4432-4721-867f-d01d43c5684b" />
+
+
+
+
+
+### Interface Color Customization
+Several interface colors are already available.
+Users can either modify colors within an existing palette or create custom colors using a color wheel.
+
+<img width="2966" height="2044" alt="Thème Couleur " src="https://github.com/user-attachments/assets/ef1dfe79-fc23-43ab-a2aa-d448681a24b9" />
 
 ### Main interface and Color Check
 
-<img width="2644" height="796" alt="Main interface" src="https://github.com/user-attachments/assets/fb49ffbb-3bc8-466c-a32d-622aaecdf3db" />
+
 
 [![Color Check](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/04_Color%20Check_01.jpeg)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/04_Color%20Check_01.jpeg)
 
