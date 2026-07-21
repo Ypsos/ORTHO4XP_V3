@@ -165,6 +165,33 @@ Le module crée aussi la **structure de dossiers** au premier lancement, ce qui 
 
 ---
 
+## 🌐 Le cache OSM local — l'étape 1 sans Overpass
+
+<img width="817" height="395" alt="Gestion cache OSM Local" src="https://github.com/user-attachments/assets/3de9256e-7b7d-495d-b1be-ad50ea25250a" />
+
+
+L'étape 1 interroge les serveurs Overpass pour récupérer le trait de côte, les plans d'eau, les aéroports et les routes. Quand ces serveurs sont saturés, le build s'interrompt — et sur une série de tuiles, l'attente devient le principal poste de temps.
+
+Le bouton **🗺 Cache OSM local (.pbf)** supprime cette dépendance. Vous téléchargez une seule fois un extrait régional gratuit sur [Geofabrik](https://download.geofabrik.de/), et le module remplit à l'avance le dossier `OSM_data/` avec **exactement les mêmes données** que celles qu'Overpass aurait renvoyées.
+
+| Sans cache local | Avec cache local |
+| --- | --- |
+| Une requête réseau par catégorie et par tuile | Aucune requête réseau |
+| Build interrompu si le serveur est indisponible | Build insensible aux pannes de serveur |
+| 1 à 5 minutes d'étape 1 par tuile | Quelques secondes |
+| Données différentes d'un build à l'autre | Extrait daté, résultat reproductible |
+| Connexion obligatoire | Fonctionne hors ligne |
+
+**Aucun logiciel supplémentaire à installer.** Le format `.pbf` est décodé directement par Ortho4XP : ni `osmconvert`, ni `osmfilter`, ni bibliothèque externe.
+
+**Aucune perte de qualité, aucun raccourci.** Les requêtes sont celles d'Ortho4XP, à l'identique, y compris les relations qui portent les multipolygones d'eau. Le module ne produit jamais de fichier factice destiné à « sauter » l'étape 1 : cela priverait le moteur du trait de côte et ruinerait la génération de la mer et des masques côtiers.
+
+Par sécurité, un cache déjà présent n'est **jamais écrasé** sans que vous ayez coché la case prévue à cet effet.
+
+> ℹ️ Une tuile peut chevaucher deux régions Geofabrik. Dans ce cas, générez le cache depuis chaque extrait concerné.
+
+---
+
 ## 🧩 Les modules qui n'existaient pas en 1.40
 
 Tous suivent la même règle de conception : **un fichier autonome, qui ne modifie aucun fichier du moteur d'origine.** Si un module manque ou échoue, Ortho4XP démarre et fonctionne quand même.
@@ -178,6 +205,7 @@ Tous suivent la même règle de conception : **un fichier autonome, qui ne modif
 | **Correction d'imagerie** | Visualise les textures de la tuile, permet d'en sélectionner, de les retoucher dans l'éditeur de votre choix (GIMP…) et de relancer uniquement ce qui doit l'être |
 | **Altimétrie / DEM** | La procédure QGIS de 41 étapes réduite à un bouton (ci-dessus) |
 | **Avancé (JOSM)** | Édition des données géographiques, emprises, nivellement et aéroports (ci-dessus) |
+| **Cache OSM local (.pbf)** | Remplit `OSM_data/` depuis un extrait `.pbf` local : étape 1 hors ligne, insensible aux pannes Overpass (ci-dessus) |
 | **Provider Score** | Note automatiquement chaque image téléchargée : bruit, artefacts de compression, **couverture nuageuse**, dérive colorimétrique, risque de jointure — et désigne le meilleur provider pour une tuile donnée |
 | **Gestion mémoire** | Surveille la RAM en temps réel et nettoie le cache avant saturation, au lieu de laisser le build s'effondrer sur les grosses tuiles |
 
@@ -185,18 +213,20 @@ Tous suivent la même règle de conception : **un fichier autonome, qui ne modif
 
 ## 🖥️ Interfaces graphiques
 
+
 ### Installation et Lanceur
 
 [![Lanceur Ortho4XP V3 — installation]<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/8af30d11-dd03-400f-8056-990217b6c15b" />
 
-<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/9f8da485-ec79-4aff-a332-5d934d66ca5c" />
+<img width="1720" height="396" alt="Interface principale" src="https://github.com/user-attachments/assets/c1e6195a-becd-4f98-85ee-d01a1669b8d5" />
+
 
 
 ### Personalisation couleurs Interface
 Plusieurs couleurs de l'interfaces sont déjà disponibles
 
 L'utilisateur peut soit modifier les couleurs dans un tableau existant ou fabriquer des couleurs personalisées au départ d'une roue de couleur 
-<img width="2966" height="2044" alt="Thème Couleur " src="https://github.com/user-attachments/assets/e4f11a47-7e1f-43df-b8be-d9d370397a9a" />
+<img width="2966" height="2044" alt="Thème Couleur " src="https://github.com/user-attachments/assets/e4f11a47-7e1f-43df-b8be-d9d370397a9a" />
 
 
 ### Interface principale et Color Check
@@ -453,6 +483,33 @@ The module also creates the **folder structure** on first launch, which removes 
 
 ---
 
+## 🌐 The local OSM cache — Step 1 without Overpass
+
+<img width="817" height="395" alt="Gestion cache OSM Local" src="https://github.com/user-attachments/assets/5e0a2397-bc3c-4900-8711-bc9d4ec5b904" />
+
+
+Step 1 queries the Overpass servers to fetch the coastline, water bodies, airports and roads. When those servers are busy, the build stops — and across a series of tiles, waiting becomes the main time sink.
+
+The **🗺 Local OSM cache (.pbf)** button removes that dependency. You download a free regional extract once from [Geofabrik](https://download.geofabrik.de/), and the module fills the `OSM_data/` folder in advance with **exactly the same data** Overpass would have returned.
+
+| Without a local cache | With a local cache |
+| --- | --- |
+| One network request per category and per tile | No network request |
+| Build interrupted when the server is down | Build unaffected by server outages |
+| 1 to 5 minutes of Step 1 per tile | A few seconds |
+| Data differs from one build to the next | Dated extract, reproducible result |
+| Connection required | Works offline |
+
+**No extra software to install.** The `.pbf` format is decoded by Ortho4XP itself: no `osmconvert`, no `osmfilter`, no external library.
+
+**No loss of quality, no shortcuts.** The queries are Ortho4XP's own, unchanged, including the relations that carry the water multipolygons. The module never writes placeholder files meant to "skip" Step 1: that would deprive the engine of the coastline and wreck sea generation and coastal masks.
+
+As a safeguard, an existing cache is **never overwritten** unless you tick the box provided for it.
+
+> ℹ️ A tile may straddle two Geofabrik regions. In that case, generate the cache from each extract concerned.
+
+---
+
 ## 🧩 The modules that did not exist in 1.40
 
 They all follow the same design rule: **a self-contained file that modifies no part of the original engine.** If a module is missing or fails, Ortho4XP still starts and works.
@@ -466,6 +523,7 @@ They all follow the same design rule: **a self-contained file that modifies no p
 | **Imagery correction** | Displays the tile textures, lets you select them, retouch them in the editor of your choice (GIMP…) and regenerate only what needs it |
 | **Elevation / DEM** | The 41-step QGIS procedure reduced to one button (above) |
 | **Advanced (JOSM)** | Geographic data editing, extents, terrain flattening and airports (above) |
+| **Local OSM cache (.pbf)** | Fills `OSM_data/` from a local `.pbf` extract: Step 1 offline, immune to Overpass outages (above) |
 | **Provider Score** | Automatically rates every downloaded image: noise, compression artefacts, **cloud cover**, colour drift, seam risk — and points to the best provider for a given tile |
 | **Memory management** | Monitors RAM in real time and clears the cache before saturation, instead of letting the build collapse on large tiles |
 
@@ -479,17 +537,14 @@ They all follow the same design rule: **a self-contained file that modifies no p
 <img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/308e6b64-2253-4dc6-a77a-20119d5f1902" />
 
 
-<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/fa421364-4432-4721-867f-d01d43c5684b" />
-
-
-
+<img width="1720" height="396" alt="Interface principale" src="https://github.com/user-attachments/assets/c1270400-4d16-42c1-98ac-2e1fd7c63b15" />
 
 
 ### Interface Color Customization
 Several interface colors are already available.
 Users can either modify colors within an existing palette or create custom colors using a color wheel.
 
-<img width="2966" height="2044" alt="Thème Couleur " src="https://github.com/user-attachments/assets/ef1dfe79-fc23-43ab-a2aa-d448681a24b9" />
+<img width="2966" height="2044" alt="Thème Couleur " src="https://github.com/user-attachments/assets/ef1dfe79-fc23-43ab-a2aa-d448681a24b9" />
 
 ### Main interface and Color Check
 
