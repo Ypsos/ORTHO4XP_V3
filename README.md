@@ -201,8 +201,6 @@ L'utilisateur peut soit modifier les couleurs dans un tableau existant ou fabriq
 
 ### Interface principale et Color Check
 
-<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/fb49ffbb-3bc8-466c-a32d-622aaecdf3db" />
-
 <img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/e18294fd-4dbf-42f6-8eda-4f003645844b" />
 
 
