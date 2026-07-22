@@ -594,6 +594,11 @@ class Ortho4XP_GUI(tk.Tk):
             txt.config(state="disabled")
             # Bouton fermer
             ttk.Button(win, text=tr("Fermer"), command=win.destroy).pack(pady=4)
+            # Taille minimale : le bouton Fermer reste toujours visible même
+            # si l'utilisateur réduit la fenêtre ; agrandissement libre conservé.
+            win.update_idletasks()
+            win.minsize(max(420, win.winfo_reqwidth()),
+                        max(260, win.winfo_reqheight()))
         except Exception as e:
             print(f"[Timeline] Erreur affichage : {e}")
 
@@ -1552,6 +1557,11 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         row += 1
         self.canvas = tk.Canvas(self.frame_right, bd=0, height=750, width=750)
         self.canvas.grid(row=0, column=0, sticky=N + S + E + W)
+        # Taille minimale = taille naturelle du contenu une fois l'UI construite.
+        # Les boutons (Apply / Reset / Exit) restent toujours visibles même si
+        # la fenêtre est réduite ; l'agrandissement reste libre.
+        self.update_idletasks()
+        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
 
     def preview_tile(self, lat, lon):
         # Recharger les zones depuis le .cfg de la tuile
@@ -2378,6 +2388,11 @@ class Ortho4XP_Earth_Preview(tk.Toplevel):
         self.active_tile = self.canvas.create_rectangle(
             x0, y0, x1, y1, fill="", outline="yellow", width=3
         )
+        # Taille minimale = taille naturelle du contenu une fois l'UI construite.
+        # Empêche de masquer les boutons en réduisant la fenêtre ;
+        # l'agrandissement reste libre.
+        self.update_idletasks()
+        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
         self.threaded_preview()
         return
 
@@ -3020,6 +3035,11 @@ class Ortho4XP_Simulator(tk.Toplevel):
         self._tile.read_from_config()
         self._build_ui()
         self._load_values()
+        # Taille minimale = taille naturelle du contenu une fois l'UI construite.
+        # Empêche de réduire la fenêtre au point de masquer les boutons ;
+        # l'agrandissement reste libre (resizable True/True conservé).
+        self.update_idletasks()
+        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
         self._anim_loop()
 
     def _on_close(self):

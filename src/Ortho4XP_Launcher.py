@@ -544,36 +544,16 @@ class Launcher(tk.Tk):
         win.geometry(f"+{x}+{y}")
 
     def _run_pip_install(self, modules, extra_msg=""):
-        """Installe une liste de modules dans le venv via pip — un par un pour voir les erreurs."""
+        """Installe une liste de modules dans le venv via pip."""
         pip = str(VENV_PIP)
         try:
             self._log("📦 Mise à jour pip...")
             subprocess.run([pip, "install", "--upgrade", "pip", "setuptools", "wheel"], check=True)
-        except Exception as e:
-            self._log(f"⚠️ pip upgrade : {e}")
-        self._log(f"📦 Installation modules{extra_msg}...")
-        failed = []
-        for mod in modules:
-            try:
-                r = subprocess.run(
-                    [pip, "install", mod],
-                    capture_output=True, text=True)
-                if r.returncode == 0:
-                    # Afficher uniquement si vraiment installé (pas juste "already satisfied")
-                    if "Successfully installed" in r.stdout:
-                        self._log(f"  ✅ {mod} installé")
-                    else:
-                        self._log(f"  ✔ {mod} déjà présent")
-                else:
-                    self._log(f"  ❌ {mod} ERREUR : {r.stderr[-300:]}")
-                    failed.append(mod)
-            except Exception as e:
-                self._log(f"  ❌ {mod} exception : {e}")
-                failed.append(mod)
-        if failed:
-            self._log(f"⚠️ Modules non installés : {', '.join(failed)}")
-        else:
+            self._log(f"📦 Installation modules{extra_msg}...")
+            subprocess.run([pip, "install"] + modules, check=True)
             self._log("✅ Modules installés dans venv/")
+        except Exception as e:
+            self._log(f"❌ Échec : {e}")
 
     def _install_mac(self):
         self._log("── 🍎 Installation macOS ──────────────────")
@@ -593,8 +573,7 @@ class Launcher(tk.Tk):
         # 2. Pip dans venv — rasterio remplace gdal (autonome, pas de dépendance système)
         pip_modules = ["pyproj", "numpy", "shapely", "rtree", "Pillow",
                        "requests", "scikit-fmm", "certifi", "urllib3",
-                       "psutil", "fiona", "scipy", "customtkinter", "rasterio",
-                       "opencv-python-headless"]
+                       "psutil", "fiona", "scipy", "customtkinter", "rasterio"]
         self._run_pip_install(pip_modules, " (venv macOS)")
         self._log("✅ rasterio installé — lecture TIF altimétrie autonome dans venv/")
 
@@ -603,52 +582,28 @@ class Launcher(tk.Tk):
         self._create_mac_launcher()
 
     def _create_launcher_mac(self):
+        # Fabrication native intégrée (plus de dépendance à create_launcher_ORTHO.py)
         self._log("── 🍎 Création Lanceur ORTHO4XP.app ──────")
-        script = BASE_DIR / "create_launcher_ORTHO.py"
-        if not script.exists():
-            self._log("❌ create_launcher_ORTHO.py introuvable."); return
-        py = str(VENV_PY) if VENV_PY.exists() else sys.executable
         try:
-            r = subprocess.run([py, str(script)], cwd=str(BASE_DIR),
-                               capture_output=True, text=True)
-            for line in r.stdout.splitlines(): self._log(line)
-            if r.returncode == 0:
-                self._log("✅ Lanceur ORTHO4XP.app créé — double-clic pour lancer !")
-            else:
-                self._log(f"❌ {r.stderr[:300]}")
-        except Exception as e: self._log(f"❌ {e}")
+            self._create_mac_launcher()
+        except Exception as e:
+            self._log(f"❌ {e}")
 
     def _create_launcher_linux(self):
+        # Fabrication native intégrée (plus de dépendance à create_launcher_ORTHO.py)
         self._log("── 🐧 Création Lanceur ORTHO4XP.desktop ──")
-        script = BASE_DIR / "create_launcher_ORTHO.py"
-        if not script.exists():
-            self._log("❌ create_launcher_ORTHO.py introuvable."); return
-        py = str(VENV_PY) if VENV_PY.exists() else sys.executable
         try:
-            r = subprocess.run([py, str(script)], cwd=str(BASE_DIR),
-                               capture_output=True, text=True)
-            for line in r.stdout.splitlines(): self._log(line)
-            if r.returncode == 0:
-                self._log("✅ Lanceur ORTHO4XP.desktop créé !")
-            else:
-                self._log(f"❌ {r.stderr[:300]}")
-        except Exception as e: self._log(f"❌ {e}")
+            self._create_linux_launcher()
+        except Exception as e:
+            self._log(f"❌ {e}")
 
     def _create_launcher_windows(self):
+        # Fabrication native intégrée (plus de dépendance à create_launcher_ORTHO.py)
         self._log("── 🪟 Création Lanceur ORTHO4XP.vbs ──────")
-        script = BASE_DIR / "create_launcher_ORTHO.py"
-        if not script.exists():
-            self._log("❌ create_launcher_ORTHO.py introuvable."); return
-        py = str(VENV_PY) if VENV_PY.exists() else sys.executable
         try:
-            r = subprocess.run([py, str(script)], cwd=str(BASE_DIR),
-                               capture_output=True, text=True)
-            for line in r.stdout.splitlines(): self._log(line)
-            if r.returncode == 0:
-                self._log("✅ Lanceur ORTHO4XP.vbs créé !")
-            else:
-                self._log(f"❌ {r.stderr[:300]}")
-        except Exception as e: self._log(f"❌ {e}")
+            self._create_windows_launcher()
+        except Exception as e:
+            self._log(f"❌ {e}")
 
 
     def _install_linux(self):

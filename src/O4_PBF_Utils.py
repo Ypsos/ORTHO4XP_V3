@@ -367,14 +367,27 @@ def _pass_nodes_bbox(pbf_path, bbox, matcher, harvest, prog):
                         bbox, matcher, harvest, ids, lats, lons,
                         want_node_tags,
                     )
+    # Fusion cumulative : on concatene avec ce qui a deja ete recolte
+    # lors des fichiers .pbf precedents (tuiles a cheval sur 2 regions),
+    # puis on trie et on deduplique par identifiant de noeud.
+    if harvest.node_ids is not None and len(harvest.node_ids):
+        ids = list(harvest.node_ids) + ids
+        lats = list(harvest.node_lat) + lats
+        lons = list(harvest.node_lon) + lons
     if ids:
         a_id = numpy.array(ids, dtype=numpy.int64)
         a_lat = numpy.array(lats, dtype=numpy.float64)
         a_lon = numpy.array(lons, dtype=numpy.float64)
         order = numpy.argsort(a_id, kind="stable")
-        harvest.node_ids = a_id[order]
-        harvest.node_lat = a_lat[order]
-        harvest.node_lon = a_lon[order]
+        a_id = a_id[order]
+        a_lat = a_lat[order]
+        a_lon = a_lon[order]
+        keep = numpy.ones(len(a_id), dtype=bool)
+        if len(a_id) > 1:
+            keep[1:] = a_id[1:] != a_id[:-1]
+        harvest.node_ids = a_id[keep]
+        harvest.node_lat = a_lat[keep]
+        harvest.node_lon = a_lon[keep]
     else:
         harvest.node_ids = numpy.zeros(0, dtype=numpy.int64)
         harvest.node_lat = numpy.zeros(0)
@@ -811,12 +824,76 @@ def _write_tile_category(harvest, matcher, cat, lat, lon, overwrite):
 #  POINT D'ENTREE PRINCIPAL
 # ==============================================================================
 
+def _harvest_batch(pbf_paths, bbox, matcher, cats, bi, nbatches,
+                   progress):
+    """Recolte un lot de tuiles depuis un ou plusieurs fichiers .pbf.
+
+    Les noeuds, chemins et relations sont d'abord lus dans TOUS les
+    fichiers (passes 1 a 4), puis la completion des noeuds hors emprise
+    (passe 5) est faite sur TOUS les fichiers a la fin. Cela permet a un
+    chemin issu du fichier A d'etre complete par un noeud present dans le
+    fichier B — le cas d'une cote qui traverse la frontiere regionale.
+    """
+    harvest = _Harvest()
+    nfiles = len(pbf_paths)
+
+    def mk(step, fi):
+        # fraction globale : lot, puis fichier, puis etape dans le fichier
+        def cb(done, total):
+            if progress:
+                inner = (step - 1 + done / max(total, 1)) / 5.0
+                per_file = (fi + inner) / nfiles
+                frac = (bi + per_file) / nbatches
+                progress("lot %d/%d" % (bi + 1, nbatches), frac)
+        return cb
+
+    t0 = time.time()
+    # Passes 1 a 3 sur chaque fichier ; on cumule les chemins membres de
+    # relations restant a trouver (ils peuvent se trouver dans un AUTRE
+    # fichier que celui ou la relation est declaree).
+    needed = set()
+    for fi, pbf in enumerate(pbf_paths):
+        if getattr(UI, "red_flag", 0):
+            break
+        if nfiles > 1:
+            UI.vprint(1, "   fichier %d/%d : %s"
+                      % (fi + 1, nfiles, os.path.basename(pbf)))
+        UI.vprint(1, "   1/5 lecture des noeuds")
+        _pass_nodes_bbox(pbf, bbox, matcher, harvest, mk(1, fi))
+        UI.vprint(1, "   2/5 lecture des chemins")
+        _pass_ways(pbf, matcher, harvest, mk(2, fi))
+        UI.vprint(1, "   3/5 lecture des relations")
+        needed |= _pass_relations(pbf, matcher, harvest, mk(3, fi))
+
+    # Passe 4 : chercher les chemins membres manquants dans TOUS les
+    # fichiers (un membre peut etre au-dela de la frontiere regionale).
+    needed = {w for w in needed if w not in harvest.ways}
+    UI.vprint(1, "   4/5 chemins membres de relations")
+    for fi, pbf in enumerate(pbf_paths):
+        if getattr(UI, "red_flag", 0):
+            break
+        if needed:
+            _pass_member_ways(pbf, needed, harvest, mk(4, fi))
+
+    # Passe 5 : completion des noeuds hors emprise, sur tous les fichiers.
+    UI.vprint(1, "   5/5 completion des chemins")
+    for fi, pbf in enumerate(pbf_paths):
+        if getattr(UI, "red_flag", 0):
+            break
+        _pass_complete_nodes(pbf, harvest, mk(5, fi))
+
+    UI.vprint(1, "   lot lu en %.1f s" % (time.time() - t0))
+    return harvest
+
+
 def build_osm_cache(pbf_path, tiles, road_level=0, overwrite=False,
                     batch_size=6, progress=None):
     """
-    Remplit le cache OSM_data/ a partir d'un extrait .pbf.
+    Remplit le cache OSM_data/ a partir d'un ou plusieurs extraits .pbf.
 
-      pbf_path   : chemin du fichier .pbf
+      pbf_path   : chemin d'un .pbf, OU liste/tuple de chemins .pbf.
+                   Plusieurs fichiers servent aux tuiles a cheval sur
+                   deux regions Geofabrik : leurs donnees sont fusionnees.
       tiles      : liste de couples (lat, lon)
       road_level : 0 = pas de small_roads, sinon 2 a 5
       overwrite  : ecraser les fichiers cache deja presents
@@ -825,10 +902,19 @@ def build_osm_cache(pbf_path, tiles, road_level=0, overwrite=False,
 
     Renvoie le nombre de fichiers ecrits.
     """
-    if not os.path.isfile(pbf_path):
-        UI.lvprint(1, "Fichier .pbf introuvable :", pbf_path)
+    # Uniformise l'entree : accepte un chemin unique ou une liste.
+    if isinstance(pbf_path, (list, tuple)):
+        pbf_paths = list(pbf_path)
+    else:
+        pbf_paths = [pbf_path]
+    pbf_paths = [p for p in pbf_paths if p]
+
+    missing = [p for p in pbf_paths if not os.path.isfile(p)]
+    if missing:
+        for p in missing:
+            UI.lvprint(1, "Fichier .pbf introuvable :", p)
         return 0
-    if not tiles:
+    if not pbf_paths or not tiles:
         return 0
 
     cats = categories_for(road_level)
@@ -837,6 +923,9 @@ def build_osm_cache(pbf_path, tiles, road_level=0, overwrite=False,
     tiles = sorted(set((int(a), int(b)) for a, b in tiles))
     batches = [tiles[i:i + batch_size]
                for i in range(0, len(tiles), batch_size)]
+
+    if len(pbf_paths) > 1:
+        UI.vprint(0, "-> %d extraits .pbf fusionnes." % len(pbf_paths))
 
     for bi, batch in enumerate(batches):
         if getattr(UI, "red_flag", 0):
@@ -847,28 +936,9 @@ def build_osm_cache(pbf_path, tiles, road_level=0, overwrite=False,
             0,
             "-> Lot %d/%d : %d tuile(s)" % (bi + 1, len(batches), len(batch)),
         )
-        harvest = _Harvest()
 
-        def mk(label, step, nsteps=5):
-            def cb(done, total):
-                if progress:
-                    frac = (bi + (step - 1 + done / max(total, 1)) / nsteps) \
-                        / len(batches)
-                    progress(label, frac)
-            return cb
-
-        t0 = time.time()
-        UI.vprint(1, "   1/5 lecture des noeuds")
-        _pass_nodes_bbox(pbf_path, bbox, matcher, harvest, mk("noeuds", 1))
-        UI.vprint(1, "   2/5 lecture des chemins")
-        _pass_ways(pbf_path, matcher, harvest, mk("chemins", 2))
-        UI.vprint(1, "   3/5 lecture des relations")
-        needed = _pass_relations(pbf_path, matcher, harvest, mk("relations", 3))
-        UI.vprint(1, "   4/5 chemins membres de relations")
-        _pass_member_ways(pbf_path, needed, harvest, mk("membres", 4))
-        UI.vprint(1, "   5/5 completion des chemins")
-        _pass_complete_nodes(pbf_path, harvest, mk("completion", 5))
-        UI.vprint(1, "   lot lu en %.1f s" % (time.time() - t0))
+        harvest = _harvest_batch(pbf_paths, bbox, matcher, cats,
+                                 bi, len(batches), progress)
 
         for (lat, lon) in batch:
             UI.vprint(0, "   Tuile %+03d%+04d" % (lat, lon))
@@ -894,10 +964,10 @@ def build_osm_cache(pbf_path, tiles, road_level=0, overwrite=False,
 # ------------------------------------------------------------------
 K_TITLE = "Cache OSM local (.pbf)"
 K_BUTTON = "\U0001F5FA Cache OSM local (.pbf)"
-K_INTRO = ("Remplit OSM_data/ \u00e0 partir d'un extrait .pbf local afin que "
-           "l'\u00e9tape 1 ne t\u00e9l\u00e9charge plus rien.")
-K_FILE = "Fichier PBF :"
-K_BROWSE = "Parcourir..."
+K_INTRO = ("Remplit OSM_data/ \u00e0 partir d'un ou plusieurs extraits .pbf "
+           "locaux afin que l'\u00e9tape 1 ne t\u00e9l\u00e9charge plus rien.")
+K_FILE = "Fichier(s) PBF :"
+K_BROWSE = "Parcourir (un ou plusieurs)..."
 K_FROM = "De latitude / longitude :"
 K_TO = "\u00c0 latitude / longitude :"
 K_ROAD = "Niveau de routes (0 = aucun) :"
@@ -909,8 +979,12 @@ K_ERRFILE = "Fichier PBF introuvable."
 K_MANY = "Nombre de tuiles demand\u00e9 tr\u00e8s important. Continuer ?"
 K_DONE = "Cache OSM local termin\u00e9. Fichiers \u00e9crits :"
 K_ERRPBF = "Erreur pendant la lecture du fichier PBF."
-K_HINT = ("Le fichier est relu 5 fois : comptez quelques minutes par lot de "
-          "tuiles.")
+K_HINT = ("Chaque fichier est relu 5 fois : comptez quelques minutes par lot "
+          "de tuiles. Pour une tuile \u00e0 cheval sur deux r\u00e9gions, "
+          "s\u00e9lectionnez les deux extraits .pbf \u00e0 la fois.")
+K_FILE_HINT = ("Astuce : vous pouvez s\u00e9lectionner plusieurs fichiers "
+               "\u00e0 la fois (Cmd-clic ou Ctrl-clic) \u2014 utile pour une "
+               "tuile \u00e0 cheval sur deux r\u00e9gions.")
 
 # ------------------------------------------------------------------
 #  Theme — memes valeurs par defaut que O4_GUI_Utils, rechargees
@@ -968,7 +1042,10 @@ def open_pbf_window(parent=None):
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
     win.configure(bg=_BG)
     win.title(tr(K_TITLE))
-    win.resizable(False, False)
+    # Redimensionnable, mais bornee par une taille minimale (fixee plus
+    # bas apres mesure du contenu) : agrandir est permis, retrecir au
+    # point de masquer un bouton ne l'est pas.
+    win.resizable(True, True)
 
     FONT = ("TkFixedFont", 11)
     FONT_B = ("TkFixedFont", 11, "bold")
@@ -1009,15 +1086,22 @@ def open_pbf_window(parent=None):
     e_file.pack(side="left", fill="x", expand=True, padx=(6, 6))
 
     def browse():
-        path = filedialog.askopenfilename(
+        # Selection multiple possible : une tuile a cheval sur deux
+        # regions Geofabrik peut necessiter deux extraits .pbf.
+        paths = filedialog.askopenfilenames(
             title=tr(K_FILE),
             filetypes=[("OpenStreetMap PBF", "*.pbf"), ("*", "*")],
         )
-        if path:
-            v_pbf.set(path)
+        if paths:
+            v_pbf.set(";".join(paths))
 
     ttk.Button(row_file, text=tr(K_BROWSE), command=browse,
-               width=14).pack(side="left")
+               width=26).pack(side="left")
+
+    # Astuce multi-selection, juste sous le champ fichier
+    tk.Label(win, text=tr(K_FILE_HINT), bg=_BG, fg=_FG2, font=FONT_S,
+             justify="left", wraplength=560, anchor="w").pack(
+        fill="x", padx=12, pady=(0, 2))
 
     # ── Coordonnees ───────────────────────────────────────────────
     for label_key, va, vo in ((K_FROM, v_lat, v_lon), (K_TO, v_lat2, v_lon2)):
@@ -1070,7 +1154,8 @@ def open_pbf_window(parent=None):
         except ValueError:
             messagebox.showerror(tr(K_TITLE), tr(K_ERRLL), parent=win)
             return
-        if not os.path.isfile(v_pbf.get()):
+        pbf_list = [p.strip() for p in v_pbf.get().split(";") if p.strip()]
+        if not pbf_list or any(not os.path.isfile(p) for p in pbf_list):
             messagebox.showerror(tr(K_TITLE), tr(K_ERRFILE), parent=win)
             return
         tiles = [
@@ -1085,7 +1170,7 @@ def open_pbf_window(parent=None):
         btn_run.config(state="disabled")
         try:
             written = build_osm_cache(
-                v_pbf.get(), tiles,
+                pbf_list, tiles,
                 road_level=int(v_road.get()),
                 overwrite=bool(v_over.get()),
                 progress=progress,
@@ -1117,6 +1202,28 @@ def open_pbf_window(parent=None):
         _TM.apply_to_root(win)
     except Exception:
         pass
+
+    # ── Taille minimale : jamais aucun bouton recouvert ───────────
+    # On laisse Tk calculer la taille requise par tout le contenu,
+    # puis on la fixe comme minimum absolu. La fenetre ne peut donc
+    # pas etre reduite au point de masquer les boutons du bas.
+    def _lock_min_size():
+        try:
+            win.update_idletasks()
+            need_w = win.winfo_reqwidth()
+            need_h = win.winfo_reqheight()
+            win.minsize(need_w, need_h)
+            # Ouvre exactement a la taille requise (aucune troncature).
+            if not win.winfo_ismapped():
+                win.geometry("%dx%d" % (need_w, need_h))
+        except Exception:
+            pass
+
+    try:
+        # differe le calcul apres le premier trace des widgets
+        win.after(0, _lock_min_size)
+    except Exception:
+        _lock_min_size()
 
     # exposes pour les tests automatises (aucun effet sur l'interface)
     win._pbf_run = run

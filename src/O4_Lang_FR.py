@@ -1085,12 +1085,14 @@ T = {
         : 'Cache OSM local (.pbf)',
     '🗺 Cache OSM local (.pbf)'
         : '🗺 Cache OSM local (.pbf)',
-    "Remplit OSM_data/ à partir d'un extrait .pbf local afin que l'étape 1 ne télécharge plus rien."
-        : "Remplit OSM_data/ à partir d'un extrait .pbf local afin que l'étape 1 ne télécharge plus rien.",
-    'Fichier PBF :'
-        : 'Fichier PBF :',
-    'Parcourir...'
-        : 'Parcourir...',
+    "Remplit OSM_data/ à partir d'un ou plusieurs extraits .pbf locaux afin que l'étape 1 ne télécharge plus rien."
+        : "Remplit OSM_data/ à partir d'un ou plusieurs extraits .pbf locaux afin que l'étape 1 ne télécharge plus rien.",
+    'Fichier(s) PBF :'
+        : 'Fichier(s) PBF :',
+    'Parcourir (un ou plusieurs)...'
+        : 'Parcourir (un ou plusieurs)...',
+    'Astuce : vous pouvez sélectionner plusieurs fichiers à la fois (Cmd-clic ou Ctrl-clic) — utile pour une tuile à cheval sur deux régions.'
+        : 'Astuce : vous pouvez sélectionner plusieurs fichiers à la fois (Cmd-clic ou Ctrl-clic) — utile pour une tuile à cheval sur deux régions.',
     'De latitude / longitude :'
         : 'De latitude / longitude :',
     'À latitude / longitude :'
@@ -1111,8 +1113,8 @@ T = {
         : 'Cache OSM local terminé. Fichiers écrits :',
     'Erreur pendant la lecture du fichier PBF.'
         : 'Erreur pendant la lecture du fichier PBF.',
-    'Le fichier est relu 5 fois : comptez quelques minutes par lot de tuiles.'
-        : 'Le fichier est relu 5 fois : comptez quelques minutes par lot de tuiles.',
+    'Chaque fichier est relu 5 fois : comptez quelques minutes par lot de tuiles. Pour une tuile à cheval sur deux régions, sélectionnez les deux extraits .pbf à la fois.'
+        : 'Chaque fichier est relu 5 fois : comptez quelques minutes par lot de tuiles. Pour une tuile à cheval sur deux régions, sélectionnez les deux extraits .pbf à la fois.',
     'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.'
         : 'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.',
 }

@@ -1084,12 +1084,14 @@ T = {
         : 'Local OSM cache (.pbf)',
     '🗺 Cache OSM local (.pbf)'
         : '🗺 Local OSM cache (.pbf)',
-    "Remplit OSM_data/ à partir d'un extrait .pbf local afin que l'étape 1 ne télécharge plus rien."
-        : 'Fills OSM_data/ from a local .pbf extract so that Step 1 no longer downloads anything.',
-    'Fichier PBF :'
-        : 'PBF file:',
-    'Parcourir...'
-        : 'Browse...',
+    "Remplit OSM_data/ à partir d'un ou plusieurs extraits .pbf locaux afin que l'étape 1 ne télécharge plus rien."
+        : 'Fills OSM_data/ from one or more local .pbf extracts so that Step 1 no longer downloads anything.',
+    'Fichier(s) PBF :'
+        : 'PBF file(s):',
+    'Parcourir (un ou plusieurs)...'
+        : 'Browse (one or more)...',
+    'Astuce : vous pouvez sélectionner plusieurs fichiers à la fois (Cmd-clic ou Ctrl-clic) — utile pour une tuile à cheval sur deux régions.'
+        : 'Tip: you can select several files at once (Cmd-click or Ctrl-click) — useful for a tile straddling two regions.',
     'De latitude / longitude :'
         : 'From latitude / longitude:',
     'À latitude / longitude :'
@@ -1110,8 +1112,8 @@ T = {
         : 'Local OSM cache completed. Files written:',
     'Erreur pendant la lecture du fichier PBF.'
         : 'Error while reading the PBF file.',
-    'Le fichier est relu 5 fois : comptez quelques minutes par lot de tuiles.'
-        : 'The file is read 5 times: allow a few minutes per batch of tiles.',
+    'Chaque fichier est relu 5 fois : comptez quelques minutes par lot de tuiles. Pour une tuile à cheval sur deux régions, sélectionnez les deux extraits .pbf à la fois.'
+        : 'Each file is read 5 times: allow a few minutes per batch of tiles. For a tile straddling two regions, select both .pbf extracts at once.',
     'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.'
         : 'Module O4_PBF_Utils.py not found in the src/ folder.',
 }
