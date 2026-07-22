@@ -229,7 +229,12 @@ Choix de l'application de retouche d'image (exemple : GIMP)
 <img width="848" height="564" alt="Josm 3" src="https://github.com/user-attachments/assets/1f984c4d-2f28-4df1-94d7-5cc0ac5dd955" />
 
 ---
+### Gestion cache OSM Local Multi-fichiers
 
+<img width="921" height="453" alt="Gestion cache OSM Local" src="https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc" />
+
+
+---
 ## 🛠 Utilisation rapide
 
 ### 🍎 Mac
@@ -509,7 +514,11 @@ Choosing the image editor (example: GIMP)
 <img width="848" height="564" alt="Josm 3" src="https://github.com/user-attachments/assets/1f984c4d-2f28-4df1-94d7-5cc0ac5dd955" />
 
 ---
+### Local OSM cache management Multi-file
 
+<img width="921" height="453" alt="Gestion cache OSM Local" src="https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc" />
+
+---
 ## 🛠 Quick start
 
 ### 🍎 Mac
