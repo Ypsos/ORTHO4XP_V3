@@ -11,17 +11,30 @@
 >
 > **ORTHO4XP V3** est développé et maintenu par **Roland (Ypsos)**, dans le respect du projet original **Ortho4XP**, créé par **Oscar Pilote**.
 >
-> Les forks, versions renommées ou projets dérivés sont des projets **indépendants** et ne constituent **pas** le dépôt officiel d'ORTHO4XP V3.
+> Les forks, versions renommées ou projets dérivés sont des projets **indépendants**.
 >
 > **Pour télécharger la version officielle et obtenir les dernières mises à jour, utilisez toujours ce dépôt GitHub.**
-
+>
 **Développée et maintenue par Roland (Ypsos) avec l'assistance de Claude IA (Anthropic)**
-
+>
 **La version moderne d'Ortho4XP**  
 Installation automatique • Sans terminal • Pour X-Plane 12
-[![TÉLÉCHARGER LA DERNIÈRE VERSION](https://img.shields.io/badge/T%C3%89L%C3%89CHARGER%20LA%20DERNI%C3%88RE%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
+[![TÉLÉCHARGER LA DERNIÈRE VERSION Disponible ICI ](https://img.shields.io/badge/T%C3%89L%C3%89CHARGER%20LA%20DERNI%C3%88RE%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
+>
 
 ---
+ℹ️ À propos des forks
+>
+OrthoForge (xbard / xpconnect.me) est un fork indépendant qui utilise une grande partie des fichiers et modules que j’ai développés pour ORTHO4XP V3.
+>
+Ils ont ajouté leurs propres évolutions en surcouche. 
+>
+Je ne peux pas garantir la stabilité ni la compatibilité de ces modifications avec ma version officielle.
+>
+La version officielle que je maintiens est entièrement gratuite, sans demande de donation ni bouton de soutien financier.
+>
+
+-
 
 ## 🧭 Origine du projet
 
@@ -292,26 +305,42 @@ Voir `AVERTISSEMENT_LICENCE_LEGAL.md` pour les détails complets.
 JOSM, QGIS et GIMP sont des logiciels tiers indépendants, distribués sous leurs propres licences.
 
 [![ORTHO4XP V3 Banner](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/BanniereGithub.png)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/BanniereGithub.png)
-
+>
 [![ORTHO4XP V3 Banner]
 ** 🇫🇷 Français | 🇬🇧 English
+>
 # ORTHO4XP V3 — Official Version
-> ## ✅ OFFICIAL REPOSITORY
+## ✅ OFFICIAL REPOSITORY
 >
-> This GitHub repository is the official repository for ORTHO4XP V3.
+This GitHub repository is the **official repository for ORTHO4XP V3**.
+<
+**ORTHO4XP V3** is developed and maintained by **Roland (Ypsos)**, in respect of the original **Ortho4XP** project created by **Oscar Pilote**.
 >
-> ORTHO4XP V3 is developed and maintained by Roland (Ypsos), in respect of the original Ortho4XP project created by Oscar Pilote.
+Forks, renamed versions, or derivative projects are **independent** projects.
+
+**To download the official version and get the latest updates, always use this GitHub repository.**
 >
-> Forks, renamed versions, or derivative projects are independent projects and do not constitute the official ORTHO4XP V3 repository.
+**Developed and maintained by Roland (Ypsos) with assistance from Claude AI (Anthropic)**
 >
-> **To download the official version and get the latest updates, always use this GitHub repository.
+**The modern version of Ortho4XP**  
+Automatic installation • No terminal required • For X-Plane 12
 >
-> Developed and maintained by Roland (Ypsos) with assistance from Claude AI (Anthropic)
+[![DOWNLOAD LATEST VERSION](https://img.shields.io/badge/DOWNLOAD%20LATEST%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
 >
-> The modern version of Ortho4XP
->
-Automatic installation • Terminal-free • For X-Plane 12
-> 
+---
+
+## ℹ️ About Forks
+
+**OrthoForge** (xbard / xpconnect.me) is an **independent fork** that uses a large part of the files and modules I developed for ORTHO4XP V3.
+
+They have added their own features on top.  
+I cannot guarantee the stability or compatibility of these modifications with the official version.
+
+The official version I maintain is **completely free**, with no donation requests or support buttons.
+
+It is available here: **https://github.com/Ypsos/ORTHO4XP_V3**
+
+---
 🧭 Project Origin
 Original software	Created by Oscar Pilote → github.com/oscarpilote/Ortho4XP
 
