@@ -49,8 +49,7 @@ Pour télécharger la version officielle, signaler un problème, proposer une am
 
 ➡ **https://github.com/Ypsos/ORTHO4XP_V3**
 
-
-**Toutes les contributions sont les bienvenues. Merci d'utiliser exclusivement ce dépôt pour les rapports de bugs, les demandes d'évolution et les discussions concernant ORTHO4XP V3.**.
+> **Toutes les contributions sont les bienvenues. Merci d'utiliser exclusivement ce dépôt pour les rapports de bugs, les demandes d'évolution et les discussions concernant ORTHO4XP V3.**.
 ---
 
 ## 🎯 L'idée directrice
@@ -290,29 +289,42 @@ JOSM, QGIS et GIMP sont des logiciels tiers indépendants, distribués sous leur
 [![ORTHO4XP V3 Banner](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/BanniereGithub.png)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/BanniereGithub.png)
 
 [![ORTHO4XP V3 Banner]
-🇫🇷 Français | 🇬🇧 English
-ORTHO4XP V3 — Official Version
-✅ OFFICIAL REPOSITORY
-This GitHub repository is the official repository for ORTHO4XP V3.
-ORTHO4XP V3 is developed and maintained by Roland (Ypsos), in respect of the original Ortho4XP project created by Oscar Pilote.
-Forks, renamed versions, or derivative projects are independent projects and do not constitute the official ORTHO4XP V3 repository.
-To download the official version and get the latest updates, always use this GitHub repository.
-Developed and maintained by Roland (Ypsos) with assistance from Claude AI (Anthropic)
-The modern version of Ortho4XP
+** 🇫🇷 Français | 🇬🇧 English
+# ORTHO4XP V3 — Official Version
+> ## ✅ OFFICIAL REPOSITORY
+>
+> This GitHub repository is the official repository for ORTHO4XP V3.
+>
+> ORTHO4XP V3 is developed and maintained by Roland (Ypsos), in respect of the original Ortho4XP project created by Oscar Pilote.
+>
+> Forks, renamed versions, or derivative projects are independent projects and do not constitute the official ORTHO4XP V3 repository.
+>
+> **To download the official version and get the latest updates, always use this GitHub repository.
+>
+> Developed and maintained by Roland (Ypsos) with assistance from Claude AI (Anthropic)
+>
+> The modern version of Ortho4XP
+>
 Automatic installation • Terminal-free • For X-Plane 12
+> 
 🧭 Project Origin
 Original software	Created by Oscar Pilote → github.com/oscarpilote/Ortho4XP
+
 Maintained Version 1.40	Fork by Shred86 → github.com/shred86/Ortho4XP
+
 This V3	Complete overhaul by Roland (Ypsos) with assistance from Claude (Anthropic AI)
+
 I am the main author of the modern V3 architecture (Event Bus, Pipeline, Memory Manager, Provider Scoring, Altimetry, JOSM, Image Correction, Viewer, etc.).
+
 My version remains the official reference and the most up-to-date version of the original project.
+>
 📌 Official Repository
 This repository is the official development source for ORTHO4XP V3.
 It centralizes official releases, updates, documentation, issue tracking, and project contributions.
 Over the years, several forks, renamed versions, or derivative projects have been published by the community. These projects are independent and follow their own evolution.
 To download the official version, report an issue, suggest an improvement, or contribute to development, always use this repository:
 ➡ https://github.com/Ypsos/ORTHO4XP_V3
-All contributions are welcome. Please exclusively use this repository for bug reports, feature requests, and discussions regarding ORTHO4XP V3.
+> **All contributions are welcome. Please exclusively use this repository for bug reports, feature requests, and discussions regarding ORTHO4XP V3.**
 ---
 
 ## 🎯 The guiding idea
