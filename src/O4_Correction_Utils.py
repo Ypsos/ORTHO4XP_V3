@@ -406,6 +406,7 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
             vw = max(480, viz.winfo_reqwidth())
             vh = max(200, viz.winfo_reqheight())
             viz.geometry(f"{vw}x{vh}+{(sw - vw) // 2}+{(sh - vh) // 2}")
+            viz.minsize(vw, vh)
 
         if not textures_dir or not os.path.isdir(textures_dir):
             _fin_simple(_tr("Dossier textures introuvable pour cette tuile."))
@@ -438,6 +439,9 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
 
         frm_viz_bot = tk.Frame(viz, bg=BG)
         frm_viz_bot.pack(pady=(4, 10))
+        # Pas de bouton « Transférer » : c'est la CASE sous la vignette qui
+        # transfère (voir _cocher_vignette). Un bouton en plus ferait
+        # doublon et retransférerait ce qui est déjà dans la liste.
         ttk.Button(frm_viz_bot,
                    text=_tr("Effacer JPG source et relancer étape 3"),
                    command=lambda: _effacer_et_relancer()).pack(
@@ -573,6 +577,39 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                     _rebuild_list()
                 except Exception:
                     pass
+
+        def _cocher_vignette(dds_name):
+            """Case cochée sous une vignette → transfert immédiat vers la
+            liste « JPG à corriger » de la fenêtre « Correction patches ».
+
+            On copie le JPG SOURCE du provider actif (nom exact déduit du
+            DDS, ZL lu dans le nom) dans PATCH_<ZL>/, puis on ajoute le
+            fichier à la liste de gauche. Aucun DDS n'est modifié, aucun JPG
+            source n'est modifié (copie seule) et un patch déjà présent est
+            conservé tel quel. Décocher ne supprime rien (sécurité) : la
+            suppression se fait avec « Supprimer patches sélectionnés »
+            dans la fenêtre « Correction patches ».
+            """
+            var = _viz_checks.get(dds_name)
+            court = "_".join(dds_name.split("_")[:2])
+            if var is None or not var.get():
+                return          # décocher ne supprime rien
+            st, copied, dest = _dupliquer_jpg_source(dds_name)
+            if st == "copie":
+                _rafraichir_liste(copied, dest)
+                lbl_info.config(
+                    text=court + " — "
+                    + _tr("transféré dans « JPG à corriger »"))
+            elif st == "existe":
+                _rafraichir_liste(copied, dest)
+                lbl_info.config(
+                    text=court + " — "
+                    + _tr("déjà présent dans « JPG à corriger »"))
+            else:
+                var.set(False)
+                lbl_info.config(
+                    text=court + " — "
+                    + _tr("aucun JPG source trouvé pour cette tuile"))
 
         def _jpg_source_path(dds_name):
             """Chemin du JPG source du provider ACTIF (nom exact déduit du
@@ -822,7 +859,9 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
             tk.Checkbutton(cell, variable=_v, bg=PREV_BG, fg=FG,
                            selectcolor=BG, activebackground=PREV_BG,
                            activeforeground=FG,
-                           highlightthickness=0, bd=0).pack()
+                           highlightthickness=0, bd=0,
+                           command=lambda d=dds_name: _cocher_vignette(d)
+                           ).pack()
             # Garder l'interface réactive pendant la 1re génération du cache.
             if idx % 8 == 0:
                 lbl_info.config(
@@ -885,6 +924,10 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
 
         viz.geometry(f"{int(vw)}x{int(vh)}"
                      f"+{(sw - int(vw)) // 2}+{(sh - int(vh)) // 2}")
+        # Taille mini : en-tête + une partie de la mosaïque + barre de boutons
+        # (Effacer / Fermer) restent toujours visibles quand on réduit ;
+        # la mosaïque se réagence (reflow) et l'agrandissement reste libre.
+        viz.minsize(800, 460)
 
     def _supprimer_preview():
         """Supprime le dossier Preview_Correction de la tuile. Ce cache de

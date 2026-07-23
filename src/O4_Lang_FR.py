@@ -1117,4 +1117,138 @@ T = {
         : 'Chaque fichier est relu 5 fois : comptez quelques minutes par lot de tuiles. Pour une tuile à cheval sur deux régions, sélectionnez les deux extraits .pbf à la fois.',
     'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.'
         : 'Le module O4_PBF_Utils.py est introuvable dans le dossier src/.',
+
+    # ── AJOUTS SESSION 23/07/2026 — TEXTES FRANÇAIS DE O4_GUI_Utils.py ──
+    '100%  (réf.)'
+        : '100%  (réf.)',
+    'Avertissement save_zone_list: '
+        : 'Avertissement save_zone_list: ',
+    'Boost — intensité de la saturation'
+        : 'Boost — intensité de la saturation',
+    'Coordonnées et dossier de la tuile'
+        : 'Coordonnées et dossier de la tuile',
+    'Copiez Utils/Earth/ depuis Ortho4XP 2.00\n\nDouble-clic = sélectionner tuile\nShift+clic = ajouter au batch'
+        : 'Copiez Utils/Earth/ depuis Ortho4XP 2.00\n\nDouble-clic = sélectionner tuile\nShift+clic = ajouter au batch',
+    'Corrections avancées'
+        : 'Corrections avancées',
+    'Erreur : '
+        : 'Erreur : ',
+    'Fabrication Tuile'
+        : 'Fabrication Tuile',
+    'Fenêtre de configuration\n('
+        : 'Fenêtre de configuration\n(',
+    'Gestion des Couleurs automatisée'
+        : 'Gestion des Couleurs automatisée',
+    'Gestion des Données'
+        : 'Gestion des Données',
+    'Intensité de la correction'
+        : 'Intensité de la correction',
+    'Red flag activé'
+        : 'Red flag activé',
+    'Zones sauvegardées dans cfg tuile '
+        : 'Zones sauvegardées dans cfg tuile ',
+    "[CorrMod] Repli sur l'ancienne fenêtre : "
+        : "[CorrMod] Repli sur l'ancienne fenêtre : ",
+    '[OACI] Serveurs Overpass indisponibles — cercles aéroports non affichés.'
+        : '[OACI] Serveurs Overpass indisponibles — cercles aéroports non affichés.',
+    '[Timeline] Erreur affichage : '
+        : '[Timeline] Erreur affichage : ',
+    'apt_curv_ext : extension de la zone de précision autour des aéroports. 1.0 = recommandé.'
+        : 'apt_curv_ext : extension de la zone de précision autour des aéroports. 1.0 = recommandé.',
+    'apt_curv_tol : tolérance de courbure spécifique aux aéroports. 1.5 = recommandé. Valeur basse = géométrie aéroport plus précise.'
+        : 'apt_curv_tol : tolérance de courbure spécifique aux aéroports. 1.5 = recommandé. Valeur basse = géométrie aéroport plus précise.',
+    'apt_smoothing_pix : lissage en pixels de la zone aéroport dans le mesh. 8 = recommandé pour éviter les bosses sur les pistes.'
+        : 'apt_smoothing_pix : lissage en pixels de la zone aéroport dans le mesh. 8 = recommandé pour éviter les bosses sur les pistes.',
+    'aéroport ZL'
+        : 'aéroport ZL',
+    'aéroport: ZL défaut'
+        : 'aéroport: ZL défaut',
+    'clean_bad_geometries : supprime les géométries vectorielles invalides avant la triangulation. True = recommandé.'
+        : 'clean_bad_geometries : supprime les géométries vectorielles invalides avant la triangulation. True = recommandé.',
+    'courbure'
+        : 'courbure',
+    'cover_airports_with_highres : active la haute résolution autour des aéroports. True = recommandé si un aéroport est présent sur la tuile.'
+        : 'cover_airports_with_highres : active la haute résolution autour des aéroports. True = recommandé si un aéroport est présent sur la tuile.',
+    'cover_extent : rayon en km autour des aéroports pour la haute résolution. 1.0 = recommandé. 3.0 = large zone haute résolution.'
+        : 'cover_extent : rayon en km autour des aéroports pour la haute résolution. 1.0 = recommandé. 3.0 = large zone haute résolution.',
+    'cover_zl : zoom level haute résolution autour des aéroports. 18 = recommandé pour voir les marquages et taxiways.'
+        : 'cover_zl : zoom level haute résolution autour des aéroports. 18 = recommandé pour voir les marquages et taxiways.',
+    'curvature_tol : tolérance de courbure générale du mesh. Valeur basse = plus de triangles, relief plus précis. 16 = recommandé. 1 = très dense (lent). 30 = grossier.'
+        : 'curvature_tol : tolérance de courbure générale du mesh. Valeur basse = plus de triangles, relief plus précis. 16 = recommandé. 1 = très dense (lent). 30 = grossier.',
+    "default_zl : niveau de zoom de l'imagerie principale. 14-15 = faible résolution, flou. 17 = résolution standard, recommandé. 19-20 = très haute résolution, très lourd en VRAM."
+        : "default_zl : niveau de zoom de l'imagerie principale. 14-15 = faible résolution, flou. 17 = résolution standard, recommandé. 19-20 = très haute résolution, très lourd en VRAM.",
+    'décals terrain'
+        : 'décals terrain',
+    'décals='
+        : 'décals=',
+    'fill_nodata : remplit les zones sans données altimétriques par interpolation du voisin le plus proche. True = recommandé pour les DEM avec trous sur la mer.'
+        : 'fill_nodata : remplit les zones sans données altimétriques par interpolation du voisin le plus proche. True = recommandé pour les DEM avec trous sur la mer.',
+    'grossier'
+        : 'grossier',
+    'imprint_masks_to_dds : grave le canal alpha dans le DDS (BC3). True = nécessaire pour transparence XP12 (recommandé). ⚠ False + water_tech=XP12 = jointures visibles.'
+        : 'imprint_masks_to_dds : grave le canal alpha dans le DDS (BC3). True = nécessaire pour transparence XP12 (recommandé). ⚠ False + water_tech=XP12 = jointures visibles.',
+    "iterate : nombre d'itérations de raffinement du mesh. 0 = pas d'itération (rapide). 1-2 = meilleure qualité côtière. 3 = très long."
+        : "iterate : nombre d'itérations de raffinement du mesh. 0 = pas d'itération (rapide). 1-2 = meilleure qualité côtière. 3 = très long.",
+    'limit_tris : limite du nombre de triangles en millions. 15 = recommandé. Augmenter pour les zones très complexes.'
+        : 'limit_tris : limite du nombre de triangles en millions. 15 = recommandé. Augmenter pour les zones très complexes.',
+    'limite'
+        : 'limite',
+    'mask_zl : résolution des masques côtiers. 17 = bon équilibre (recommandé). 19-20 = très précis, fichiers lourds.'
+        : 'mask_zl : résolution des masques côtiers. 17 = bon équilibre (recommandé). 19-20 = très précis, fichiers lourds.',
+    'masking_mode : algorithme masque. sand = dégradé naturel (recommandé). rocks = transition abrupte (falaises). 3steps = 3 étapes personnalisées.'
+        : 'masking_mode : algorithme masque. sand = dégradé naturel (recommandé). rocks = transition abrupte (falaises). 3steps = 3 étapes personnalisées.',
+    'masks_width : largeur en mètres de la zone de dégradé côtier. 100m = transition nette (recommandé). 500m = dégradé naturel. ⚠ Valeurs > 500m peuvent produire des jointures visibles.'
+        : 'masks_width : largeur en mètres de la zone de dégradé côtier. 100m = transition nette (recommandé). 500m = dégradé naturel. ⚠ Valeurs > 500m peuvent produire des jointures visibles.',
+    "max_area : surface maximum d'un polygone vectoriel. Les polygones plus grands sont découpés. 100 = recommandé."
+        : "max_area : surface maximum d'un polygone vectoriel. Les polygones plus grands sont découpés. 100 = recommandé.",
+    'max_levelled_segs : nombre maximum de segments de route nivelés. 200000 = recommandé.'
+        : 'max_levelled_segs : nombre maximum de segments de route nivelés. 200000 = recommandé.',
+    'mesh_zl : zoom level du maillage 3D. 14-16 = mesh grossier, relief approximatif. 19 = mesh très précis, côtes et falaises détaillées (recommandé). 20 = très lourd, rarement nécessaire.'
+        : 'mesh_zl : zoom level du maillage 3D. 14-16 = mesh grossier, relief approximatif. 19 = mesh très précis, côtes et falaises détaillées (recommandé). 20 = très lourd, rarement nécessaire.',
+    'min_angle : angle minimum des triangles du mesh. 0.5 = recommandé. Valeur basse = meilleure qualité géométrique.'
+        : 'min_angle : angle minimum des triangles du mesh. 0.5 = recommandé. Valeur basse = meilleure qualité géométrique.',
+    "min_area : surface minimum d'un polygone vectoriel (en degrés²). Les polygones plus petits sont ignorés. 0.0001 = recommandé (élimine les micro-polygones parasites)."
+        : "min_area : surface minimum d'un polygone vectoriel (en degrés²). Les polygones plus petits sont ignorés. 0.0001 = recommandé (élimine les micro-polygones parasites).",
+    'moyen'
+        : 'moyen',
+    "normal_map_strength : intensité de l'ombrage terrain. 0 = terrain plat visuellement. 1.0 = ombrage exact (recommandé). 2.0 = ombrage très marqué, peut sembler exagéré sur terrain plat."
+        : "normal_map_strength : intensité de l'ombrage terrain. 0 = terrain plat visuellement. 1.0 = ombrage exact (recommandé). 2.0 = ombrage très marqué, peut sembler exagéré sur terrain plat.",
+    'ombres='
+        : 'ombres=',
+    "overlay_lod : distance en mètres jusqu'où XPlane affiche l'imagerie sur la mer. 30000 = recommandé."
+        : "overlay_lod : distance en mètres jusqu'où XPlane affiche l'imagerie sur la mer. 30000 = recommandé.",
+    'précis'
+        : 'précis',
+    'ratio_bathy : dégradé de profondeur XP12. 0 = mer uniforme. 1 = eau profonde sombre → turquoise côtier (recommandé).'
+        : 'ratio_bathy : dégradé de profondeur XP12. 0 = mer uniforme. 1 = eau profonde sombre → turquoise côtier (recommandé).',
+    'ratio_water : 0 = JPG satellite opaque sur mer. 1 = eau XP12 entièrement visible (vagues, reflets, bathymétrie). Recommandé : 0.10 pour Vendée/Atlantique.'
+        : 'ratio_water : 0 = JPG satellite opaque sur mer. 1 = eau XP12 entièrement visible (vagues, reflets, bathymétrie). Recommandé : 0.10 pour Vendée/Atlantique.',
+    'road_level : densité des routes intégrées dans le mesh. 0 = aucune route. 4 = toutes les routes (recommandé).'
+        : 'road_level : densité des routes intégrées dans le mesh. 0 = aucune route. 4 = toutes les routes (recommandé).',
+    'terrain_casts_shadows : le terrain projette des ombres sur lui-même. True = ombres réalistes (recommandé). False = moins réaliste mais gain de performances.'
+        : 'terrain_casts_shadows : le terrain projette des ombres sur lui-même. True = ombres réalistes (recommandé). False = moins réaliste mais gain de performances.',
+    'triangles'
+        : 'triangles',
+    'très précis'
+        : 'très précis',
+    'tuile '
+        : 'tuile ',
+    'use_decal_on_terrain : applique des décals de texture (herbe/roche) sur le terrain pour améliorer le rendu au sol à basse altitude. True = recommandé pour la Vendée.'
+        : 'use_decal_on_terrain : applique des décals de texture (herbe/roche) sur le terrain pour améliorer le rendu au sol à basse altitude. True = recommandé pour la Vendée.',
+    'use_masks_for_inland : applique les masques côtiers sur lacs et rivières. False = recommandé (économise VRAM). True = masque lac visible dans le canvas ci-dessus.'
+        : 'use_masks_for_inland : applique les masques côtiers sur lacs et rivières. False = recommandé (économise VRAM). True = masque lac visible dans le canvas ci-dessus.',
+    'water_simplification : simplification des polygones eau. 0 = pas de simplification (précis). 0.5 = simplification modérée. 1.0 = très simplifié (rapide mais moins précis).'
+        : 'water_simplification : simplification des polygones eau. 0 = pas de simplification (précis). 0.5 = simplification modérée. 1.0 = très simplifié (rapide mais moins précis).',
+    'water_smoothing : lissage du maillage eau intérieure. 2 = recommandé.'
+        : 'water_smoothing : lissage du maillage eau intérieure. 2 = recommandé.',
+    'water_tech : XP12 = eau dynamique (vagues, reflets, bathymétrie). ⚠ XP11+bathy = ancien mode, incompatible avec imprint_masks_to_dds=True.'
+        : 'water_tech : XP12 = eau dynamique (vagues, reflets, bathymétrie). ⚠ XP11+bathy = ancien mode, incompatible avec imprint_masks_to_dds=True.',
+    'zone aéroport XP12'
+        : 'zone aéroport XP12',
+    '── Navigation ──\nClic + glisser\n   Déplacer la carte\nMolette\n   Zoom avant / arrière\n\n── Tracer une zone ──\nShift + clic\n   Ajouter un point\nCtrl+Shift + clic\n   Point aligné grille\n Sauvegarder la zone\nBackspace  Annuler dernier pt\n\n── Rectangle ZL ──\nCtrl + clic (vide)\n   Créer rectangle\nCtrl + clic (zone)\n   Supprimer rectangle\nd  Supprimer dernière zone'
+        : '── Navigation ──\nClic + glisser\n   Déplacer la carte\nMolette\n   Zoom avant / arrière\n\n── Tracer une zone ──\nShift + clic\n   Ajouter un point\nCtrl+Shift + clic\n   Point aligné grille\n Sauvegarder la zone\nBackspace  Annuler dernier pt\n\n── Rectangle ZL ──\nCtrl + clic (vide)\n   Créer rectangle\nCtrl + clic (zone)\n   Supprimer rectangle\nd  Supprimer dernière zone',
+    '⚠ XP11+bathy : vagues XP12 désactivées'
+        : '⚠ XP11+bathy : vagues XP12 désactivées',
+    '🎚  Simulateur Ortho4XP — tuile '
+        : '🎚  Simulateur Ortho4XP — tuile ',
 }

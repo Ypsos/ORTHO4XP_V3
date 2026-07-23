@@ -242,13 +242,31 @@ class Ortho4XP_GUI(tk.Tk):
         self.stop_icon   = _load_icon("Stop.gif")
         self.exit_icon   = _load_icon("Exit.gif")
 
-        # ── FRAME TOP (lat/lon + Base Folder + boutons + steps + bars) ─
+        # ── FRAME TOP (toutes les rubriques empilées) ─────────────────
         self.frame_top = tk.Frame(self, border=4, relief=RIDGE, bg=_BG)
         self.frame_top.grid(row=0, column=0, sticky=N+S+W+E)
         self.frame_top.columnconfigure(0, weight=1)
 
-        # ── FRAME TILE (ligne 0 : lat/lon/imagery/zl + icônes) ────────
-        self.frame_tile = tk.Frame(self.frame_top, border=0, padx=5, pady=5, bg=_BG)
+        # ── Fabricant de CADRE de rubrique (chapitrage encadré) ───────
+        #  Chaque groupe est enfermé dans un cadre titré bordé, pour bien
+        #  isoler visuellement les rubriques les unes des autres.
+        #  Purement visuel : aucune fonction ni aucun bouton n'est modifié.
+        def _section(title, r):
+            sec = tk.LabelFrame(self.frame_top,
+                text="  " + title + "  ",
+                bg=_BG, fg=_FG2,
+                border=2, relief=RIDGE,
+                font=("TkFixedFont", fs(12), "bold"),
+                padx=6, pady=4)
+            sec.grid(row=r, column=0, sticky=N+S+W+E, padx=6, pady=(6, 2))
+            sec.columnconfigure(0, weight=1)
+            return sec
+
+        # ══ RUBRIQUE 1 : Coordonnées et dossier de la tuile ═══════════
+        sec_coord = _section(tr('Coordonnées et dossier de la tuile'), 0)
+
+        # ── Ligne coordonnées : lat/lon/imagery/zl + icônes ───────────
+        self.frame_tile = tk.Frame(sec_coord, border=0, padx=5, pady=5, bg=_BG)
         self.frame_tile.grid(row=0, column=0, sticky=N+S+W+E)
         self.frame_tile.columnconfigure(5, weight=1)   # imagery s'étire
 
@@ -296,14 +314,11 @@ class Ortho4XP_GUI(tk.Tk):
         _icon_btn(self.frame_tile, self.stop_icon,   "🛑", self.set_red_flag,          12)
         _icon_btn(self.frame_tile, self.exit_icon,   "⏻",  self.exit_prg,             13)
 
-        # Bouton sélection langue 🌐
-        from O4_Lang import make_language_button
-        make_language_button(self.frame_tile).grid(
-            row=0, column=14, rowspan=2, padx=4, pady=2)
+        # Bouton de sélection de langue : déplacé dans la fenêtre du lanceur
+        # (Ortho4XP_Launcher.py). Retiré ici pour éviter le doublon.
 
-
-        # ── FRAME FOLDER (ligne 1 : Base Folder) ──────────────────────
-        self.frame_folder = tk.Frame(self.frame_top, border=0, padx=5, pady=0, bg=_BG)
+        # ── Ligne dossier racine ──────────────────────────────────────
+        self.frame_folder = tk.Frame(sec_coord, border=0, padx=5, pady=0, bg=_BG)
         self.frame_folder.grid(row=1, column=0, sticky=N+S+W+E)
         self.frame_folder.columnconfigure(1, weight=1)
 
@@ -319,9 +334,125 @@ class Ortho4XP_GUI(tk.Tk):
             kw_folder["text"] = "📁"; kw_folder["width"] = 4
         ttk.Button(self.frame_folder, **kw_folder).grid(row=0, column=2, padx=0, pady=0, sticky=N+S+E+W)
 
-        # ── FRAME STEPS (ligne 2 : 5 boutons build) ───────────────────
-        self.frame_steps = tk.Frame(self.frame_top, border=0, padx=5, pady=5, bg=_BG)
-        self.frame_steps.grid(row=2, column=0, sticky=N+S+W+E)
+        # ══ RUBRIQUE 2 : Gestion des Données ══════════════════════════
+        sec_data = _section(tr('Gestion des Données'), 1)
+        self.frame_data = tk.Frame(sec_data, border=0, padx=5, pady=2, bg=_BG)
+        self.frame_data.grid(row=0, column=0, sticky=N+S+W+E)
+        self.frame_data.columnconfigure(3, weight=1)
+
+        ttk.Button(self.frame_data,
+            text=tr("⛰ Altimétrie / DEM"),
+            command=self.open_altimetrie_module,
+            width=22).grid(row=0, column=0, padx=5, pady=2, sticky=W)
+
+        ttk.Button(self.frame_data,
+            text=tr("🗺 Cache OSM local (.pbf)"),
+            command=self.open_pbf_module,
+            width=22).grid(row=0, column=1, padx=5, pady=2, sticky=W)
+
+        ttk.Button(self.frame_data,
+            text=tr("⏱ Timeline"),
+            command=self._show_timeline,
+            width=14).grid(row=0, column=2, padx=5, pady=2, sticky=W)
+
+        # Label RAM live (mise à jour périodique conservée à l'identique)
+        self._ram_label = tk.Label(self.frame_data,
+            text="RAM: --",
+            bg=_BG, fg=_FG2,
+            font=("TkFixedFont", fs(10)))
+        self._ram_label.grid(row=0, column=3, padx=12, sticky=E)
+        self._update_ram_label()
+
+        # ══ RUBRIQUE 3 : Gestion des Couleurs automatisée ═════════════
+        sec_color = _section(tr('Gestion des Couleurs automatisée'), 2)
+        self.frame_cnorm = tk.Frame(sec_color, border=0, padx=2, pady=2, bg=_BG)
+        self.frame_cnorm.grid(row=0, column=0, sticky=N+S+W+E)
+        self.frame_cnorm.columnconfigure(0, weight=1)
+        self.frame_cnorm.columnconfigure(1, weight=1)
+
+        # ── Cadre gauche : Normalisation couleur ──────────────────────
+        lf_norm = tk.LabelFrame(self.frame_cnorm, text=" " + tr("Color Normalize") + " ",
+            bg=_BG, fg=_FG2, border=2, relief=RIDGE,
+            font=("TkFixedFont", fs(11), "bold"), padx=8, pady=4)
+        lf_norm.grid(row=0, column=0, padx=(0, 6), pady=2, sticky=N+S+W+E)
+        lf_norm.columnconfigure(1, weight=1)
+        self._lf_norm = lf_norm
+
+        self.cnorm_enabled = tk.IntVar(value=1)
+        self.cnorm_checkbox = tk.Checkbutton(lf_norm, text=tr("Enable"),
+            fg=_FG, selectcolor=_BG,
+            activeforeground="#ffffff", activebackground=_BG,
+            variable=self.cnorm_enabled, command=self.toggle_cnorm,
+            font=("TkFixedFont", fs(11), "bold"), bg=_BG)
+        self.cnorm_checkbox.grid(row=0, column=0, columnspan=2, padx=2, sticky=W)
+
+        self._cnorm_desc_label = tk.Label(lf_norm, text=tr('Intensité de la correction'), bg=_BG, fg="#cbdcc9",
+                 font=("TkFixedFont", fs(10)))
+        self._cnorm_desc_label.grid(row=1, column=0, columnspan=2, padx=2, sticky=W)
+
+        self.cnorm_strength = tk.IntVar(value=100)
+        self.cnorm_slider = tk.Scale(lf_norm, from_=0, to=100, orient=HORIZONTAL,
+            variable=self.cnorm_strength, command=self.update_cnorm_strength,
+            bg=_BG, fg=_FG, troughcolor="#1a2e25",
+            length=int(180*s), showvalue=True)
+        self.cnorm_slider.grid(row=2, column=0, padx=2, sticky=W+E)
+
+        self.cnorm_pct_label = tk.Label(lf_norm, text="100%",
+            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(12), "bold"))
+        self.cnorm_pct_label.grid(row=2, column=1, padx=6, sticky=W)
+
+        self.cnorm_ref_label = tk.Label(lf_norm,
+            text=tr("Réf: Calibré_48753_JPG_Europe"),
+            bg=_BG, fg=_FG2,
+            font=("TkFixedFont", fs(11), "bold"))
+        self.cnorm_ref_label.grid(row=3, column=0, columnspan=2, padx=2, pady=(2, 0), sticky=W)
+
+        # ── Cadre droit : Saturation ──────────────────────────────────
+        lf_sat = tk.LabelFrame(self.frame_cnorm, text=" Saturation ",
+            bg=_BG, fg=_FG2, border=2, relief=RIDGE,
+            font=("TkFixedFont", fs(11), "bold"), padx=8, pady=4)
+        lf_sat.grid(row=0, column=1, padx=(6, 0), pady=2, sticky=N+S+W+E)
+        lf_sat.columnconfigure(1, weight=1)
+        self._lf_sat = lf_sat
+
+        self.cnorm_sat_enabled = tk.IntVar(value=0)
+        self.cnorm_sat_checkbox = tk.Checkbutton(lf_sat, text=tr("Enable"),
+            fg=_FG, selectcolor=_BG,
+            activeforeground="#ffffff", activebackground=_BG,
+            variable=self.cnorm_sat_enabled, command=self.toggle_cnorm_sat,
+            font=("TkFixedFont", fs(11), "bold"), bg=_BG)
+        self.cnorm_sat_checkbox.grid(row=0, column=0, columnspan=2, padx=2, sticky=W)
+
+        self._cnorm_sat_desc_label = tk.Label(lf_sat, text=tr('Boost — intensité de la saturation'), bg=_BG, fg="#cbdcc9",
+                 font=("TkFixedFont", fs(10)))
+        self._cnorm_sat_desc_label.grid(row=1, column=0, columnspan=2, padx=2, sticky=W)
+
+        self.cnorm_sat_value = tk.IntVar(value=100)
+        self.cnorm_sat_slider = tk.Scale(lf_sat, from_=0, to=200, orient=HORIZONTAL,
+            variable=self.cnorm_sat_value, command=self.update_cnorm_sat,
+            bg=_BG, fg=_FG, troughcolor="#1a2e25",
+            length=int(180*s), showvalue=True)
+        self.cnorm_sat_slider.grid(row=2, column=0, padx=2, sticky=W+E)
+
+        self.cnorm_sat_label = tk.Label(lf_sat, text=tr('100%  (réf.)'),
+            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(11), "bold"),
+            width=14, anchor=W)
+        self.cnorm_sat_label.grid(row=2, column=1, padx=6, sticky=W)
+
+        self._cnorm_sat_legend = tk.Label(lf_sat,
+            text=tr("0%=gris  100%=réf.48753JPG  200%=×2"),
+            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(10)))
+        self._cnorm_sat_legend.grid(
+            row=3, column=0, columnspan=2, padx=2, pady=(2, 0), sticky=W)
+
+        # État initial des curseurs selon les cases (grisé si décoché)
+        self._sync_cnorm_slider_state()
+        self._sync_cnorm_sat_slider_state()
+
+        # ══ RUBRIQUE 4 : Fabrication Tuile ════════════════════════════
+        sec_build = _section(tr('Fabrication Tuile'), 3)
+        self.frame_steps = tk.Frame(sec_build, border=0, padx=5, pady=5, bg=_BG)
+        self.frame_steps.grid(row=0, column=0, sticky=N+S+W+E)
         for i in range(6): self.frame_steps.columnconfigure(i, weight=1)
 
         ttk.Button(self.frame_steps, text=tr("Assemble Vector data"), command=self.build_poly_file).grid(
@@ -342,9 +473,9 @@ class Ortho4XP_GUI(tk.Tk):
         ttk.Button(self.frame_steps, text=tr("    All in one     "), command=self.build_all).grid(
             row=0, column=5, padx=5, pady=0, sticky=N+S+E+W)
 
-        # ── FRAME BARS (ligne 3 : barres de progression) ──────────────
-        self.frame_bars = tk.Frame(self.frame_top, border=0, padx=5, pady=5, bg=_BG)
-        self.frame_bars.grid(row=3, column=0, sticky=N+S+W+E)
+        # ── Barres de progression ─────────────────────────────────────
+        self.frame_bars = tk.Frame(sec_build, border=0, padx=5, pady=5, bg=_BG)
+        self.frame_bars.grid(row=1, column=0, sticky=N+S+W+E)
 
         self.pgrb1v = tk.IntVar()
         self.pgrb2v = tk.IntVar()
@@ -357,122 +488,26 @@ class Ortho4XP_GUI(tk.Tk):
         self.pgrb3 = ttk.Progressbar(self.frame_bars, mode="determinate", orient=HORIZONTAL, variable=self.pgrb3v)
         self.pgrb3.grid(row=0, column=2, padx=5, pady=0)
 
-        # ── BARRE COLOR NORMALIZE (ligne 4 — EN BAS des boutons) ──────
-        self.frame_cnorm = tk.Frame(self.frame_top, border=3, relief=RIDGE,
-                                    padx=8, pady=4, bg=_BG)
-        self.frame_cnorm.grid(row=4, column=0, sticky=N+S+W+E)
-        for i in range(8): self.frame_cnorm.columnconfigure(i, weight=1)
+        # ══ RUBRIQUE 5 : Corrections avancées ═════════════════════════
+        sec_adv = _section(tr('Corrections avancées'), 4)
+        self.frame_advanced = tk.Frame(sec_adv, border=0, padx=5, pady=4, bg=_BG)
+        self.frame_advanced.grid(row=0, column=0, sticky=N+S+W+E)
+        for i in range(3): self.frame_advanced.columnconfigure(i, weight=1)
 
-        # ── LIGNE 1 : Color Normalize | Enable | Strength | slider | % | Réf ──
-        for i in range(6): self.frame_cnorm.columnconfigure(i, weight=1)
-
-        tk.Label(self.frame_cnorm, text=tr("Color Normalize"), bg=_BG, fg=_FG2,
-                 font=("TkFixedFont", fs(11), "bold"), padx=8).grid(
-                 row=0, column=0, sticky=W+E, padx=4, pady=2)
-
-        self.cnorm_enabled = tk.IntVar(value=1)
-        self.cnorm_checkbox = tk.Checkbutton(self.frame_cnorm, text=tr("Enable"),
-            fg=_FG, selectcolor=_BG,
-            activeforeground="#ffffff", activebackground=_BG,
-            variable=self.cnorm_enabled, command=self.toggle_cnorm,
-            font=("TkFixedFont", fs(11), "bold"), bg=_BG)
-        self.cnorm_checkbox.grid(row=0, column=1, padx=8, sticky=W)
-
-        tk.Label(self.frame_cnorm, text=tr("Strength:"), bg=_BG, fg=_FG,
-                 font=("TkFixedFont", fs(11))).grid(row=0, column=2, padx=6, sticky=E)
-
-        self.cnorm_strength = tk.IntVar(value=100)
-        self.cnorm_slider = tk.Scale(self.frame_cnorm, from_=0, to=100, orient=HORIZONTAL,
-            variable=self.cnorm_strength, command=self.update_cnorm_strength,
-            bg=_BG, fg=_FG, troughcolor="#1a2e25",
-            length=int(200*s), showvalue=True)
-        self.cnorm_slider.grid(row=0, column=3, padx=6, sticky=W+E)
-
-        self.cnorm_pct_label = tk.Label(self.frame_cnorm, text="100%",
-            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(12), "bold"))
-        self.cnorm_pct_label.grid(row=0, column=4, padx=6, sticky=W)
-
-        self.cnorm_ref_label = tk.Label(self.frame_cnorm,
-            text=tr("Réf: Calibré_48753_JPG_Europe"),
-            bg=_BG, fg=_FG2,
-            font=("TkFixedFont", fs(11), "bold"))
-        self.cnorm_ref_label.grid(row=0, column=5, padx=10, sticky=W+E)
-
-        # ── LIGNE 2 : Augmenter saturation ────────────────────────────
-        tk.Label(self.frame_cnorm, text=tr("Saturation:"), bg=_BG, fg=_FG,
-                 font=("TkFixedFont", fs(11))).grid(row=1, column=0, padx=6, sticky=E)
-
-        self.cnorm_sat_enabled = tk.IntVar(value=0)
-        self.cnorm_sat_checkbox = tk.Checkbutton(self.frame_cnorm, text=tr("Enable"),
-            fg=_FG, selectcolor=_BG,
-            activeforeground="#ffffff", activebackground=_BG,
-            variable=self.cnorm_sat_enabled, command=self.toggle_cnorm_sat,
-            font=("TkFixedFont", fs(11)), bg=_BG)
-        self.cnorm_sat_checkbox.grid(row=1, column=1, padx=8, sticky=W)
-
-        tk.Label(self.frame_cnorm, text=tr("Sat +/-:"), bg=_BG, fg=_FG,
-                 font=("TkFixedFont", fs(11))).grid(row=1, column=2, padx=6, sticky=E)
-
-        self.cnorm_sat_value = tk.IntVar(value=100)
-        self.cnorm_sat_slider = tk.Scale(self.frame_cnorm, from_=0, to=200, orient=HORIZONTAL,
-            variable=self.cnorm_sat_value, command=self.update_cnorm_sat,
-            bg=_BG, fg=_FG, troughcolor="#1a2e25",
-            length=int(200*s), showvalue=True)
-        self.cnorm_sat_slider.grid(row=1, column=3, padx=6, sticky=W+E)
-
-        self.cnorm_sat_label = tk.Label(self.frame_cnorm, text="100%  (réf.)",
-            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(11), "bold"),
-            width=14, anchor=W)
-        self.cnorm_sat_label.grid(row=1, column=4, padx=6, sticky=W)
-
-        tk.Label(self.frame_cnorm,
-            text=tr("0%=gris  100%=réf.48753JPG  200%=×2"),
-            bg=_BG, fg=_FG2, font=("TkFixedFont", fs(10))).grid(
-            row=1, column=5, padx=10, sticky=W+E)
-
-        # ── LIGNE 3 :  Altimétrie + Correction Patches + Color Check + …
-        ttk.Button(self.frame_cnorm,
-            text=tr("⛰ Altimétrie / DEM"),
-            command=self.open_altimetrie_module,
-            width=22).grid(row=2, column=0, columnspan=2, padx=5,
-                           pady=(8,4), sticky=W+E)
-
-        ttk.Button(self.frame_cnorm,
-            text=tr("🖊 Correction imagerie/zone"),
-            command=self.open_correction_module,
-            width=22).grid(row=2, column=2, padx=5, pady=(8,4), sticky=E)
-
-        ttk.Button(self.frame_cnorm,
-            text=tr("RGB adjustments, sharpness, saturation"),
-            command=self.open_color_check,
-            width=32).grid(row=2, column=3, padx=5, pady=(8,4))
-
-        # Bouton Timeline — affiche le rapport des durées d'étapes
-        ttk.Button(self.frame_cnorm,
-            text=tr("⏱ Timeline"),
-            command=self._show_timeline,
-            width=12).grid(row=2, column=4, padx=5, pady=(8,4))
-
-        # Label RAM live
-        self._ram_label = tk.Label(self.frame_cnorm,
-            text="RAM: --",
-            bg=_BG, fg=_FG2,
-            font=("TkFixedFont", fs(10)))
-        self._ram_label.grid(row=2, column=5, padx=8, sticky=W)
-        self._update_ram_label()
-
-        # ── LIGNE 4 :  Avancé (couches JOSM)
-        ttk.Button(self.frame_cnorm,
+        ttk.Button(self.frame_advanced,
             text=tr("🛠 Avancé (JOSM)"),
             command=self.open_avance_module,
-            width=22).grid(row=3, column=0, columnspan=2, padx=5,
-                           pady=(4,8), sticky=W+E)
+            width=22).grid(row=0, column=0, padx=5, pady=2, sticky=N+S+E+W)
 
-        # ── LIGNE 4 :  Cache OSM local (.pbf)
-        ttk.Button(self.frame_cnorm,
-            text=tr("🗺 Cache OSM local (.pbf)"),
-            command=self.open_pbf_module,
-            width=22).grid(row=3, column=2, padx=5, pady=(4,8), sticky=E)
+        ttk.Button(self.frame_advanced,
+            text=tr("RGB adjustments, sharpness, saturation"),
+            command=self.open_color_check,
+            width=32).grid(row=0, column=1, padx=5, pady=2, sticky=N+S+E+W)
+
+        ttk.Button(self.frame_advanced,
+            text=tr("🖊 Correction imagerie/zone"),
+            command=self.open_correction_module,
+            width=22).grid(row=0, column=2, padx=5, pady=2, sticky=N+S+E+W)
 
         # ── CONSOLE (row=1 principal — extensible) ─────────────────────
         self.frame_console = tk.Frame(self, border=4, relief=RIDGE, bg=_BG)
@@ -535,7 +570,7 @@ class Ortho4XP_GUI(tk.Tk):
         try:
             CNORM.check_tile_change(int(self.lat.get()), int(self.lon.get()))
             self.cnorm_ref_label.config(
-                text="Réf: " + (CNORM.REFERENCE_TEMP_NAME or CNORM.REFERENCE_DEFAULT_NAME),
+                text=tr('Réf: ') + (CNORM.REFERENCE_TEMP_NAME or CNORM.REFERENCE_DEFAULT_NAME),
                 fg="darkorange" if CNORM.REFERENCE_TEMP else _FG)
         except:
             pass
@@ -557,8 +592,46 @@ class Ortho4XP_GUI(tk.Tk):
             self.update_cfg()
 
     # ── Color Normalize ────────────────────────────────────────────────
+    #  Couleur "grisée" appliquée aux titres/textes d'un cadre décoché.
+    _CNORM_INACTIVE_FG = "#6f8579"
+
+    def _set_widget_fg(self, widget, color):
+        """Recolore un widget si présent (silencieux si absent/détruit)."""
+        try:
+            if widget is not None:
+                widget.config(fg=color)
+        except Exception:
+            pass
+
+    def _sync_cnorm_slider_state(self):
+        """Cadre Normalisation : curseur + titres/textes actifs seulement si la case est cochée."""
+        on = bool(self.cnorm_enabled.get())
+        try:
+            self.cnorm_slider.config(state=("normal" if on else "disabled"))
+        except Exception:
+            pass
+        grey = self._CNORM_INACTIVE_FG
+        self._set_widget_fg(getattr(self, "_lf_norm", None),          _FG2      if on else grey)
+        self._set_widget_fg(getattr(self, "_cnorm_desc_label", None), "#cbdcc9" if on else grey)
+        self._set_widget_fg(getattr(self, "cnorm_pct_label", None),   _FG2      if on else grey)
+        self._set_widget_fg(getattr(self, "cnorm_ref_label", None),   _FG2      if on else grey)
+
+    def _sync_cnorm_sat_slider_state(self):
+        """Cadre Saturation : curseur + titres/textes actifs seulement si la case est cochée."""
+        on = bool(self.cnorm_sat_enabled.get())
+        try:
+            self.cnorm_sat_slider.config(state=("normal" if on else "disabled"))
+        except Exception:
+            pass
+        grey = self._CNORM_INACTIVE_FG
+        self._set_widget_fg(getattr(self, "_lf_sat", None),               _FG2      if on else grey)
+        self._set_widget_fg(getattr(self, "_cnorm_sat_desc_label", None), "#cbdcc9" if on else grey)
+        self._set_widget_fg(getattr(self, "cnorm_sat_label", None),       _FG2      if on else grey)
+        self._set_widget_fg(getattr(self, "_cnorm_sat_legend", None),     _FG2      if on else grey)
+
     def toggle_cnorm(self):
         CNORM.color_normalization_enabled = bool(self.cnorm_enabled.get())
+        self._sync_cnorm_slider_state()
 
     def update_cnorm_strength(self, value):
         CNORM.CORRECTION_STRENGTH = int(value) / 100.0
@@ -566,12 +639,13 @@ class Ortho4XP_GUI(tk.Tk):
 
     def toggle_cnorm_sat(self):
         CNORM.saturation_enabled = bool(self.cnorm_sat_enabled.get())
+        self._sync_cnorm_sat_slider_state()
 
     def update_cnorm_sat(self, value):
         v = int(value)
         CNORM.saturation_strength = v / 100.0
         if v == 100:
-            self.cnorm_sat_label.config(text="100%  (réf.)")
+            self.cnorm_sat_label.config(text=tr('100%  (réf.)'))
         elif v < 100:
             self.cnorm_sat_label.config(text=f"{v}%  (−sat.)")
         else:
@@ -600,7 +674,7 @@ class Ortho4XP_GUI(tk.Tk):
             win.minsize(max(420, win.winfo_reqwidth()),
                         max(260, win.winfo_reqheight()))
         except Exception as e:
-            print(f"[Timeline] Erreur affichage : {e}")
+            print(tr("[Timeline] Erreur affichage : ") + str(e))
 
     def _update_ram_label(self):
         """
@@ -634,6 +708,7 @@ class Ortho4XP_GUI(tk.Tk):
         # Désactive Color Normalize et décoche la case avant d'ouvrir
         self.cnorm_enabled.set(0)
         CNORM.color_normalization_enabled = False
+        self._sync_cnorm_slider_state()
 
         lat = int(self.lat.get() or 0)
         lon = int(self.lon.get() or 0)
@@ -740,7 +815,7 @@ class Ortho4XP_GUI(tk.Tk):
                 return
             except Exception as _e:
                 try:
-                    UI.vprint(1, "[CorrMod] Repli sur l'ancienne fenêtre : "
+                    UI.vprint(1, tr("[CorrMod] Repli sur l'ancienne fenêtre : ")
                                  + str(_e))
                 except Exception:
                     pass
@@ -817,7 +892,7 @@ class Ortho4XP_GUI(tk.Tk):
             custom = self.custom_build_dir.get() or ""
             self._sim_win = Ortho4XP_Simulator(self, lat, lon, custom)
         except Exception as e:
-            messagebox.showinfo("Simulateur", f"Erreur : {e}")
+            messagebox.showinfo("Simulateur", tr("Erreur : ") + str(e))
 
     # ── Providers Personnels ──────────────────────────────────────────
     def _reload_personal_providers(self):
@@ -862,7 +937,7 @@ class Ortho4XP_GUI(tk.Tk):
         try:
             self._config_win = CFG.Ortho4XP_Config(self)
         except Exception as e:
-            messagebox.showinfo("Config", f"Fenêtre de configuration\n({e})")
+            messagebox.showinfo("Config", tr("Fenêtre de configuration\n(") + str(e) + ")")
 
     def open_custom_zl_window(self):
         try:
@@ -871,7 +946,7 @@ class Ortho4XP_GUI(tk.Tk):
                 return
             lat = int(self.lat.get() or 48); lon = int(self.lon.get() or 6)
             self.custom_zl_window = Ortho4XP_Custom_ZL(self, lat, lon)
-        except Exception as e: messagebox.showinfo("Custom ZL", f"Erreur : {e}")
+        except Exception as e: messagebox.showinfo("Custom ZL", tr("Erreur : ") + str(e))
 
     def open_earth_window(self):
         try:
@@ -880,11 +955,11 @@ class Ortho4XP_GUI(tk.Tk):
                 return
             lat = int(self.lat.get() or 48); lon = int(self.lon.get() or 6)
             self.earth_window = Ortho4XP_Earth_Preview(self, lat, lon)
-        except Exception as e: messagebox.showinfo("Earth", f"Erreur : {e}")
+        except Exception as e: messagebox.showinfo("Earth", tr("Erreur : ") + str(e))
 
     def set_red_flag(self):
         UI.red_flag = True
-        messagebox.showinfo("Red Flag", "Red flag activé")
+        messagebox.showinfo("Red Flag", tr('Red flag activé'))
 
     def exit_prg(self):
         try:
@@ -1525,18 +1600,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         tk.Label(
             self.frame_left,
             text=(
-                "── Navigation ──\n"
-                "Clic + glisser\n   Déplacer la carte\n"
-                "Molette\n   Zoom avant / arrière\n\n"
-                "── Tracer une zone ──\n"
-                "Shift + clic\n   Ajouter un point\n"
-                "Ctrl+Shift + clic\n   Point aligné grille\n"
-                "n  Sauvegarder la zone\n"
-                "Backspace  Annuler dernier pt\n\n"
-                "── Rectangle ZL ──\n"
-                "Ctrl + clic (vide)\n   Créer rectangle\n"
-                "Ctrl + clic (zone)\n   Supprimer rectangle\n"
-                "d  Supprimer dernière zone"
+                tr('── Navigation ──\nClic + glisser\n   Déplacer la carte\nMolette\n   Zoom avant / arrière\n\n── Tracer une zone ──\nShift + clic\n   Ajouter un point\nCtrl+Shift + clic\n   Point aligné grille\n Sauvegarder la zone\nBackspace  Annuler dernier pt\n\n── Rectangle ZL ──\nCtrl + clic (vide)\n   Créer rectangle\nCtrl + clic (zone)\n   Supprimer rectangle\nd  Supprimer dernière zone')
             ),
             bg=_BG, fg=_FG2,
             justify=LEFT,
@@ -1637,7 +1701,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 break
             time.sleep(0.5)
         if not os.path.isfile(filepreview):
-            UI.vprint(0, "Preview non générée :", filepreview)
+            UI.vprint(0, tr("Preview non générée :"), filepreview)
             return
         self.image = Image.open(filepreview)
         self._image_orig = self.image.copy()
@@ -1745,7 +1809,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             except Exception:
                 continue
         if not data:
-            print("[OACI] Serveurs Overpass indisponibles — cercles aéroports non affichés.")
+            print(tr("[OACI] Serveurs Overpass indisponibles — cercles aéroports non affichés."))
             return
         result = []
         for el in data.get("elements", []):
@@ -2188,9 +2252,9 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             import os as _os
             _os.makedirs(tile.build_dir, exist_ok=True)
             tile.write_to_config()
-            UI.vprint(1, f"Zones sauvegardées dans cfg tuile {self.lat},{self.lon}")
+            UI.vprint(1, tr("Zones sauvegardées dans cfg tuile ") + f"{self.lat},{self.lon}")
         except Exception as e:
-            UI.vprint(0, f"Avertissement save_zone_list: {e}")
+            UI.vprint(0, tr("Avertissement save_zone_list: ") + str(e))
         return
 
 ################################################################################
@@ -2933,9 +2997,7 @@ class Ortho4XP_Earth_Preview(tk.Toplevel):
             self.canvas.create_text(
                 cx, cy,
                 text=tr("Carte Earth non disponible\\n") +
-                     "Copiez Utils/Earth/ depuis Ortho4XP 2.00\n\n"
-                     "Double-clic = sélectionner tuile\n"
-                     "Shift+clic = ajouter au batch",
+                     tr('Copiez Utils/Earth/ depuis Ortho4XP 2.00\n\nDouble-clic = sélectionner tuile\nShift+clic = ajouter au batch'),
                 fill="white", font=("TkFixedFont", 13),
                 justify="center"
             )
@@ -3024,7 +3086,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
         self.lon = lon
         self.custom_build_dir = custom_build_dir
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.title(f"🎚  Simulateur Ortho4XP — tuile {lat:+d}/{lon:+d}")
+        self.title(tr("🎚  Simulateur Ortho4XP — tuile ") + f"{lat:+d}/{lon:+d}")
         self.configure(bg=self.BG)
         self.resizable(True, True)
         self._anim_running = True
@@ -3063,7 +3125,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             bg=self.BG, fg=self.FG2,
             font=("TkFixedFont", fs(13), "bold")).pack(side="left")
         tk.Label(hdr,
-            text=f"tuile {self.lat:+d}/{self.lon:+d}",
+            text=tr("tuile ") + f"{self.lat:+d}/{self.lon:+d}",
             bg=self.BG, fg=self.FG3,
             font=("TkFixedFont", fs(10))).pack(side="left", padx=12)
 
@@ -3217,53 +3279,37 @@ class Ortho4XP_Simulator(tk.Toplevel):
         # ── Groupe 1 : Eau & Transparence ──────────────────────────
         sliders_eau = [
             ("ratio_water",    "ratio_water",    0, 1,    0.01, float,
-             "ratio_water : 0 = JPG satellite opaque sur mer. "
-             "1 = eau XP12 entièrement visible (vagues, reflets, bathymétrie). "
-             "Recommandé : 0.10 pour Vendée/Atlantique.", None),
+             tr('ratio_water : 0 = JPG satellite opaque sur mer. 1 = eau XP12 entièrement visible (vagues, reflets, bathymétrie). Recommandé : 0.10 pour Vendée/Atlantique.'), None),
             ("ratio_bathy",    "ratio_bathy",    0, 1,    0.05, float,
-             "ratio_bathy : dégradé de profondeur XP12. "
-             "0 = mer uniforme. 1 = eau profonde sombre → turquoise côtier (recommandé).", None),
+             tr('ratio_bathy : dégradé de profondeur XP12. 0 = mer uniforme. 1 = eau profonde sombre → turquoise côtier (recommandé).'), None),
             ("water_tech",     "water_tech",     0, 0,    1,    str,
-             "water_tech : XP12 = eau dynamique (vagues, reflets, bathymétrie). "
-             "⚠ XP11+bathy = ancien mode, incompatible avec imprint_masks_to_dds=True.",
+             tr('water_tech : XP12 = eau dynamique (vagues, reflets, bathymétrie). ⚠ XP11+bathy = ancien mode, incompatible avec imprint_masks_to_dds=True.'),
              ["XP12", "XP11+bathy"]),
             ("overlay_lod",    "overlay_lod (m)",5000,50000,1000,float,
-             "overlay_lod : distance en mètres jusqu'où XPlane affiche l'imagerie sur la mer. "
-             "30000 = recommandé.", None),
+             tr("overlay_lod : distance en mètres jusqu'où XPlane affiche l'imagerie sur la mer. 30000 = recommandé."), None),
             ("water_smoothing","water_smoothing",0, 5,    1,    int,
-             "water_smoothing : lissage du maillage eau intérieure. 2 = recommandé.", None),
+             tr('water_smoothing : lissage du maillage eau intérieure. 2 = recommandé.'), None),
         ]
         self._add_group(inner, tr("Eau & Transparence"), sliders_eau, exp_lbl, fs)
 
         # ── Groupe 2 : Masques côtiers ──────────────────────────────
         sliders_cote = [
             ("masks_width",    "masks_width (m)", 50,8000,50,  int,
-             "masks_width : largeur en mètres de la zone de dégradé côtier. "
-             "100m = transition nette (recommandé). "
-             "500m = dégradé naturel. "
-             "⚠ Valeurs > 500m peuvent produire des jointures visibles.", None),
+             tr('masks_width : largeur en mètres de la zone de dégradé côtier. 100m = transition nette (recommandé). 500m = dégradé naturel. ⚠ Valeurs > 500m peuvent produire des jointures visibles.'), None),
             ("mask_zl",        "mask_zl",        14,20,   1,    int,
-             "mask_zl : résolution des masques côtiers. "
-             "17 = bon équilibre (recommandé). 19-20 = très précis, fichiers lourds.", None),
+             tr('mask_zl : résolution des masques côtiers. 17 = bon équilibre (recommandé). 19-20 = très précis, fichiers lourds.'), None),
             ("masking_mode",   "masking_mode",   0, 0,    1,    str,
-             "masking_mode : algorithme masque. "
-             "sand = dégradé naturel (recommandé). "
-             "rocks = transition abrupte (falaises). "
-             "3steps = 3 étapes personnalisées.",
+             tr('masking_mode : algorithme masque. sand = dégradé naturel (recommandé). rocks = transition abrupte (falaises). 3steps = 3 étapes personnalisées.'),
              ["sand","rocks","3steps"]),
             ("imprint_masks_to_dds","imprint DDS",0,0,   1,    str,
-             "imprint_masks_to_dds : grave le canal alpha dans le DDS (BC3). "
-             "True = nécessaire pour transparence XP12 (recommandé). "
-             "⚠ False + water_tech=XP12 = jointures visibles.",
+             tr('imprint_masks_to_dds : grave le canal alpha dans le DDS (BC3). True = nécessaire pour transparence XP12 (recommandé). ⚠ False + water_tech=XP12 = jointures visibles.'),
              ["True","False"]),
         ]
         self._add_group(inner, tr("Masques côtiers"), sliders_cote, exp_lbl, fs)
 
         sliders_inland = [
             ("use_masks_for_inland","use_inland", 0, 0, 1, str,
-             "use_masks_for_inland : applique les masques côtiers sur lacs et rivières. "
-             "False = recommandé (économise VRAM). "
-             "True = masque lac visible dans le canvas ci-dessus.",
+             tr('use_masks_for_inland : applique les masques côtiers sur lacs et rivières. False = recommandé (économise VRAM). True = masque lac visible dans le canvas ci-dessus.'),
              ["False","True"]),
         ]
         self._add_group(inner, tr("Lacs & Rivières"), sliders_inland, exp_lbl, fs)
@@ -3280,38 +3326,22 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders = [
             ("normal_map_strength","normal_map",  0, 2,   0.1,  float,
-             "normal_map_strength : intensité de l'ombrage terrain. "
-             "0 = terrain plat visuellement. "
-             "1.0 = ombrage exact (recommandé). "
-             "2.0 = ombrage très marqué, peut sembler exagéré sur terrain plat.", None),
+             tr("normal_map_strength : intensité de l'ombrage terrain. 0 = terrain plat visuellement. 1.0 = ombrage exact (recommandé). 2.0 = ombrage très marqué, peut sembler exagéré sur terrain plat."), None),
             ("terrain_casts_shadows","ombres terrain",0,0,1,str,
-             "terrain_casts_shadows : le terrain projette des ombres sur lui-même. "
-             "True = ombres réalistes (recommandé). "
-             "False = moins réaliste mais gain de performances.",
+             tr('terrain_casts_shadows : le terrain projette des ombres sur lui-même. True = ombres réalistes (recommandé). False = moins réaliste mais gain de performances.'),
              ["True","False"]),
-            ("use_decal_on_terrain","décals terrain",0,0,1,str,
-             "use_decal_on_terrain : applique des décals de texture (herbe/roche) "
-             "sur le terrain pour améliorer le rendu au sol à basse altitude. "
-             "True = recommandé pour la Vendée.",
+            ("use_decal_on_terrain",tr('décals terrain'),0,0,1,str,
+             tr('use_decal_on_terrain : applique des décals de texture (herbe/roche) sur le terrain pour améliorer le rendu au sol à basse altitude. True = recommandé pour la Vendée.'),
              ["True","False"]),
             ("fill_nodata",    "fill_nodata",    0, 0,    1,    str,
-             "fill_nodata : remplit les zones sans données altimétriques "
-             "par interpolation du voisin le plus proche. "
-             "True = recommandé pour les DEM avec trous sur la mer.",
+             tr('fill_nodata : remplit les zones sans données altimétriques par interpolation du voisin le plus proche. True = recommandé pour les DEM avec trous sur la mer.'),
              ["True","False"]),
             ("min_area",       "min_area (°²)",  0.00001,0.01,0.00001,float,
-             "min_area : surface minimum d'un polygone vectoriel (en degrés²). "
-             "Les polygones plus petits sont ignorés. "
-             "0.0001 = recommandé (élimine les micro-polygones parasites).", None),
+             tr("min_area : surface minimum d'un polygone vectoriel (en degrés²). Les polygones plus petits sont ignorés. 0.0001 = recommandé (élimine les micro-polygones parasites)."), None),
             ("max_area",       "max_area (°²)",  1,200,  5,    float,
-             "max_area : surface maximum d'un polygone vectoriel. "
-             "Les polygones plus grands sont découpés. "
-             "100 = recommandé.", None),
+             tr("max_area : surface maximum d'un polygone vectoriel. Les polygones plus grands sont découpés. 100 = recommandé."), None),
             ("water_simplification","water_simpl",0,1,  0.05, float,
-             "water_simplification : simplification des polygones eau. "
-             "0 = pas de simplification (précis). "
-             "0.5 = simplification modérée. "
-             "1.0 = très simplifié (rapide mais moins précis).", None),
+             tr('water_simplification : simplification des polygones eau. 0 = pas de simplification (précis). 0.5 = simplification modérée. 1.0 = très simplifié (rapide mais moins précis).'), None),
         ]
         self._add_group(inner, tr("Terrain & Ombrage"), sliders[:3], exp_lbl, fs)
         self._add_group(inner, tr("Altimétrie & Vecteurs"), sliders[3:], exp_lbl, fs)
@@ -3326,27 +3356,17 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders = [
             ("mesh_zl",        "mesh_zl",        14,20,  1,    int,
-             "mesh_zl : zoom level du maillage 3D. "
-             "14-16 = mesh grossier, relief approximatif. "
-             "19 = mesh très précis, côtes et falaises détaillées (recommandé). "
-             "20 = très lourd, rarement nécessaire.", None),
+             tr('mesh_zl : zoom level du maillage 3D. 14-16 = mesh grossier, relief approximatif. 19 = mesh très précis, côtes et falaises détaillées (recommandé). 20 = très lourd, rarement nécessaire.'), None),
             ("curvature_tol",  "curvature_tol",  1,30,   0.5,  float,
-             "curvature_tol : tolérance de courbure générale du mesh. "
-             "Valeur basse = plus de triangles, relief plus précis. "
-             "16 = recommandé. 1 = très dense (lent). 30 = grossier.", None),
+             tr('curvature_tol : tolérance de courbure générale du mesh. Valeur basse = plus de triangles, relief plus précis. 16 = recommandé. 1 = très dense (lent). 30 = grossier.'), None),
             ("limit_tris",     "limit_tris (M)", 1,50,   1,    float,
-             "limit_tris : limite du nombre de triangles en millions. "
-             "15 = recommandé. Augmenter pour les zones très complexes.", None),
+             tr('limit_tris : limite du nombre de triangles en millions. 15 = recommandé. Augmenter pour les zones très complexes.'), None),
             ("min_angle",      "min_angle (°)",  0.1,2,  0.1,  float,
-             "min_angle : angle minimum des triangles du mesh. "
-             "0.5 = recommandé. Valeur basse = meilleure qualité géométrique.", None),
+             tr('min_angle : angle minimum des triangles du mesh. 0.5 = recommandé. Valeur basse = meilleure qualité géométrique.'), None),
             ("iterate",        "iterate",        0, 3,   1,    int,
-             "iterate : nombre d'itérations de raffinement du mesh. "
-             "0 = pas d'itération (rapide). "
-             "1-2 = meilleure qualité côtière. 3 = très long.", None),
+             tr("iterate : nombre d'itérations de raffinement du mesh. 0 = pas d'itération (rapide). 1-2 = meilleure qualité côtière. 3 = très long."), None),
             ("clean_bad_geometries","clean_geom",0,0,   1,    str,
-             "clean_bad_geometries : supprime les géométries vectorielles invalides "
-             "avant la triangulation. True = recommandé.",
+             tr('clean_bad_geometries : supprime les géométries vectorielles invalides avant la triangulation. True = recommandé.'),
              ["True","False"]),
         ]
         self._add_group(inner, tr("Paramètres Mesh"), sliders[:4], exp_lbl, fs)
@@ -3361,35 +3381,24 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders = [
             ("default_zl",     "default_zl",     14,20,  1,    int,
-             "default_zl : niveau de zoom de l'imagerie principale. "
-             "14-15 = faible résolution, flou. "
-             "17 = résolution standard, recommandé. "
-             "19-20 = très haute résolution, très lourd en VRAM.", None),
+             tr("default_zl : niveau de zoom de l'imagerie principale. 14-15 = faible résolution, flou. 17 = résolution standard, recommandé. 19-20 = très haute résolution, très lourd en VRAM."), None),
             ("cover_zl",       "cover_zl airports",14,20,1,   int,
-             "cover_zl : zoom level haute résolution autour des aéroports. "
-             "18 = recommandé pour voir les marquages et taxiways.", None),
+             tr('cover_zl : zoom level haute résolution autour des aéroports. 18 = recommandé pour voir les marquages et taxiways.'), None),
             ("cover_extent",   "cover_extent (km)",0,5, 0.5,  float,
-             "cover_extent : rayon en km autour des aéroports pour la haute résolution. "
-             "1.0 = recommandé. 3.0 = large zone haute résolution.", None),
+             tr('cover_extent : rayon en km autour des aéroports pour la haute résolution. 1.0 = recommandé. 3.0 = large zone haute résolution.'), None),
             ("cover_airports_with_highres","HiRes airports",0,0,1,str,
-             "cover_airports_with_highres : active la haute résolution autour des aéroports. "
-             "True = recommandé si un aéroport est présent sur la tuile.",
+             tr('cover_airports_with_highres : active la haute résolution autour des aéroports. True = recommandé si un aéroport est présent sur la tuile.'),
              ["False","True"]),
             ("apt_smoothing_pix","apt_smooth (px)",0,30, 1,   int,
-             "apt_smoothing_pix : lissage en pixels de la zone aéroport dans le mesh. "
-             "8 = recommandé pour éviter les bosses sur les pistes.", None),
+             tr('apt_smoothing_pix : lissage en pixels de la zone aéroport dans le mesh. 8 = recommandé pour éviter les bosses sur les pistes.'), None),
             ("apt_curv_tol",   "apt_curv_tol",   0.5,5, 0.5,  float,
-             "apt_curv_tol : tolérance de courbure spécifique aux aéroports. "
-             "1.5 = recommandé. Valeur basse = géométrie aéroport plus précise.", None),
+             tr('apt_curv_tol : tolérance de courbure spécifique aux aéroports. 1.5 = recommandé. Valeur basse = géométrie aéroport plus précise.'), None),
             ("apt_curv_ext",   "apt_curv_ext (km)",0.5,3,0.5, float,
-             "apt_curv_ext : extension de la zone de précision autour des aéroports. "
-             "1.0 = recommandé.", None),
+             tr('apt_curv_ext : extension de la zone de précision autour des aéroports. 1.0 = recommandé.'), None),
             ("road_level",     "road_level",     0, 4,   1,    int,
-             "road_level : densité des routes intégrées dans le mesh. "
-             "0 = aucune route. 4 = toutes les routes (recommandé).", None),
+             tr('road_level : densité des routes intégrées dans le mesh. 0 = aucune route. 4 = toutes les routes (recommandé).'), None),
             ("max_levelled_segs","levelled_segs",0,500000,10000,int,
-             "max_levelled_segs : nombre maximum de segments de route nivelés. "
-             "200000 = recommandé.", None),
+             tr('max_levelled_segs : nombre maximum de segments de route nivelés. 200000 = recommandé.'), None),
         ]
         self._add_group(inner, tr("Imagerie"), sliders[:4], exp_lbl, fs)
         self._add_group(inner, tr("Aéroports"), sliders[4:7], exp_lbl, fs)
@@ -3776,7 +3785,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             if grad_px > 1000:
                 warn.append(f"⚠ {int(mw)}m trop large ({int(grad_px)}px)")
             if "XP11" in wt:
-                warn.append("⚠ XP11+bathy : vagues XP12 désactivées")
+                warn.append(tr('⚠ XP11+bathy : vagues XP12 désactivées'))
             for i, w_txt in enumerate(warn):
                 yy = H - 16*(len(warn)-i)
                 cv.create_rectangle(0, yy, W, yy+16, fill="#3a0000", outline="")
@@ -3829,8 +3838,8 @@ class Ortho4XP_Simulator(tk.Toplevel):
             cv2.create_rectangle(0, H2-20, W2, H2, fill="#060e06", outline="")
             cv2.create_text(W2//2, H2-10,
                 text=(f"normal_map {int(nm2*100)}%  "
-                      f"ombres={'✓' if shad2=='True' else '✗'}  "
-                      f"décals={'✓' if dcl2=='True' else '✗'}"),
+                      + tr("ombres=") + f"{'✓' if shad2=='True' else '✗'}  "
+                      + tr("décals=") + f"{'✓' if dcl2=='True' else '✗'}"),
                 fill="#e0d8a0", font=("TkFixedFont", 9))
 
         params = {
@@ -3856,10 +3865,10 @@ class Ortho4XP_Simulator(tk.Toplevel):
             mzl2 = params2.get("mesh_zl", 19)
             ct2  = params2.get("curvature_tol", 16)
             lt2  = params2.get("limit_tris", 15)
-            prec = "très précis" if mzl2>=19 else "précis" if mzl2>=17 else "moyen" if mzl2>=15 else "grossier"
+            prec = tr("très précis") if mzl2>=19 else tr("précis") if mzl2>=17 else tr("moyen") if mzl2>=15 else tr("grossier")
             cv2.create_rectangle(0, H2-20, W2, H2, fill="#060e06", outline="")
             cv2.create_text(W2//2, H2-10,
-                text=f"mesh_zl {mzl2} — {prec}  |  courbure {ct2}  |  limite {lt2}M triangles",
+                text=f"mesh_zl {mzl2} — {prec}  |  " + tr("courbure") + f" {ct2}  |  " + tr("limite") + f" {lt2}M " + tr("triangles"),
                 fill="#80ff88", font=("TkFixedFont", 9))
 
         # Le maillage est visible en overlay sur la vue 3D
@@ -3994,7 +4003,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
         legend = [
             ("#88ff44" if apt=="True" else "#557755", (),
              f"cover_extent {cext:.1f}km ZL{czl}"),
-            ("#ffee44", (), "zone aéroport XP12"),
+            ("#ffee44", (), tr('zone aéroport XP12')),
             ("#7a9a7a", (), f"jointure {asmp}px  (dzl>=17)"),
             ("#ff8844", (), f"curv_ext +{ace:.1f}km"),
             ("#44aaff", (), f"curv_tol {act:.1f}"),
@@ -4016,7 +4025,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         # ── BARRE ÉTAT ─────────────────────────────────────────────
         qual_lbl = "HD ZL20" if dzl>=20 else f"ZL{dzl} — {'HD' if dzl>=19 else 'SD' if dzl>=17 else 'LD'}"
-        apt_lbl  = f"aéroport ZL{czl} ±{cext:.1f}km" if apt=="True" else "aéroport: ZL défaut"
+        apt_lbl  = (tr("aéroport ZL") + f"{czl} ±{cext:.1f}km") if apt=="True" else tr("aéroport: ZL défaut")
         cv.create_rectangle(0, H - 22, W, H, fill="#06100680", outline="")
         cv.create_text(W // 2, H - 11,
             text=f"imagerie {qual_lbl}  |  routes niv.{rl}  |  {apt_lbl}",

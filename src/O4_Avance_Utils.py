@@ -979,6 +979,12 @@ class AvanceWindow(tk.Toplevel):
 
         self.bind("<Escape>", lambda e: self._on_close())
 
+        # Taille mini = taille naturelle du contenu une fois l'UI construite :
+        # les cartes de mécanismes et les boutons de pied de page restent
+        # toujours visibles quand on réduit ; l'agrandissement reste libre.
+        self.update_idletasks()
+        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
+
         self._refresh_tile()
         self._refresh_josm_async()
 
@@ -1229,6 +1235,8 @@ class AvanceWindow(tk.Toplevel):
         lb.bind("<Return>", _go)
         win.bind("<Escape>", lambda e: win.destroy())
         lb.focus_set()
+        win.update_idletasks()
+        win.minsize(win.winfo_reqwidth(), win.winfo_reqheight())
 
     # ── Sauvegarde puis ouverture ──────────────────────────────────────
     def _protect_and_open(self, filepath):
@@ -1586,6 +1594,8 @@ class AvanceWindow(tk.Toplevel):
         lb.bind("<Return>", _go)
         win.bind("<Escape>", lambda e: win.destroy())
         lb.focus_set()
+        win.update_idletasks()
+        win.minsize(win.winfo_reqwidth(), win.winfo_reqheight())
 
     # ── Fichiers d'emprise enregistrés au mauvais endroit ──────────────
     def _propose_stray(self, extents_dir):
@@ -1758,6 +1768,8 @@ class AvanceWindow(tk.Toplevel):
         ttk.Button(win, text=tr("Fermer"), command=win.destroy).grid(
             row=4, column=0, padx=10, pady=(10, 10), sticky=E)
         win.bind("<Escape>", lambda e: win.destroy())
+        win.update_idletasks()
+        win.minsize(win.winfo_reqwidth(), win.winfo_reqheight())
 
     def _save_modified(self):
         """Enregistre l'état courant de toutes les couches de la tuile."""
@@ -1926,6 +1938,8 @@ class AvanceWindow(tk.Toplevel):
         lb.bind("<Return>", _go)
         win.bind("<Escape>", lambda e: win.destroy())
         lb.focus_set()
+        win.update_idletasks()
+        win.minsize(win.winfo_reqwidth(), win.winfo_reqheight())
 
     def _open_in_josm(self, filepath):
         """Remote Control d'abord, lancement de l'application ensuite."""

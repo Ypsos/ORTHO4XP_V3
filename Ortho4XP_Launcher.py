@@ -235,6 +235,34 @@ class Launcher(tk.Tk):
                   bg=BG_GLOBAL, fg="#a6e3a1", relief="flat", bd=0,
                   activebackground=BG_GLOBAL, cursor="hand2",
                   command=self._apply_theme_btn).pack(side="left", padx=4)
+
+        # ── Bouton de sélection de langue ─────────────────────────────────
+        # Placé ici dans la fenêtre du lanceur (Mac / Linux / Windows).
+        # Réutilise le bouton existant de O4_Lang. À la validation d'une
+        # langue, le choix est sauvegardé dans Ortho4XP.cfg puis le lanceur
+        # se ferme et redémarre automatiquement dans la nouvelle langue
+        # (callback on_change=self._restart_with_new_lang).
+        try:
+            import O4_Lang as _O4Lang
+
+            # Icône d'identification linguistique, placée DEVANT le bouton.
+            # Globe + code langue (FR / EN / ...) : rendu identique sur
+            # Mac, Linux et Windows (les drapeaux emoji ne s'affichent pas
+            # sous Windows, ils sont donc volontairement écartés).
+            self._lang_icon = tk.Label(
+                theme_frame,
+                text="🌐 " + self._current_lang_code(),
+                bg=BG_GLOBAL, fg="#a6e3a1",
+                font=("Helvetica", 14, "bold"),
+            )
+            self._lang_icon.pack(side="left", padx=(16, 4))
+
+            _O4Lang.make_language_button(
+                theme_frame,
+                on_change=self._restart_with_new_lang,
+            ).pack(side="left", padx=(0, 4))
+        except Exception:
+            pass  # si O4_Lang absent → le lanceur fonctionne quand même
         # ─────────────────────────────────────────────────────────────────
 
         # Gros bouton LANCER en dessous
@@ -244,6 +272,51 @@ class Launcher(tk.Tk):
         self._log(f"📍 Dossier : {BASE_DIR}")
         self.check_integrity()
         self._run_security_check()
+
+    # ====================== IDENTIFICATION LANGUE ======================
+    def _current_lang_code(self):
+        """
+        Retourne le code de la langue active ('FR', 'EN', ...) pour l'icône.
+        Lecture 100 % défensive : aucune exception ne remonte, valeur de
+        repli 'EN' si O4_Lang est absent ou si Ortho4XP.cfg ne contient rien.
+        """
+        try:
+            import O4_Lang as _L
+            code = None
+            for _attr in ("current_lang", "get_lang", "_read_lang_from_cfg"):
+                _f = getattr(_L, _attr, None)
+                if callable(_f):
+                    try:
+                        code = _f()
+                    except Exception:
+                        code = None
+                    if code:
+                        break
+                elif isinstance(_f, str) and _f:
+                    code = _f
+                    break
+            if not code:
+                code = getattr(_L, "LANG", None)
+            if code:
+                return str(code).strip().upper()[:2]
+        except Exception:
+            pass
+        return "EN"
+
+    # ====================== REDÉMARRAGE LANGUE ======================
+    def _restart_with_new_lang(self):
+        """
+        Appelé après validation d'une nouvelle langue dans le dialogue.
+        La langue est déjà sauvegardée dans Ortho4XP.cfg par O4_Lang.
+        On relance le lanceur (qui relit la langue au démarrage) puis on
+        ferme l'instance courante. Multi-OS (Mac / Linux / Windows).
+        """
+        try:
+            subprocess.Popen([sys.executable] + sys.argv)
+        except Exception:
+            pass
+        finally:
+            self.destroy()   # ferme le lanceur courant -> mainloop se termine
 
     # ====================== SENTINELLE ======================
     def _run_security_check(self):

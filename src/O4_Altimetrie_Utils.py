@@ -85,6 +85,23 @@ def creer_structure(base, pays):
     return racine, stock_pays, assemble_pays
 
 
+def creer_pays_dans(racine, pays, cible):
+    """Crée le dossier d'un pays dans UN SEUL des deux dossiers de la
+    structure, jamais dans les deux :
+      cible="stock"  → <racine>/Altimétrie TIFF/<pays>
+      cible="sortie" → <racine>/Altimétrie assemble/Assemble <pays>
+    L'autre dossier n'est jamais référencé ni touché. La racine et le
+    dossier parent choisi ne sont créés que s'ils manquent (idempotent).
+    Retourne le chemin du dossier créé."""
+    stock, assemble = chemins_structure(racine)
+    if cible == "stock":
+        pays_dir = os.path.join(stock, pays)
+    else:
+        pays_dir = os.path.join(assemble, PREFIXE_PAYS_ASSEMBLE + pays)
+    os.makedirs(pays_dir, exist_ok=True)
+    return pays_dir
+
+
 def lister_pays(racine):
     """Pays présents dans le stock."""
     stock, _a = chemins_structure(racine)
@@ -1078,6 +1095,253 @@ def open_altimetrie_window(gui):
         _remonter()
         return True
 
+    def _racine_structure():
+        """Déduit la racine <...>/Altimétrie d'une structure DÉJÀ créée,
+        à partir du dossier des sources courant. Retourne la racine si
+        le dossier courant appartient bien à la structure imposée
+        (<racine>/Altimétrie TIFF/…), sinon None (dossiers personnels ou
+        aucune structure en place)."""
+        s = _stock[0]
+        if not s:
+            return None
+        parts = os.path.normpath(s).split(os.sep)
+        if DOSSIER_STOCK in parts:
+            i = parts.index(DOSSIER_STOCK)
+            racine = os.sep.join(parts[:i]) or os.sep
+            if os.path.isdir(os.path.join(racine, DOSSIER_STOCK)):
+                return racine
+        return None
+
+    def _resoudre_racine():
+        """Retrouve la racine <...>/Altimétrie de la structure existante
+        sans jamais la recréer : d'abord depuis le dossier des sources,
+        sinon depuis le dossier de sortie, sinon en demandant à
+        l'utilisateur d'ouvrir son dossier « Altimétrie ». Retourne la
+        racine ou None si l'utilisateur annule."""
+        r = _racine_structure()
+        if r:
+            return r
+        if _sortie[0]:
+            parts = os.path.normpath(_sortie[0]).split(os.sep)
+            if DOSSIER_ASSEMBLE in parts:
+                i = parts.index(DOSSIER_ASSEMBLE)
+                rr = os.sep.join(parts[:i]) or os.sep
+                if os.path.isdir(os.path.join(rr, DOSSIER_ASSEMBLE)):
+                    return rr
+        messagebox.showinfo(
+            _tr("Altimétrie / DEM"),
+            _tr("Ouvrez le dossier « Altimétrie » de votre structure."),
+            parent=win)
+        _remonter()
+        base = filedialog.askdirectory(
+            parent=win,
+            initialdir=_stock[0] or os.path.expanduser("~"),
+            title=_tr("Ouvrir la racine Altimétrie"))
+        _remonter()
+        if not base:
+            return None
+        parts = os.path.normpath(base).split(os.sep)
+        if DOSSIER_RACINE in parts:
+            return os.sep.join(parts[:parts.index(DOSSIER_RACINE) + 1])
+        if os.path.basename(os.path.normpath(base)) == DOSSIER_RACINE:
+            return base
+        return os.path.join(base, DOSSIER_RACINE)
+
+    def _ajouter_pays():
+        """Bouton « Ajouter un pays ».
+        1) Une fenêtre demande le dossier de destination : Altimétrie TIFF
+           OU Altimétrie assemble.
+        2) Une seconde fenêtre demande le nom du pays.
+        3) À la validation, le dossier est créé UNIQUEMENT dans le dossier
+           choisi — jamais dans les deux — et devient le dossier courant
+           correspondant. L'autre chemin n'est pas modifié.
+        La structure de base (« Créer la structure ») n'est jamais recréée
+        ici."""
+        racine = _resoudre_racine()
+        if not racine:
+            return False
+        # 1) Choix du dossier de destination : TIFF (sources) ou assemble.
+        choix = _choix_tiff_assemble(racine)
+        _remonter()
+        if not choix:
+            return False
+        cible_txt = DOSSIER_STOCK if choix == "stock" else DOSSIER_ASSEMBLE
+        # 2) Saisie du nom du pays.
+        pays = _saisie(
+            _tr("Altimétrie / DEM"),
+            _tr("Nom du pays (ex. : France, Suisse, Allemagne) :")
+            + "\n→ " + cible_txt,
+            parent=win, initialvalue="")
+        _remonter()
+        if not pays:
+            return False
+        pays = pays.strip().replace("/", "-").replace("\\", "-")
+        if not pays:
+            return False
+        # 3) Création dans le SEUL dossier choisi.
+        _etat(_tr("Création de la structure…"), FG)
+        try:
+            pays_dir = creer_pays_dans(racine, pays, choix)
+        except Exception as e:
+            _etat("")
+            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            _remonter()
+            return False
+        # 4) Le dossier créé devient le dossier courant correspondant ;
+        #    l'AUTRE chemin reste inchangé.
+        if choix == "stock":
+            _stock[0] = pays_dir
+            _cfg_set(CFG_STOCK, pays_dir)
+        else:
+            _sortie[0] = pays_dir
+            _cfg_set(CFG_SORTIE, pays_dir)
+        _maj_bandeaux()
+        _etat(_tr("Structure créée."), FG)
+        txt.delete("1.0", tk.END)
+        _log(_tr("Pays ajouté :") + " " + pays)
+        _log()
+        if choix == "stock":
+            _log(_tr("Dossier des sources :"))
+        else:
+            _log(_tr("Dossier de sortie :"))
+        _log("   " + pays_dir)
+        _remonter()
+        return True
+
+    def _choix_tiff_assemble(racine):
+        """Ouvre la racine Altimétrie et demande dans lequel des deux
+        dossiers de la structure l'utilisateur veut travailler.
+        Retourne "stock" (Altimétrie TIFF), "sortie" (Altimétrie assemble)
+        ou None si annulation."""
+        res = {"v": None}
+        dlg = tk.Toplevel(win)
+        dlg.title(_tr("Altimétrie / DEM"))
+        dlg.configure(bg=BG)
+        try:
+            dlg.transient(win)
+        except Exception:
+            pass
+        dlg.resizable(False, False)
+        dlg.columnconfigure(0, weight=1)
+        dlg.columnconfigure(1, weight=1)
+
+        tk.Label(dlg,
+                 text=_tr("Dans quel dossier de la structure Altimétrie "
+                          "voulez-vous travailler ?"),
+                 bg=BG, fg=FG, font=FONT, justify="left",
+                 anchor="w", wraplength=520).grid(
+            row=0, column=0, columnspan=2, padx=14, pady=(14, 2), sticky="w")
+        tk.Label(dlg, text=_tr("Racine :") + " " + racine,
+                 bg=BG, fg=FG2, font=("TkFixedFont", 10), justify="left",
+                 anchor="w", wraplength=520).grid(
+            row=1, column=0, columnspan=2, padx=14, pady=(0, 12), sticky="w")
+
+        def _pick(val):
+            res["v"] = val
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+
+        ttk.Button(dlg, text=DOSSIER_STOCK,
+                   command=lambda: _pick("stock")).grid(
+            row=2, column=0, padx=(14, 7), pady=(0, 6), sticky="ew", ipady=4)
+        ttk.Button(dlg, text=DOSSIER_ASSEMBLE,
+                   command=lambda: _pick("sortie")).grid(
+            row=2, column=1, padx=(7, 14), pady=(0, 6), sticky="ew", ipady=4)
+        ttk.Button(dlg, text=_tr("Annuler"),
+                   command=lambda: _pick(None)).grid(
+            row=3, column=0, columnspan=2, padx=14, pady=(0, 14))
+
+        dlg.bind("<Escape>", lambda e: _pick(None))
+        dlg.protocol("WM_DELETE_WINDOW", lambda: _pick(None))
+        try:
+            dlg.update_idletasks()
+            _x = win.winfo_rootx() + max(
+                0, (win.winfo_width() - dlg.winfo_reqwidth()) // 2)
+            _y = win.winfo_rooty() + 120
+            dlg.geometry("+%d+%d" % (_x, _y))
+        except Exception:
+            pass
+        try:
+            dlg.grab_set()
+        except Exception:
+            pass
+        dlg.wait_window()
+        return res["v"]
+
+    def _choisir_dans_structure():
+        """Bouton « Emplacement TIFF / assemble » : ouvre la racine
+        Altimétrie de la structure existante, demande à l'utilisateur s'il
+        veut travailler dans Altimétrie TIFF (sources) ou Altimétrie
+        assemble (sortie), puis lui laisse désigner le dossier exact
+        (un pays, par exemple). Ne redemande PAS le disque si la structure
+        est déjà connue. Ne modifie QUE le chemin correspondant au choix,
+        jamais l'autre."""
+        # 1) Retrouver la racine <...>/Altimétrie sans rien redemander.
+        racine = _racine_structure()
+        if not racine and _sortie[0]:
+            parts = os.path.normpath(_sortie[0]).split(os.sep)
+            if DOSSIER_ASSEMBLE in parts:
+                i = parts.index(DOSSIER_ASSEMBLE)
+                r = os.sep.join(parts[:i]) or os.sep
+                if os.path.isdir(os.path.join(r, DOSSIER_ASSEMBLE)):
+                    racine = r
+        # 2) Structure inconnue : demander d'ouvrir la racine Altimétrie.
+        if not racine:
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _tr("Ouvrez le dossier « Altimétrie » de votre structure."),
+                parent=win)
+            _remonter()
+            base = filedialog.askdirectory(
+                parent=win,
+                initialdir=_stock[0] or os.path.expanduser("~"),
+                title=_tr("Ouvrir la racine Altimétrie"))
+            _remonter()
+            if not base:
+                return False
+            parts = os.path.normpath(base).split(os.sep)
+            if DOSSIER_RACINE in parts:
+                racine = os.sep.join(parts[:parts.index(DOSSIER_RACINE) + 1])
+            elif os.path.basename(os.path.normpath(base)) == DOSSIER_RACINE:
+                racine = base
+            else:
+                racine = os.path.join(base, DOSSIER_RACINE)
+            # Création seulement des dossiers manquants ; aucun fichier
+            # existant n'est touché.
+            for d in (racine, os.path.join(racine, DOSSIER_STOCK),
+                      os.path.join(racine, DOSSIER_ASSEMBLE)):
+                os.makedirs(d, exist_ok=True)
+        # 3) Demander TIFF ou assemble.
+        choix = _choix_tiff_assemble(racine)
+        _remonter()
+        if not choix:
+            return False
+        if choix == "stock":
+            depart = os.path.join(racine, DOSSIER_STOCK)
+            titre = _tr("Dossier de vos altimétries sources (.tif, .asc…)")
+        else:
+            depart = os.path.join(racine, DOSSIER_ASSEMBLE)
+            titre = _tr("Dossier de destination des altimétries assemblées")
+        os.makedirs(depart, exist_ok=True)
+        # 4) Laisser désigner le dossier exact, ouvert directement dans le
+        #    dossier choisi (l'utilisateur peut entrer dans un pays).
+        d = filedialog.askdirectory(parent=win, initialdir=depart,
+                                    title=titre)
+        _remonter()
+        if not d:
+            return False
+        if choix == "stock":
+            _stock[0] = d
+            _cfg_set(CFG_STOCK, d)
+        else:
+            _sortie[0] = d
+            _cfg_set(CFG_SORTIE, d)
+        _maj_bandeaux()
+        _etat(_tr("Dossier enregistré."), FG)
+        return True
+
     def _assistant(force=False):
         """Première utilisation : demande les deux dossiers, sans jamais
         imposer de nom ni créer d'arborescence. L'organisation existante
@@ -1652,6 +1916,10 @@ def open_altimetrie_window(gui):
         (_tr("Ouvrir dans QGIS"), _ouvrir_qgis, 1, 3),
         (_tr("Dossier de sortie"),
          lambda: (_choisir_sortie(), _rafraichir()), 2, 0),
+        (_tr("Ajouter un pays"),
+         lambda: (_ajouter_pays(), _rafraichir()), 2, 1),
+        (_tr("Emplacement TIFF / assemble"),
+         lambda: (_choisir_dans_structure(), _rafraichir()), 2, 2),
         (_tr("Fermer"), win.destroy, 2, 3),
     ]
     for _txt, _cmd, _r, _c in _defs:
