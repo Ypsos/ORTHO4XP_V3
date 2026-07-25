@@ -198,9 +198,12 @@ Tous suivent la même règle de conception : **un fichier autonome, qui ne modif
 
 ### Installation et Lanceur
 
-[![Lanceur Ortho4XP V3 — installation]<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/8af30d11-dd03-400f-8056-990217b6c15b" />
+[![Lanceur Ortho4XP V3 — installation]
+<img width="940" height="963" alt="Lanceur" src="https://github.com/user-attachments/assets/e0c62747-a4fb-4afd-9645-caa196a19c27" />
 
-<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/9f8da485-ec79-4aff-a332-5d934d66ca5c" />
+<img width="1695" height="1136" alt="Interface principale" src="https://github.com/user-attachments/assets/9eacd131-76a9-44cf-8d60-76866ddd8095" />
+
+
 
 
 ### Personalisation couleurs Interface
@@ -494,10 +497,9 @@ They all follow the same design rule: **a self-contained file that modifies no p
 ### Installation and Launcher
 
 [![Ortho4XP V3 Launcher — installation]
-<img width="1826" height="1936" alt="Lanceur" src="https://github.com/user-attachments/assets/308e6b64-2253-4dc6-a77a-20119d5f1902" />
+<img width="940" height="963" alt="Lanceur" src="https://github.com/user-attachments/assets/528f32df-ba3f-425c-88bb-0f70d23eb423" />
 
-
-<img width="2644" height="796" alt="Interface principale" src="https://github.com/user-attachments/assets/fa421364-4432-4721-867f-d01d43c5684b" />
+<img width="1695" height="1136" alt="Interface principale" src="https://github.com/user-attachments/assets/75a942d1-0347-422b-9d86-979a9d589e65" />
 
 
 
