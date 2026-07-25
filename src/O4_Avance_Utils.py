@@ -28,6 +28,7 @@
 # ============================================================================
 
 import os
+import re
 import sys
 import shutil
 import platform
@@ -87,6 +88,39 @@ except Exception:
 # ============================================================================
 #  Utilitaires de chemins
 # ============================================================================
+
+_RE_TUILE = re.compile(r"^([+-]\d{2})([+-]\d{3})$")
+
+
+def _tile_de_fichier(filepath):
+    """Tuile à laquelle appartient RÉELLEMENT un fichier de données OSM.
+
+    Déduite du chemin — dossier « +46-003 », ou nom de fichier
+    « +46-003_water_osm.bz2 » — et jamais des champs de la fenêtre
+    principale.
+
+    POURQUOI : la fenêtre suit la tuile active avec quelques secondes
+    de décalage. Pendant ce laps de temps, les boutons de couches
+    montrent encore l'ancienne tuile alors que les champs affichent
+    déjà la nouvelle. Se fier aux champs rangerait la copie de sécurité
+    d'un fichier de +46-003 sous +47+008 — et la protection deviendrait
+    introuvable le jour où elle sert. Le chemin, lui, ne ment jamais.
+
+    Retourne (lat, lon), ou (None, None) si le nom ne suit pas la
+    convention Ortho4XP.
+    """
+    candidats = [os.path.basename(os.path.dirname(filepath))]
+    base = os.path.basename(filepath)
+    candidats.append(base[:7])
+    for c in candidats:
+        m = _RE_TUILE.match(c)
+        if m:
+            try:
+                return int(m.group(1)), int(m.group(2))
+            except ValueError:
+                pass
+    return None, None
+
 
 def _short_latlon(lat, lon):
     """Nom de tuile Ortho4XP, ex. (46, -3) -> '+46-003'."""
@@ -878,6 +912,8 @@ class AvanceWindow(tk.Toplevel):
         self.title(tr("Avancé — Couches JOSM"))
         self.BG, self.FG, self.FG2, self.PREV_BG = _theme()
         self._osm_buttons = []
+        # Couches ouvertes pendant la séance, toutes tuiles confondues.
+        self._couches_ouvertes = set()
         self.configure(bg=self.BG)
         # macOS : sans transient, la fenêtre repasse derrière le GUI après
         # chaque boîte de dialogue et paraît s'être fermée.
@@ -982,10 +1018,16 @@ class AvanceWindow(tk.Toplevel):
         # Taille mini = taille naturelle du contenu une fois l'UI construite :
         # les cartes de mécanismes et les boutons de pied de page restent
         # toujours visibles quand on réduit ; l'agrandissement reste libre.
-        self.update_idletasks()
-        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
+        # Recalculée à chaque changement de tuile : le nombre de boutons de
+        # couches varie de 1 à 7 selon les données présentes.
+        self._ui_prete = True
+        self._verrouiller_minsize()
 
         self._refresh_tile()
+        # Tuile affichée à l'instant : sert de référence à la
+        # surveillance, qui ne rafraîchira que si elle change vraiment.
+        self._tuile_vue = self._tile_latlon()
+        self._tuile_stable = self._tuile_vue
         self._refresh_josm_async()
 
         # Rangement des fichiers égarés, puis publication automatique.
@@ -1016,6 +1058,37 @@ class AvanceWindow(tk.Toplevel):
                                command=command)
             b.grid(row=2, column=0, padx=6, pady=(0, 8), sticky=E+W)
         return f
+
+    # ── Un bouton par fichier réellement présent ───────────────────────
+    # ── Taille minimale, recalculable ──────────────────────────────────
+    def _verrouiller_minsize(self):
+        """Réajuste la taille mini au contenu réellement présent.
+
+        Appelée à la construction, puis après chaque reconstruction des
+        boutons de couches : selon la tuile, Ortho4XP produit de 3 à 7
+        fichiers OSM, donc de 3 à 7 boutons. Une taille mini figée à la
+        construction laisserait le dernier bouton coupé sur une tuile
+        plus fournie que celle affichée au départ.
+        """
+        # Pendant la construction, l'interface est incomplète : mesurer
+        # à ce moment donnerait une taille mini trop petite.
+        if not getattr(self, "_ui_prete", False):
+            return
+        try:
+            self.update_idletasks()
+            besoin_l = self.winfo_reqwidth()
+            besoin_h = self.winfo_reqheight()
+            self.minsize(besoin_l, besoin_h)
+            # La fenêtre a pu être réduite par l'utilisateur avant le
+            # changement de tuile : on l'agrandit du strict nécessaire,
+            # jamais davantage, et on ne la rétrécit jamais.
+            actuel_l = self.winfo_width()
+            actuel_h = self.winfo_height()
+            if actuel_l < besoin_l or actuel_h < besoin_h:
+                self.geometry("%dx%d" % (max(besoin_l, actuel_l),
+                                         max(besoin_h, actuel_h)))
+        except Exception:
+            pass
 
     # ── Un bouton par fichier réellement présent ───────────────────────
     def _fill_osm_buttons(self):
@@ -1055,6 +1128,7 @@ class AvanceWindow(tk.Toplevel):
                            command=self._open_osm_data)
             b.grid(row=2, column=0, padx=6, pady=(0, 8), sticky=E+W)
             self._osm_buttons.append(b)
+            self._verrouiller_minsize()
             return
 
         r = 2
@@ -1070,6 +1144,7 @@ class AvanceWindow(tk.Toplevel):
             r += 1
         # Petite marge sous le dernier bouton.
         f.grid_rowconfigure(r - 1, pad=5)
+        self._verrouiller_minsize()
 
     # ── Journal de la fenêtre ──────────────────────────────────────────
     def _say(self, msg):
@@ -1246,9 +1321,15 @@ class AvanceWindow(tk.Toplevel):
         version éditée est donc prise en compte par Ortho4XP sans aucune
         intervention dans le pipeline. La copie « .original » sert
         uniquement de retour arrière.
+
+        La tuile est déduite DU FICHIER, pas des champs de la fenêtre
+        principale : une copie de sécurité doit toujours être rangée
+        sous la tuile à laquelle le fichier appartient réellement.
         """
-        try:
+        lat, lon = _tile_de_fichier(filepath)
+        if lat is None or lon is None:
             lat, lon = self._tile_latlon()
+        try:
             created, dest = _ensure_original(filepath, lat, lon)
             if created:
                 self._say(tr("Copie de sécurité créée : ")
@@ -1267,7 +1348,6 @@ class AvanceWindow(tk.Toplevel):
 
         # Instantané du travail de la séance précédente, avant de rouvrir.
         try:
-            lat, lon = self._tile_latlon()
             m = _snapshot_modified(filepath, lat, lon)
             if m:
                 self._say(tr("Modifications sauvegardées : ")
@@ -1276,6 +1356,14 @@ class AvanceWindow(tk.Toplevel):
             _log("snapshot : " + str(e))
 
         self._say(tr("Ouverture : ") + os.path.basename(filepath))
+        # Mémorisé pour la sauvegarde de fermeture : c'est la liste des
+        # couches réellement ouvertes pendant la séance, toutes tuiles
+        # confondues. Balayer le dossier de la tuile affichée ne suffit
+        # pas — on peut avoir changé de tuile depuis.
+        try:
+            self._couches_ouvertes.add(os.path.abspath(filepath))
+        except Exception:
+            pass
         self._open_in_josm(filepath)
 
     # ══════════════════════════════════════════════════════════════════
@@ -1670,8 +1758,46 @@ class AvanceWindow(tk.Toplevel):
                 _log("publication " + nom + " : " + str(e))
         return n
 
+    def _suivre_tuile(self):
+        """Rafraîchit l'en-tête et les boutons si la tuile a changé.
+
+        La tuile active est saisie dans la fenêtre principale, qui ne
+        prévient personne. Sans cette vérification, il faut fermer et
+        rouvrir la fenêtre pour la voir suivre — et les boutons de
+        couches continuent d'afficher ceux de l'ancienne tuile.
+
+        Rien n'est reconstruit tant que la tuile ne change pas : le coût
+        est une simple lecture de deux champs toutes les 4 secondes.
+        """
+        try:
+            courant = self._tile_latlon()
+        except Exception:
+            return
+        if courant[0] is None or courant[1] is None:
+            return
+        # Anti-saisie en cours : la valeur doit être la même qu'au
+        # passage précédent avant d'être prise en compte. Sans cela,
+        # taper « 46 » déclencherait un rafraîchissement dès le « 4 »,
+        # sur une tuile qui n'existe pas.
+        stable = getattr(self, "_tuile_stable", None)
+        self._tuile_stable = courant
+        if courant != stable:
+            return
+        if courant == getattr(self, "_tuile_vue", None):
+            return
+        self._tuile_vue = courant
+        try:
+            self._say(tr("Tuile active : ") + _short_latlon(*courant))
+            self._refresh_tile()
+        except Exception as e:
+            _log("suivi de tuile : " + str(e))
+
     def _surveiller(self):
         """Vérifie périodiquement si une emprise vient d'être enregistrée."""
+        try:
+            self._suivre_tuile()
+        except Exception as e:
+            _log("suivi de tuile : " + str(e))
         try:
             self._publier_auto()
         except Exception as e:
@@ -1691,29 +1817,33 @@ class AvanceWindow(tk.Toplevel):
         dernière zone de risque : éditer dans JOSM, enregistrer, puis
         supprimer la tuile sans avoir pensé à sauvegarder.
 
+        Ce sont les couches RÉELLEMENT OUVERTES pendant la séance qui
+        sont sauvegardées, chacune sous la tuile à laquelle elle
+        appartient. L'ancien balayage du dossier de la tuile affichée
+        laissait tomber le travail dès qu'on avait changé de tuile
+        entre-temps — et relisait au passage des couches jamais
+        ouvertes.
+
         Silencieuse et sans condition d'échec : la fermeture ne doit
         JAMAIS être empêchée par un problème de sauvegarde.
         """
         try:
-            lat, lon = self._tile_latlon()
-            if lat is not None and lon is not None:
-                d = _osm_data_dir(lat, lon)
-                if os.path.isdir(d):
-                    n = 0
-                    for f in sorted(os.listdir(d)):
-                        if not f.lower().endswith("osm.bz2"):
-                            continue
-                        # Seules les couches déjà ouvertes ici sont
-                        # concernées : une couche jamais ouverte n'a pas
-                        # d'original de référence, donc rien à comparer.
-                        if not os.path.isfile(
-                                _original_path(os.path.join(d, f), lat, lon)):
-                            continue
-                        if _snapshot_modified(os.path.join(d, f), lat, lon):
-                            n += 1
-                    if n:
-                        _log(tr("Modifications sauvegardées à la fermeture : ")
-                             + str(n))
+            n = 0
+            for chemin in sorted(getattr(self, "_couches_ouvertes", ())):
+                if not os.path.isfile(chemin):
+                    continue
+                lat, lon = _tile_de_fichier(chemin)
+                if lat is None or lon is None:
+                    lat, lon = self._tile_latlon()
+                if lat is None or lon is None:
+                    continue
+                # Sans original de référence, il n'y a rien à comparer :
+                # _snapshot_modified le vérifie déjà et retourne None.
+                if _snapshot_modified(chemin, lat, lon):
+                    n += 1
+            if n:
+                _log(tr("Modifications sauvegardées à la fermeture : ")
+                     + str(n))
         except Exception as e:
             _log("fermeture : " + str(e))
         try:

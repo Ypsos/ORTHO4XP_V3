@@ -320,6 +320,10 @@ T = {
     # ── FENÊTRE LAUNCHER ───────────────────────────────────────────
     "1. Installer les Modules"              : "1. Installer les Modules",
     "🔍 Vérifier Intégrité"                : "🔍 Vérifier Intégrité",
+    "📜 Crédits & Licence"                 : "📜 Crédits & Licence",
+    "📖 Historique"                        : "📖 Historique",
+    "Fichier introuvable :"                : "Fichier introuvable :",
+    "Fichier de crédits introuvable :"     : "Fichier de crédits introuvable :",
     "▶️ LANCER ORTHO4XP"                   : "▶️ LANCER ORTHO4XP",
     "Installer les Modules — Choisir la plateforme"
                                             : "Installer les Modules — Choisir la plateforme",
@@ -1251,4 +1255,50 @@ T = {
         : '⚠ XP11+bathy : vagues XP12 désactivées',
     '🎚  Simulateur Ortho4XP — tuile '
         : '🎚  Simulateur Ortho4XP — tuile ',
+
+    # ── BATHYMÉTRIE / fonds marins (module O4_Bathymetrie_Utils) ──
+    '🌊 Bathymétrie'
+        : '🌊 Bathymétrie',
+    'Bathymétrie'
+        : 'Bathymétrie',
+    'Le module O4_Bathymetrie_Utils.py est introuvable dans le dossier src/.'
+        : 'Le module O4_Bathymetrie_Utils.py est introuvable dans le dossier src/.',
+    'Bathymétrie — Ortho4XP V3'
+        : 'Bathymétrie — Ortho4XP V3',
+    "Assemblage terminé.\n\n{f}\n\ncustom_bathy_dem est renseigné : la tuile est prête pour l'étape mesh."
+        : "Assemblage terminé.\n\n{f}\n\ncustom_bathy_dem est renseigné : la tuile est prête pour l'étape mesh.",
+    "Aucun dossier de bathymétries n'est configuré."
+        : "Aucun dossier de bathymétries n'est configuré.",
+    'Aucun fichier bathymétrique lisible dans ce dossier.'
+        : 'Aucun fichier bathymétrique lisible dans ce dossier.',
+    'Aucun fichier bathymétrique ne recouvre cette tuile.'
+        : 'Aucun fichier bathymétrique ne recouvre cette tuile.',
+    'Choisissez le disque ou le dossier où créer votre organisation des bathymétries (un disque externe convient).'
+        : 'Choisissez le disque ou le dossier où créer votre organisation des bathymétries (un disque externe convient).',
+    'Dans quel dossier de la structure Bathymétrie voulez-vous travailler ?'
+        : 'Dans quel dossier de la structure Bathymétrie voulez-vous travailler ?',
+    "Deux dossiers sont nécessaires :\n\n1) celui où se trouvent vos bathymétries sources ;\n2) celui où écrire les bathymétries assemblées.\n\nVoulez-vous qu'Ortho4XP crée cette organisation pour vous ?\n\nOUI  →  la structure est créée automatiquement.\nNON  →  vous désignez vos propres dossiers, qui sont utilisés tels quels."
+        : "Deux dossiers sont nécessaires :\n\n1) celui où se trouvent vos bathymétries sources ;\n2) celui où écrire les bathymétries assemblées.\n\nVoulez-vous qu'Ortho4XP crée cette organisation pour vous ?\n\nOUI  →  la structure est créée automatiquement.\nNON  →  vous désignez vos propres dossiers, qui sont utilisés tels quels.",
+    'Dossier de destination des bathymétries assemblées'
+        : 'Dossier de destination des bathymétries assemblées',
+    'Dossier de vos bathymétries sources (.tif, .asc…)'
+        : 'Dossier de vos bathymétries sources (.tif, .asc…)',
+    'Dossier enregistré.'
+        : 'Dossier enregistré.',
+    'Emplacement TIFF / assemble'
+        : 'Emplacement TIFF / assemble',
+    'Ouvrez le dossier « Bathymétrie » de votre structure.'
+        : 'Ouvrez le dossier « Bathymétrie » de votre structure.',
+    'Ouvrir la racine Bathymétrie'
+        : 'Ouvrir la racine Bathymétrie',
+    "Où créer l'organisation des bathymétries"
+        : "Où créer l'organisation des bathymétries",
+    'Si vos bathymétries sont sur un disque externe,'
+        : 'Si vos bathymétries sont sur un disque externe,',
+    'Structure créée.\n\nDéposez vos bathymétries dans :\n{d}\n\nFormat requis : EPSG:4326.'
+        : 'Structure créée.\n\nDéposez vos bathymétries dans :\n{d}\n\nFormat requis : EPSG:4326.',
+    'custom_bathy_dem non écrit :'
+        : 'custom_bathy_dem non écrit :',
+    'custom_bathy_dem renseigné dans le cfg de la tuile.'
+        : 'custom_bathy_dem renseigné dans le cfg de la tuile.',
 }

@@ -46,6 +46,19 @@ except Exception:
     _ALTIMOD = None
     _altimod_enabled = False
 
+# ── Module Bathymétrie / fonds marins (non bloquant) ─────────────────────
+#  Fichier autonome : même structure automatisée que l'Altimétrie, mais
+#  pour les relevés de fonds. Renseigne custom_bathy_dem (jamais custom_dem).
+#  S'appuie sur le moteur validé de O4_Altimetrie_Utils. Import non bloquant :
+#  si le module est absent, le GUI démarre et le bouton le signale.
+#  AUCUN fichier du pipeline n'est concerné par ce module.
+try:
+    import O4_Bathymetrie_Utils as _BATHYMOD
+    _bathymod_enabled = True
+except Exception:
+    _BATHYMOD = None
+    _bathymod_enabled = False
+
 # ── Module Avancé / JOSM (non bloquant) ──────────────────────────────────
 #  Fichier autonome : fenêtre « Avancé » regroupant les couches JOSM
 #  (Extents/, Patches/, OSM_data/). Import non bloquant : si le module est
@@ -338,7 +351,7 @@ class Ortho4XP_GUI(tk.Tk):
         sec_data = _section(tr('Gestion des Données'), 1)
         self.frame_data = tk.Frame(sec_data, border=0, padx=5, pady=2, bg=_BG)
         self.frame_data.grid(row=0, column=0, sticky=N+S+W+E)
-        self.frame_data.columnconfigure(3, weight=1)
+        self.frame_data.columnconfigure(4, weight=1)
 
         ttk.Button(self.frame_data,
             text=tr("⛰ Altimétrie / DEM"),
@@ -346,21 +359,26 @@ class Ortho4XP_GUI(tk.Tk):
             width=22).grid(row=0, column=0, padx=5, pady=2, sticky=W)
 
         ttk.Button(self.frame_data,
+            text=tr("🌊 Bathymétrie"),
+            command=self.open_bathymetrie_module,
+            width=22).grid(row=0, column=1, padx=5, pady=2, sticky=W)
+
+        ttk.Button(self.frame_data,
             text=tr("🗺 Cache OSM local (.pbf)"),
             command=self.open_pbf_module,
-            width=22).grid(row=0, column=1, padx=5, pady=2, sticky=W)
+            width=22).grid(row=0, column=2, padx=5, pady=2, sticky=W)
 
         ttk.Button(self.frame_data,
             text=tr("⏱ Timeline"),
             command=self._show_timeline,
-            width=14).grid(row=0, column=2, padx=5, pady=2, sticky=W)
+            width=14).grid(row=0, column=3, padx=5, pady=2, sticky=W)
 
         # Label RAM live (mise à jour périodique conservée à l'identique)
         self._ram_label = tk.Label(self.frame_data,
             text="RAM: --",
             bg=_BG, fg=_FG2,
             font=("TkFixedFont", fs(10)))
-        self._ram_label.grid(row=0, column=3, padx=12, sticky=E)
+        self._ram_label.grid(row=0, column=4, padx=12, sticky=E)
         self._update_ram_label()
 
         # ══ RUBRIQUE 3 : Gestion des Couleurs automatisée ═════════════
@@ -742,6 +760,35 @@ class Ortho4XP_GUI(tk.Tk):
             except Exception:
                 pass
             messagebox.showerror(tr("Altimétrie / DEM"), str(_e))
+
+    def open_bathymetrie_module(self):
+        """Point d'entrée du bouton « Bathymétrie ».
+
+        Délègue au module autonome O4_Bathymetrie_Utils, jumeau de
+        l'Altimétrie : même structure automatisée et même moteur
+        d'assemblage (reprojection EPSG:4326, découpe avec débord,
+        fusion), mais pour les relevés de FONDS. Renseigne
+        custom_bathy_dem sans jamais toucher custom_dem. Aucun fichier
+        du pipeline n'est modifié.
+
+        Si le module est absent ou lève une erreur, le GUI reste
+        parfaitement fonctionnel : on se contente d'informer.
+        """
+        from tkinter import messagebox
+        if not (_bathymod_enabled and _BATHYMOD is not None):
+            messagebox.showinfo(
+                tr("Bathymétrie"),
+                tr("Le module O4_Bathymetrie_Utils.py est introuvable "
+                   "dans le dossier src/."))
+            return
+        try:
+            _BATHYMOD.open_bathymetrie_window(self)
+        except Exception as _e:
+            try:
+                UI.vprint(1, "[Bathymetrie] " + str(_e))
+            except Exception:
+                pass
+            messagebox.showerror(tr("Bathymétrie"), str(_e))
 
     def open_avance_module(self):
         """Point d'entrée du bouton « Avancé (JOSM) ».

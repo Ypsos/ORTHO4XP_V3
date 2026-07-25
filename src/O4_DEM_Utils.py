@@ -38,6 +38,14 @@ available_sources = (
 
 global_sources = ("View", "SRTM", "ALOS")
 
+# Plage d'altitude physiquement plausible sur Terre, utilisee pour neutraliser
+# les valeurs aberrantes laissees par certains outils (warp GDAL, etc.) :
+#   - fosse des Mariannes ~ -10935 m  -> borne basse -12000 m (marge + fonds bathy)
+#   - Everest              ~   8849 m  -> borne haute   9500 m (marge)
+# Toute valeur non finie (NaN, inf) ou hors de cette plage est ramenee a nodata.
+_ALT_MIN_PLAUSIBLE = -12000.0
+_ALT_MAX_PLAUSIBLE = 9500.0
+
 ################################################################################
 class DEM:
     def __init__(self, lat, lon, source="", fill_nodata=True, info_only=False):
@@ -53,6 +61,7 @@ class DEM:
         self.load_data(source, info_only)
         if info_only:
             return
+        self._sanitize_alt_dem()
         if fill_nodata == "to zero":
             self.nodata_to_zero()
         elif fill_nodata:
@@ -168,6 +177,38 @@ class DEM:
             )
             self.subdems[-1].alt = self.subdems[-1].alt_strict
             self.subdems[-1].alt_vec = self.subdems[-1].alt_vec_strict
+
+    def _sanitize_alt_dem(self):
+        """Neutralise les valeurs aberrantes AVANT tout remplissage.
+
+        Certains outils (warp GDAL, conversions…) laissent dans le raster
+        des valeurs impossibles : non finies (NaN, inf) ou hors de toute
+        plage terrestre plausible — par exemple un -3.4e38 (FLT_MAX) alors
+        que le fichier declare nodata=-32768. La comparaison existante
+        `alt_dem == self.nodata` ne les attrape pas : elles survivent et
+        produisent un relief plat ou des pics delirants, tout en passant
+        pour un build propre.
+
+        On les ramene ici a self.nodata pour que le mecanisme
+        nodata / fill_nodata deja en place les traite normalement. Les
+        cellules deja marquees nodata ne sont pas comptees comme corrigees.
+        """
+        arr = getattr(self, "alt_dem", None)
+        if arr is None:
+            return
+        mauvais = ~numpy.isfinite(arr)
+        mauvais |= (arr < _ALT_MIN_PLAUSIBLE) | (arr > _ALT_MAX_PLAUSIBLE)
+        deja = (arr == self.nodata)
+        a_corriger = mauvais & ~deja
+        n = int(a_corriger.sum())
+        if n:
+            arr[a_corriger] = self.nodata
+            UI.vprint(
+                1,
+                "   INFO: %d aberrant elevation value(s) remapped to nodata "
+                "(non-finite or outside [%g, %g] m)."
+                % (n, _ALT_MIN_PLAUSIBLE, _ALT_MAX_PLAUSIBLE),
+            )
 
     def nodata_to_zero(self):
         if (self.alt_dem == self.nodata).any():

@@ -1,93 +1,88 @@
 # ============================================================
-#  O4_Altimetrie_Utils.py  —  ORTHO4XP V3
-#  Module autonome « Altimétrie / DEM »
+#  O4_Bathymetrie_Utils.py  —  ORTHO4XP V3
+#  Module autonome « Bathymétrie / relevés de fonds »
 #
 #  RÔLE :
-#    Remplacer la procédure QGIS manuelle (41 étapes + tableur .ods) par
-#    un seul bouton. Le module lit les fichiers altimétriques présents
-#    dans le dossier de la tuile (fichiers réels OU liens symboliques
-#    relatifs), les reprojette en EPSG:4326, les découpe à l'emprise de
-#    la tuile élargie du débord de chevauchement, les fusionne, écrit
-#    <tuile>.tif à côté, et renseigne custom_dem dans le cfg de la tuile.
+#    Jumeau du module Altimétrie, mais pour les RELEVÉS DE FONDS MARINS
+#    (bathymétrie). Un seul bouton lit les fichiers bathymétriques d'un
+#    dossier, les reprojette en EPSG:4326, les découpe à l'emprise de la
+#    tuile élargie du débord, les fusionne, écrit <tuile>.tif à côté, et
+#    renseigne « custom_bathy_dem » dans le cfg de la tuile (et NON
+#    custom_dem, qui reste le relief terrestre).
 #
-#  ÉQUIVALENCE AVEC LA PROCÉDURE MANUELLE (validée avec Roland) :
-#    Raster/Projections/Warp  -> reprojection EPSG:4326
-#    NoData -32767 -> -99999  -> _NODATA
-#    Emprise du tableur .ods  -> gdalwarp -te (lon-0.1) (lat-0.1)
-#                                          (lon+1.1) (lat+1.1)
-#    Raster/Divers/Fusion     -> rasterio.merge
-#    Export + champ DEM       -> écriture <tuile>.tif + custom_dem
+#  POURQUOI UN MODULE SÉPARÉ :
+#    Le relief terrestre (custom_dem) et les fonds marins
+#    (custom_bathy_dem) sont deux sources DISTINCTES qui ne doivent
+#    jamais se mélanger : la terre peut venir de l'IGN / Sonny, les fonds
+#    du SHOM. C'est exactement la séparation ajoutée dans O4_Bathymetry.py
+#    et O4_Config_Utils.py ; ce module en est l'outil de préparation.
+#
+#  RÉUTILISATION (aucune duplication) :
+#    Tout le MOTEUR raster (reprojection, assainissement des valeurs
+#    aberrantes, fusion, préparation/réduction, auto-test) est celui,
+#    déjà validé, de O4_Altimetrie_Utils.py : il est purement géométrique
+#    et se moque de savoir si les altitudes sont positives (relief) ou
+#    négatives (profondeurs). Il est donc IMPORTÉ tel quel. Seuls
+#    changent ici : les noms de dossiers, les clés de configuration, la
+#    clé écrite dans le cfg de tuile (custom_bathy_dem) et les libellés.
 #
 #  RÈGLES RESPECTÉES :
-#    - Fichier NEUF. Aucun fichier du pipeline n'est modifié :
-#      ni O4_DSF_Utils.py, ni les fichiers Sea, ni le mécanisme Extents/.
-#    - Aucune commande Terminal. Tout passe par rasterio (déjà installé
-#      dans le venv, avec gdal_data/ et proj_data/ embarqués : l'erreur
-#      « Cannot find proj.db » ne peut donc pas se produire).
-#    - Le CRS source n'est JAMAIS codé en dur : il est lu dans le
-#      fichier. EPSG:2154 (Lambert-93) n'est proposé qu'en repli pour les
-#      fichiers qui ne déclarent aucun CRS (cas des .asc IGN bruts).
-#    - L'arborescence de Roland n'est ni interprétée ni réorganisée.
+#    - Fichier NEUF. Aucun fichier du pipeline n'est modifié.
+#    - Aucune commande Terminal ; tout passe par rasterio.
+#    - Le CRS source n'est jamais codé en dur (lu dans le fichier).
 #    - Les fichiers sources ne sont jamais modifiés (lecture seule).
+#    - custom_bathy_dem est écrit SANS toucher custom_dem : les deux
+#      altimétries coexistent dans le même cfg de tuile.
 # ============================================================
 
 import os
 
-# Débord de chevauchement : 10 % d'une tuile de 1° = 0,1° sur les 4 côtés.
-# Sert à ce que les bords fusionnent sans couture avec la tuile voisine.
-DEBORD_DEFAUT = 0.1
+# ── Moteur raster + logique pure, réutilisés depuis le module Altimétrie
+#    (déjà validés, purement géométriques : négatifs = profondeurs). ──
+from O4_Altimetrie_Utils import (
+    tile_key,
+    tile_bounds,
+    intersecte,
+    assainir_altitudes,
+    lister_sources,
+    sources_depuis_dossier,
+    assembler_tuile,
+    preparer_pays,
+    resolution_metres,
+    rasterio_disponible,
+    auto_test,
+    _lire_cfg_valeur,
+    DEBORD_DEFAUT,
+    _EXT_RASTER,
+    _CRS_REPLI,
+)
 
-# Valeur NoData de sortie (identique à la procédure manuelle).
-_NODATA = -99999.0
-
-# CRS de repli, utilisé UNIQUEMENT si le fichier ne déclare aucun CRS.
-_CRS_REPLI = "EPSG:2154"
-
-_EXT_RASTER = (".tif", ".tiff", ".vrt", ".asc", ".img", ".hgt", ".dt2")
-
-# Bornes d'altitude physiquement possibles sur Terre, avec une marge
-# large (Everest 8 849 m, fosse des Mariannes -10 984 m). Toute valeur
-# en dehors n'est pas une altitude : c'est une valeur de remplissage
-# (-32767, -9999, -3.4e38 laissé par un warp GDAL…) que le fichier a
-# oublié de déclarer en NoData. Fusionnée telle quelle, elle écrase le
-# relief réel et produit un mesh plat ou aberrant SANS message d'erreur.
-_ALT_MIN = -12000.0
-_ALT_MAX = 9500.0
-
-# Hauteur des bandes lues d'un coup lors de l'assainissement. Travailler
-# par bandes garde la mémoire constante : un département réduit peut
-# faire plusieurs Go, il ne doit jamais être chargé en entier.
-_BANDE_LIGNES = 512
-
-# ── Structure imposée (créée au premier lancement) ──────────────────
-#   <racine choisie>/Altimétrie/
-#       ├── Altimétrie TIFF/<Pays>/      ← sources déposées (EPSG:4326)
-#       └── Altimétrie assemble/
+# ── Structure imposée propre à la bathymétrie (créée au 1er lancement) ─
+#   <racine choisie>/Bathymétrie/
+#       ├── Bathymétrie TIFF/<Pays>/      ← relevés déposés (EPSG:4326)
+#       └── Bathymétrie assemble/
 #             └── Assemble <Pays>/<tuile>/<tuile>.tif
-# Imposer la structure supprime toute la classe d'erreurs « chemin
-# introuvable » chez les utilisateurs qui n'ont pas d'organisation.
-DOSSIER_RACINE = "Altimétrie"
-DOSSIER_STOCK = "Altimétrie TIFF"
-DOSSIER_ASSEMBLE = "Altimétrie assemble"
+DOSSIER_RACINE = "Bathymétrie"
+DOSSIER_STOCK = "Bathymétrie TIFF"
+DOSSIER_ASSEMBLE = "Bathymétrie assemble"
 PREFIXE_PAYS_ASSEMBLE = "Assemble "
 
-CFG_RACINE = "dem_root_dir"      # ANCIEN — conservé pour la reprise
-CFG_PAYS = "dem_last_country"    # ANCIEN — conservé pour la reprise
-CFG_STOCK = "dem_stock_dir"      # dossier des sources, choisi par l'utilisateur
-CFG_SORTIE = "dem_output_dir"    # dossier du résultat assemblé
-CFG_QGIS = "qgis_app"            # application QGIS (comme patch_editor_app)
+CFG_RACINE = "bathy_root_dir"      # ANCIEN — conservé pour la reprise
+CFG_PAYS = "bathy_last_country"    # ANCIEN — conservé pour la reprise
+CFG_STOCK = "bathy_stock_dir"      # dossier des relevés, choisi par l'utilisateur
+CFG_SORTIE = "bathy_output_dir"    # dossier du résultat assemblé
+CFG_QGIS = "qgis_app"              # application QGIS (partagée avec Altimétrie)
 
 
 def chemins_structure(racine):
-    """Retourne (stock, assemble) pour une racine <...>/Altimétrie."""
+    """Retourne (stock, assemble) pour une racine <...>/Bathymétrie."""
     return (os.path.join(racine, DOSSIER_STOCK),
             os.path.join(racine, DOSSIER_ASSEMBLE))
 
 
 def creer_structure(base, pays):
-    """Crée la structure complète. Idempotent : ne détruit jamais rien,
-    se contente de créer ce qui manque. Retourne (racine, stock_pays,
-    assemble_pays)."""
+    """Crée la structure complète. Idempotent : ne détruit jamais rien.
+    Retourne (racine, stock_pays, assemble_pays)."""
     racine = os.path.join(base, DOSSIER_RACINE) \
         if os.path.basename(os.path.normpath(base)) != DOSSIER_RACINE \
         else base
@@ -100,12 +95,10 @@ def creer_structure(base, pays):
 
 
 def creer_pays_dans(racine, pays, cible):
-    """Crée le dossier d'un pays dans UN SEUL des deux dossiers de la
-    structure, jamais dans les deux :
-      cible="stock"  → <racine>/Altimétrie TIFF/<pays>
-      cible="sortie" → <racine>/Altimétrie assemble/Assemble <pays>
-    L'autre dossier n'est jamais référencé ni touché. La racine et le
-    dossier parent choisi ne sont créés que s'ils manquent (idempotent).
+    """Crée le dossier d'un pays dans UN SEUL des deux dossiers, jamais
+    dans les deux :
+      cible="stock"  → <racine>/Bathymétrie TIFF/<pays>
+      cible="sortie" → <racine>/Bathymétrie assemble/Assemble <pays>
     Retourne le chemin du dossier créé."""
     stock, assemble = chemins_structure(racine)
     if cible == "stock":
@@ -126,86 +119,25 @@ def lister_pays(racine):
                   and os.path.isdir(os.path.join(stock, d)))
 
 
-# ────────────────────────────────────────────────────────────────────
-#  Partie 1 — logique pure (sans rasterio, entièrement simulable)
-# ────────────────────────────────────────────────────────────────────
-
-def tile_key(lat, lon):
-    """Nom canonique de la tuile : +46-003, +49+007, -34+151…"""
-    return "%s%02d%s%03d" % ("+" if lat >= 0 else "-", abs(int(lat)),
-                             "+" if lon >= 0 else "-", abs(int(lon)))
-
-
-def tile_bounds(lat, lon, debord=DEBORD_DEFAUT):
-    """Emprise (ouest, sud, est, nord) de la tuile élargie du débord.
-    Reproduit exactement la formule du tableur FormuleBord :
-      gdalwarp -te (lon-0.1) (lat-0.1) (lon+1.1) (lat+1.1)"""
-    return (lon - debord, lat - debord,
-            lon + 1 + debord, lat + 1 + debord)
-
-
-def intersecte(src, tgt):
-    """Vrai si les deux emprises se touchent, ne serait-ce que d'un pixel.
-    Un contact strictement tangent n'apporte aucun pixel → exclu."""
-    return (src[0] < tgt[2] and src[2] > tgt[0] and
-            src[1] < tgt[3] and src[3] > tgt[1])
-
-
-def assainir_altitudes(arr, nodata=None):
-    """Remplace par _NODATA toute valeur qui n'est pas une altitude.
-
-    Fonction PURE (numpy seulement) : entièrement simulable sans
-    rasterio. Retourne (tableau float32 assaini, nombre de valeurs
-    remplacées). Le tableau reçu n'est jamais modifié.
-
-    Sont considérées comme inexploitables :
-      - NaN et infinis ;
-      - toute valeur hors [_ALT_MIN, _ALT_MAX] : -32767, -9999,
-        -3.4e38, 32767… ;
-      - la valeur NoData déclarée par le fichier, si elle est dans les
-        bornes (certains DEM déclarent 0 ou -1).
-
-    Après passage, fill_nodata / merge peuvent faire leur travail :
-    un trou reste un trou au lieu de devenir une fausse altitude.
-    """
-    import numpy as np
-    a = np.array(arr, dtype="float32", copy=True)
-    fini = np.isfinite(a)
-    mauvais = ~fini
-    mauvais |= fini & ((a < _ALT_MIN) | (a > _ALT_MAX))
-    if nodata is not None:
-        try:
-            nd = float(nodata)
-            if np.isfinite(nd) and _ALT_MIN <= nd <= _ALT_MAX:
-                # Tolérance : le NoData déclaré peut ne pas être
-                # représentable exactement en float32.
-                mauvais |= fini & (np.abs(a - np.float32(nd)) <= 1e-3)
-        except (TypeError, ValueError):
-            pass
-    nb = int(mauvais.sum())
-    if nb:
-        a[mauvais] = _NODATA
-    return a, nb
-
-
 def maj_cfg_lignes(lignes, chemin):
-    """Remplace (ou ajoute) custom_dem sans toucher aux autres lignes."""
+    """Remplace (ou ajoute) custom_bathy_dem SANS toucher aux autres
+    lignes — en particulier custom_dem (le relief) reste intact."""
     out = []
     trouve = False
     for l in lignes:
-        if l.startswith("custom_dem="):
-            out.append("custom_dem=%s\n" % chemin)
+        if l.startswith("custom_bathy_dem="):
+            out.append("custom_bathy_dem=%s\n" % chemin)
             trouve = True
         else:
             out.append(l)
     if not trouve:
-        out.append("custom_dem=%s\n" % chemin)
+        out.append("custom_bathy_dem=%s\n" % chemin)
     return out
 
 
-def ecrire_custom_dem(cfg_path, chemin_tif):
-    """Écrit custom_dem dans le cfg de la tuile. Le cfg est créé s'il
-    n'existe pas. Aucune autre clé n'est touchée."""
+def ecrire_custom_bathy_dem(cfg_path, chemin_tif):
+    """Écrit custom_bathy_dem dans le cfg de la tuile. Le cfg est créé
+    s'il n'existe pas. Aucune autre clé n'est touchée (custom_dem inclus)."""
     lignes = []
     if os.path.isfile(cfg_path):
         with open(cfg_path, "r", encoding="utf-8") as f:
@@ -215,687 +147,8 @@ def ecrire_custom_dem(cfg_path, chemin_tif):
         f.writelines(lignes)
 
 
-def lister_sources(dossier, sortie_exclue=None):
-    """Fichiers raster du dossier de la tuile, liens relatifs compris.
-    Le fichier de sortie déjà présent est exclu (pas d'auto-fusion)."""
-    res = []
-    if not dossier or not os.path.isdir(dossier):
-        return res
-    for f in sorted(os.listdir(dossier)):
-        if f.startswith("."):
-            continue
-        if sortie_exclue and f == sortie_exclue:
-            continue
-        p = os.path.join(dossier, f)
-        # os.path.isfile suit les liens symboliques relatifs.
-        if os.path.isfile(p) and f.lower().endswith(_EXT_RASTER):
-            res.append(p)
-    return res
-
-
-def sources_depuis_stock(racine, lat, lon, debord=DEBORD_DEFAUT):
-    """Compatibilité : ancienne structure imposée <racine>/Altimétrie TIFF.
-    Se contente de désigner le dossier de stock puis délègue."""
-    stock, _a = chemins_structure(racine)
-    return sources_depuis_dossier(stock, lat, lon, debord)
-
-
-def sources_depuis_dossier(stock, lat, lon, debord=DEBORD_DEFAUT):
-    """Étape B — parcourt le dossier des sources DÉSIGNÉ PAR L'UTILISATEUR
-    (sous-dossiers compris) et retourne les fichiers dont l'emprise
-    intersecte la tuile élargie. Aucun nom de dossier n'est imposé.
-
-    Nécessite rasterio pour lire les emprises. Les fichiers dont
-    l'emprise n'est pas lisible en degrés sont retournés quand même :
-    assembler_tuile() refera le test après reprojection.
-    """
-    res = []
-    if not os.path.isdir(stock):
-        return res
-    try:
-        rasterio = _import_rasterio()[0]
-    except Exception:
-        return res
-    bornes = tile_bounds(lat, lon, debord)
-    # followlinks=True : indispensable. L'utilisateur place souvent un
-    # LIEN vers son stock réel (plusieurs dizaines de Go) au lieu de
-    # dupliquer les données. Sans cette option, os.walk ne descendrait
-    # pas dans le lien et ne trouverait aucun fichier.
-    vus = set()
-    for rep, sous, fichiers in os.walk(stock, followlinks=True):
-        # Garde-fou : un lien qui pointerait sur un parent créerait une
-        # boucle infinie. On ne visite jamais deux fois le même dossier.
-        reel = os.path.realpath(rep)
-        if reel in vus:
-            sous[:] = []
-            continue
-        vus.add(reel)
-        for f in sorted(fichiers):
-            if f.startswith(".") or not f.lower().endswith(_EXT_RASTER):
-                continue
-            p = os.path.join(rep, f)
-            try:
-                with rasterio.open(p) as ds:
-                    b = ds.bounds
-                    crs = ds.crs
-                if crs is not None and crs.to_epsg() == 4326:
-                    if not intersecte((b.left, b.bottom, b.right, b.top),
-                                      bornes):
-                        continue
-                # CRS non 4326 → emprise non comparable ici : on garde,
-                # le test définitif est fait après reprojection.
-                res.append(p)
-            except Exception:
-                continue
-    return res
-
-
-# ────────────────────────────────────────────────────────────────────
-#  Partie 2 — moteur raster (rasterio)
-# ────────────────────────────────────────────────────────────────────
-
-def _import_rasterio():
-    """Import différé : le module reste chargeable même sans rasterio,
-    et la fenêtre affiche alors un message clair au lieu de planter."""
-    import rasterio
-    from rasterio.warp import calculate_default_transform, reproject, Resampling
-    from rasterio.merge import merge
-    from rasterio.crs import CRS
-    return rasterio, calculate_default_transform, reproject, Resampling, merge, CRS
-
-
-def rasterio_disponible():
-    try:
-        _import_rasterio()
-        return True
-    except Exception:
-        return False
-
-
-def _bandes(ds, lignes=_BANDE_LIGNES):
-    """Découpe le fichier en bandes horizontales. Mémoire constante."""
-    from rasterio.windows import Window
-    i = 0
-    while i < ds.height:
-        h = min(lignes, ds.height - i)
-        yield Window(0, i, ds.width, h)
-        i += h
-
-
-def _fichier_sain(src_path):
-    """Vrai si le fichier ne contient AUCUNE valeur aberrante.
-    Simple lecture, aucune écriture : dans le cas normal (la grande
-    majorité des fichiers) rien n'est copié sur le disque."""
-    rasterio = _import_rasterio()[0]
-    with rasterio.open(src_path) as ds:
-        nd = ds.nodata
-        for w in _bandes(ds):
-            _a, n = assainir_altitudes(ds.read(1, window=w), nd)
-            if n:
-                return False
-    return True
-
-
-def _assainir_fichier(src_path, dst_path, log=None):
-    """Réécrit le fichier bande par bande en remplaçant les valeurs
-    aberrantes par _NODATA. La géométrie (emprise, résolution, CRS)
-    est conservée à l'identique : seule la valeur des pixels change.
-    Le fichier source n'est jamais modifié."""
-    rasterio = _import_rasterio()[0]
-    total = 0
-    with rasterio.open(src_path) as src:
-        profil = src.profile.copy()
-        profil.update(driver="GTiff", count=1, dtype="float32",
-                      nodata=_NODATA, compress="DEFLATE")
-        profil.pop("blockxsize", None)
-        profil.pop("blockysize", None)
-        profil["tiled"] = False
-        with rasterio.open(dst_path, "w", **profil) as dst:
-            for w in _bandes(src):
-                a, n = assainir_altitudes(src.read(1, window=w), src.nodata)
-                total += n
-                dst.write(a, 1, window=w)
-    if log and total:
-        log("      %d valeur(s) aberrante(s) neutralisée(s) : %s"
-            % (total, os.path.basename(src_path)))
-    return dst_path, total
-
-
-def _source_assainie(src_path, tmp_dir, marque, log=None):
-    """Retourne le chemin à utiliser réellement pour la reprojection :
-    le fichier d'origine s'il est sain, sinon une copie assainie écrite
-    dans tmp_dir. Retourne (chemin, chemin_temporaire_ou_None)."""
-    try:
-        if _fichier_sain(src_path):
-            return src_path, None
-    except Exception as e:
-        # Un fichier illisible sera de toute façon signalé par la
-        # reprojection : on ne bloque pas ici.
-        if log:
-            log("      Contrôle des valeurs impossible : %s" % e)
-        return src_path, None
-    tmp_path = os.path.join(tmp_dir, "sain_%s.tif" % marque)
-    try:
-        _assainir_fichier(src_path, tmp_path, log=log)
-    except Exception as e:
-        if log:
-            log("      Assainissement impossible : %s" % e)
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
-        return src_path, None
-    return tmp_path, tmp_path
-
-
-def _reprojeter(src_path, dst_path, log=None):
-    """Reprojette en EPSG:4326 et impose le NoData de sortie.
-    Équivaut à : gdalwarp -t_srs EPSG:4326 -dstnodata -99999"""
-    (rasterio, calculate_default_transform, reproject,
-     Resampling, merge, CRS) = _import_rasterio()
-
-    with rasterio.open(src_path) as src:
-        src_crs = src.crs
-        if src_crs is None:
-            # Aucun CRS déclaré (cas des .asc IGN bruts) → repli Lambert-93.
-            src_crs = CRS.from_string(_CRS_REPLI)
-            if log:
-                log("      CRS absent — repli %s : %s"
-                    % (_CRS_REPLI, os.path.basename(src_path)))
-
-        dst_crs = CRS.from_epsg(4326)
-        transform, width, height = calculate_default_transform(
-            src_crs, dst_crs, src.width, src.height, *src.bounds)
-
-        profil = src.profile.copy()
-        profil.update(driver="GTiff", crs=dst_crs, transform=transform,
-                      width=width, height=height, nodata=_NODATA,
-                      dtype="float32", count=1, compress="DEFLATE")
-        profil.pop("blockxsize", None)
-        profil.pop("blockysize", None)
-        if width >= 256 and height >= 256:
-            profil["tiled"] = True
-        else:
-            profil["tiled"] = False
-
-        with rasterio.open(dst_path, "w", **profil) as dst:
-            reproject(source=rasterio.band(src, 1),
-                      destination=rasterio.band(dst, 1),
-                      src_transform=src.transform, src_crs=src_crs,
-                      src_nodata=src.nodata,
-                      dst_transform=transform, dst_crs=dst_crs,
-                      dst_nodata=_NODATA,
-                      resampling=Resampling.bilinear)
-    return dst_path
-
-
-def assembler_tuile(lat, lon, dossier_tuile, debord=DEBORD_DEFAUT,
-                    log=None, sources=None):
-    """Assemble le DEM de la tuile. Retourne le chemin du .tif produit.
-
-    Enchaînement, identique à la procédure manuelle :
-      1) sélection des sources qui intersectent la tuile élargie
-      2) reprojection EPSG:4326 + NoData -99999
-      3) fusion (merge) bornée à l'emprise élargie
-      4) écriture de <tuile>.tif dans le dossier de la tuile
-    """
-    import tempfile
-    import shutil
-
-    (rasterio, calculate_default_transform, reproject,
-     Resampling, merge, CRS) = _import_rasterio()
-
-    def _log(m):
-        if log:
-            log(m)
-
-    cle = tile_key(lat, lon)
-    nom_sortie = cle + ".tif"
-    sortie = os.path.join(dossier_tuile, nom_sortie)
-    bornes = tile_bounds(lat, lon, debord)
-
-    _log("   [DEM] Tuile %s — emprise %.3f %.3f %.3f %.3f (débord %.3f°)"
-         % (cle, bornes[0], bornes[1], bornes[2], bornes[3], debord))
-
-    if sources is None:
-        sources = lister_sources(dossier_tuile, sortie_exclue=nom_sortie)
-    if not sources:
-        raise RuntimeError("Aucun fichier altimétrique dans le dossier "
-                           "de la tuile.")
-
-    tmp = tempfile.mkdtemp(prefix="o4_dem_")
-    reprojetes = []
-    ignorees = []
-    try:
-        # ── 1 + 2 : lecture, test d'intersection, reprojection ────────
-        for i, s in enumerate(sources):
-            nom = os.path.basename(s)
-            try:
-                with rasterio.open(s) as ds:
-                    b = ds.bounds
-                    crs = ds.crs
-                    if crs is not None and crs.to_epsg() == 4326:
-                        emprise = (b.left, b.bottom, b.right, b.top)
-                    else:
-                        # Emprise inconnue en degrés avant reprojection :
-                        # on ne peut pas trancher ici → on reprojette puis
-                        # on teste. Marqué par emprise=None.
-                        emprise = None
-            except Exception as e:
-                ignorees.append((nom, "illisible : %s" % e))
-                _log("      IGNORÉ (illisible) : %s" % nom)
-                continue
-
-            if emprise is not None and not intersecte(emprise, bornes):
-                ignorees.append((nom, "hors emprise %.3f %.3f %.3f %.3f"
-                                 % emprise))
-                _log("      IGNORÉ (hors emprise) : %s" % nom)
-                continue
-
-            dst = os.path.join(tmp, "r%03d.tif" % i)
-            # Valeurs de remplissage non déclarées (-32767, -3.4e38, NaN)
-            # neutralisées AVANT la reprojection : sinon elles sont
-            # moyennées avec le relief réel et aplatissent le mesh sans
-            # qu'aucune erreur ne soit signalée.
-            src_reel, a_effacer = _source_assainie(s, tmp, "a%03d" % i,
-                                                   log=_log)
-            try:
-                _reprojeter(src_reel, dst, log=_log)
-            except Exception as e:
-                ignorees.append((nom, "reprojection : %s" % e))
-                _log("      IGNORÉ (reprojection) : %s" % nom)
-                continue
-            finally:
-                if a_effacer:
-                    try:
-                        os.remove(a_effacer)
-                    except Exception:
-                        pass
-
-            # Second test après reprojection (cas emprise inconnue).
-            with rasterio.open(dst) as ds:
-                b = ds.bounds
-                if not intersecte((b.left, b.bottom, b.right, b.top),
-                                  bornes):
-                    ignorees.append(
-                        (nom, "hors emprise après reprojection "
-                              "%.3f %.3f %.3f %.3f"
-                              % (b.left, b.bottom, b.right, b.top)))
-                    _log("      IGNORÉ (hors emprise) : %s" % nom)
-                    continue
-
-            reprojetes.append(dst)
-            _log("      RETENU : %s" % nom)
-
-        if not reprojetes:
-            detail = "\n".join("   • %s : %s" % (n, r) for n, r in ignorees)
-            raise RuntimeError(
-                "Aucune source ne recouvre cette tuile.\n"
-                "Emprise cherchée : %.3f %.3f %.3f %.3f\n"
-                "%d fichier(s) écarté(s) :\n%s"
-                % (bornes[0], bornes[1], bornes[2], bornes[3],
-                   len(ignorees), detail or "   (aucun)"))
-
-        # ── 3 : fusion bornée à l'emprise élargie ─────────────────────
-        _log("   [DEM] Fusion de %d source(s)…" % len(reprojetes))
-        ouverts = [rasterio.open(p) for p in reprojetes]
-        try:
-            mosaic, out_transform = merge(ouverts, bounds=bornes,
-                                          nodata=_NODATA)
-            profil = ouverts[0].profile.copy()
-        finally:
-            for o in ouverts:
-                try:
-                    o.close()
-                except Exception:
-                    pass
-
-        profil.update(driver="GTiff", height=mosaic.shape[1],
-                      width=mosaic.shape[2], transform=out_transform,
-                      count=1, dtype="float32", nodata=_NODATA,
-                      compress="DEFLATE")
-        profil.pop("blockxsize", None)
-        profil.pop("blockysize", None)
-        profil["tiled"] = (mosaic.shape[1] >= 256 and mosaic.shape[2] >= 256)
-
-        # ── 4 : écriture ─────────────────────────────────────────────
-        tmp_out = os.path.join(tmp, "final.tif")
-        with rasterio.open(tmp_out, "w", **profil) as dst:
-            dst.write(mosaic[0].astype("float32"), 1)
-
-        # Écriture finale seulement si tout a réussi : un assemblage
-        # interrompu ne laisse jamais un .tif partiel à la place du bon.
-        shutil.move(tmp_out, sortie)
-        _log("   [DEM] Écrit : %s" % sortie)
-        return sortie, ignorees
-    finally:
-        try:
-            shutil.rmtree(tmp, ignore_errors=True)
-        except Exception:
-            pass
-
-
-def resolution_metres(src_path):
-    """Résolution approximative du fichier, en mètres.
-    Sert à afficher ce que donnera un ratio de réduction et à empêcher
-    de « réduire » une source déjà grossière (Sonny ≈ 20 m) en dessous
-    de sa résolution native, ce qui n'apporterait aucune information."""
-    rasterio = _import_rasterio()[0]
-    with rasterio.open(src_path) as ds:
-        rx, ry = abs(ds.res[0]), abs(ds.res[1])
-        crs = ds.crs
-        lat = (ds.bounds.bottom + ds.bounds.top) / 2.0
-        if crs is not None and crs.to_epsg() == 4326:
-            # Degrés → mètres, à la latitude médiane du fichier.
-            import math
-            mx = rx * 111320.0 * max(0.05, math.cos(math.radians(lat)))
-            my = ry * 110540.0
-            return (mx + my) / 2.0
-        # CRS projeté (Lambert-93, UTM…) : l'unité est déjà le mètre.
-        return (rx + ry) / 2.0
-
-
-def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
-                  crs_repli=_CRS_REPLI, log=None, stop=None):
-    """Chaîne A — prépare le fichier réduit d'un département / pays.
-
-    Équivaut à la procédure Terminal :
-        gdalbuildvrt X.vrt *.asc
-        gdalwarp -s_srs <CRS> -t_srs EPSG:4326 X.vrt XEPSG.tif
-        gdal_translate -outsize <ratio>% <ratio>% XEPSG.tif X-reduit.tif
-
-    DIFFÉRENCE ASSUMÉE : l'ordre est inversé (reprojection + réduction
-    dalle par dalle, PUIS assemblage). Le résultat est identique, mais la
-    mémoire reste constante : un département IGN en 1 m représente des
-    dizaines de Go et ne peut pas être assemblé en mémoire.
-
-    Le CRS source est LU dans chaque fichier ; crs_repli ne sert que pour
-    les fichiers qui n'en déclarent aucun (cas des .asc IGN bruts, d'où
-    le -s_srs EPSG:2154 de la procédure manuelle).
-    """
-    import tempfile
-    import shutil
-
-    (rasterio, calculate_default_transform, reproject,
-     Resampling, merge, CRS) = _import_rasterio()
-    from rasterio.transform import Affine
-
-    def _log(m=""):
-        if log:
-            log(m)
-
-    if not os.path.isdir(dossier_source):
-        raise RuntimeError("Dossier source introuvable : %s" % dossier_source)
-    ratio = max(0.01, min(1.0, float(ratio)))
-
-    sources = []
-    for rep, _d, fichiers in os.walk(dossier_source, followlinks=True):
-        for f in sorted(fichiers):
-            if not f.startswith(".") and f.lower().endswith(_EXT_RASTER):
-                sources.append(os.path.join(rep, f))
-    if not sources:
-        raise RuntimeError("Aucun fichier altimétrique dans :\n%s"
-                           % dossier_source)
-
-    _log("   [PREP] %d fichier(s) source(s), ratio %.0f %%"
-         % (len(sources), ratio * 100))
-
-    tmp = tempfile.mkdtemp(prefix="o4_prep_")
-    reduits = []
-    ignorees = []
-    try:
-        dst_crs = CRS.from_epsg(4326)
-        for i, src_path in enumerate(sources):
-            if stop is not None and stop():
-                raise RuntimeError("Préparation interrompue par "
-                                   "l'utilisateur.")
-            nom = os.path.basename(src_path)
-            # Même garde-fou qu'à l'assemblage : une dalle qui contient
-            # une valeur de remplissage non déclarée contaminerait, via
-            # le rééchantillonnage « average », tous les pixels réduits
-            # de son voisinage.
-            src_reel, a_effacer = _source_assainie(src_path, tmp,
-                                                   "b%05d" % i, log=_log)
-            try:
-                with rasterio.open(src_reel) as src:
-                    src_crs = src.crs
-                    if src_crs is None:
-                        src_crs = CRS.from_string(crs_repli)
-                    transform, width, height = calculate_default_transform(
-                        src_crs, dst_crs, src.width, src.height,
-                        *src.bounds)
-                    # Réduction : on applique le ratio à la grille de
-                    # sortie, exactement comme gdal_translate -outsize.
-                    w2 = max(1, int(round(width * ratio)))
-                    h2 = max(1, int(round(height * ratio)))
-                    t2 = transform * Affine.scale(width / float(w2),
-                                                  height / float(h2))
-                    profil = src.profile.copy()
-                    profil.update(driver="GTiff", crs=dst_crs,
-                                  transform=t2, width=w2, height=h2,
-                                  count=1, dtype="float32",
-                                  nodata=_NODATA, compress="DEFLATE")
-                    profil.pop("blockxsize", None)
-                    profil.pop("blockysize", None)
-                    profil["tiled"] = (w2 >= 256 and h2 >= 256)
-                    dst_path = os.path.join(tmp, "p%05d.tif" % i)
-                    with rasterio.open(dst_path, "w", **profil) as dst:
-                        reproject(
-                            source=rasterio.band(src, 1),
-                            destination=rasterio.band(dst, 1),
-                            src_transform=src.transform, src_crs=src_crs,
-                            src_nodata=src.nodata,
-                            dst_transform=t2, dst_crs=dst_crs,
-                            dst_nodata=_NODATA,
-                            # average : moyenne des pixels regroupés.
-                            # Sur un MNT c'est nettement meilleur que le
-                            # plus proche voisin, qui crée des marches.
-                            resampling=(Resampling.average if ratio < 1.0
-                                        else Resampling.bilinear))
-                reduits.append(dst_path)
-            except Exception as e:
-                ignorees.append((nom, str(e)))
-                _log("      IGNORÉ : %s (%s)" % (nom, e))
-                continue
-            finally:
-                if a_effacer:
-                    try:
-                        os.remove(a_effacer)
-                    except Exception:
-                        pass
-            if (i + 1) % 10 == 0 or i + 1 == len(sources):
-                _log("      %d / %d traité(s)" % (i + 1, len(sources)))
-
-        if not reduits:
-            detail = "\n".join("   • %s : %s" % (n, r) for n, r in ignorees)
-            raise RuntimeError("Aucun fichier exploitable.\n%s" % detail)
-
-        _log("   [PREP] Assemblage de %d dalle(s) réduite(s)…"
-             % len(reduits))
-        ouverts = [rasterio.open(p) for p in reduits]
-        try:
-            mosaic, out_transform = merge(ouverts, nodata=_NODATA)
-            profil = ouverts[0].profile.copy()
-        finally:
-            for o in ouverts:
-                try:
-                    o.close()
-                except Exception:
-                    pass
-
-        profil.update(driver="GTiff", height=mosaic.shape[1],
-                      width=mosaic.shape[2], transform=out_transform,
-                      count=1, dtype="float32", nodata=_NODATA,
-                      compress="DEFLATE")
-        profil.pop("blockxsize", None)
-        profil.pop("blockysize", None)
-        profil["tiled"] = (mosaic.shape[1] >= 256 and mosaic.shape[2] >= 256)
-
-        tmp_out = os.path.join(tmp, "final.tif")
-        with rasterio.open(tmp_out, "w", **profil) as dst:
-            dst.write(mosaic[0].astype("float32"), 1)
-        os.makedirs(os.path.dirname(fichier_sortie), exist_ok=True)
-        # Écriture atomique : jamais de fichier partiel dans le stock.
-        shutil.move(tmp_out, fichier_sortie)
-        _log("   [PREP] Écrit : %s" % fichier_sortie)
-        return fichier_sortie, ignorees
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-# ────────────────────────────────────────────────────────────────────
-#  Partie 3 — auto-test (validation du moteur sans toucher aux données)
-# ────────────────────────────────────────────────────────────────────
-
-def auto_test(log=None):
-    """Fabrique des GeoTIFF de test dans un dossier temporaire, exécute
-    la chaîne complète et vérifie le résultat. Ne touche à AUCUN fichier
-    de Roland. Retourne (ok, rapport)."""
-    import tempfile
-    import shutil
-
-    lignes = []
-
-    def _l(m):
-        lignes.append(m)
-        if log:
-            log(m)
-
-    # ── Tests de logique pure (toujours exécutables) ─────────────────
-    try:
-        assert tile_key(46, -3) == "+46-003"
-        assert tile_key(49, 7) == "+49+007"
-        assert tile_key(-34, 151) == "-34+151"
-        _l("[1/7] Nommage des tuiles ................ OK")
-
-        assert tile_bounds(45, 1) == (0.9, 44.9, 2.1, 46.1)
-        b = [round(x, 6) for x in tile_bounds(49, 7)]
-        assert b == [6.9, 48.9, 8.1, 50.1]
-        _l("[2/7] Emprise + débord (formule .ods) ... OK")
-
-        t = tile_bounds(49, 7)
-        assert intersecte((5.0, 48.0, 6.9001, 50.0), t)
-        assert not intersecte((5.0, 48.0, 6.9, 50.0), t)
-        assert not intersecte((10, 49, 11, 50), t)
-        _l("[3/7] Règle du pixel de contact ......... OK")
-
-        r = maj_cfg_lignes(["default_zl=17\n", "custom_dem=/vieux.tif\n"],
-                           "/neuf.tif")
-        assert r[1] == "custom_dem=/neuf.tif\n" and len(r) == 2
-        r = maj_cfg_lignes(["default_zl=17\n"], "/neuf.tif")
-        assert r[-1] == "custom_dem=/neuf.tif\n"
-        _l("[4/7] Écriture custom_dem ............... OK")
-
-        import numpy as _np
-        _a = _np.array([[100.0, -32767.0, _np.nan],
-                        [-3.4e38, 8000.0, 1e30]], dtype="float32")
-        _r, _n = assainir_altitudes(_a, -32767.0)
-        assert _n == 4, "valeurs aberrantes mal comptees : %d" % _n
-        assert _r[0][0] == 100.0 and _r[1][1] == 8000.0, \
-            "une altitude valide a ete detruite"
-        assert (_r[0][1] == _NODATA and _r[1][0] == _NODATA
-                and _r[1][2] == _NODATA), "remplissage non neutralise"
-        assert _np.isnan(_a[0][2]), "le tableau source a ete modifie"
-        _r2, _n2 = assainir_altitudes(
-            _np.array([[0.0, 50.0]], dtype="float32"), 0.0)
-        assert _n2 == 1 and _r2[0][1] == 50.0
-        _r3, _n3 = assainir_altitudes(
-            _np.array([[0.0, 50.0]], dtype="float32"), None)
-        assert _n3 == 0
-        _l("[5/7] Neutralisation des DEM douteux .... OK")
-    except Exception as e:
-        _l("ÉCHEC logique : %s" % e)
-        return False, "\n".join(lignes)
-
-    # ── Tests raster (nécessitent rasterio) ──────────────────────────
-    if not rasterio_disponible():
-        _l("[6/7] rasterio .......................... ABSENT")
-        _l("")
-        _l("rasterio est introuvable dans le venv d'Ortho4XP.")
-        _l("Le moteur d'assemblage ne peut pas fonctionner.")
-        return False, "\n".join(lignes)
-
-    (rasterio, calculate_default_transform, reproject,
-     Resampling, merge, CRS) = _import_rasterio()
-    import numpy as np
-    from rasterio.transform import from_origin
-
-    tmp = tempfile.mkdtemp(prefix="o4_dem_test_")
-    try:
-        # Deux dalles voisines en 4326, NoData -32767, qui se chevauchent
-        # et couvrent ensemble la tuile +45+001.
-        chemins = []
-        for k, (x0, y0) in enumerate([(0.5, 46.5), (1.4, 46.5)]):
-            p = os.path.join(tmp, "src%d.tif" % k)
-            data = np.full((120, 120), 100.0 + k, dtype="float32")
-            data[0, 0] = -32767.0
-            prof = dict(driver="GTiff", height=120, width=120, count=1,
-                        dtype="float32", crs=CRS.from_epsg(4326),
-                        transform=from_origin(x0, y0, 0.01, 0.01),
-                        nodata=-32767.0)
-            with rasterio.open(p, "w", **prof) as d:
-                d.write(data, 1)
-            chemins.append(p)
-
-        # Une dalle volontairement hors emprise : doit être ignorée.
-        p = os.path.join(tmp, "hors.tif")
-        prof = dict(driver="GTiff", height=20, width=20, count=1,
-                    dtype="float32", crs=CRS.from_epsg(4326),
-                    transform=from_origin(20.0, 60.0, 0.01, 0.01),
-                    nodata=-32767.0)
-        with rasterio.open(p, "w", **prof) as d:
-            d.write(np.full((20, 20), 5.0, dtype="float32"), 1)
-        chemins.append(p)
-
-        _l("[6/7] Lecture / reprojection ............ OK")
-
-        sortie, ignorees = assembler_tuile(45, 1, tmp, log=_l,
-                                           sources=chemins)
-        assert os.path.isfile(sortie), "fichier de sortie absent"
-        assert os.path.basename(sortie) == "+45+001.tif"
-        assert any(n == "hors.tif" for n, _r in ignorees), \
-            "la dalle hors emprise aurait dû être ignorée"
-
-        with rasterio.open(sortie) as d:
-            assert d.crs.to_epsg() == 4326, "CRS de sortie incorrect"
-            assert abs(d.nodata - _NODATA) < 1e-6, "NoData incorrect"
-            bb = d.bounds
-            for got, want in ((bb.left, 0.9), (bb.bottom, 44.9),
-                              (bb.right, 2.1), (bb.top, 46.1)):
-                assert abs(got - want) < 0.02, \
-                    "emprise %.4f attendue %.4f" % (got, want)
-            arr = d.read(1)
-            assert float(arr.max()) > 99.0, "aucune donnée utile fusionnée"
-        _l("[7/7] Fusion + écriture + NoData ........ OK")
-        _l("")
-        _l("Moteur d'assemblage opérationnel.")
-        return True, "\n".join(lignes)
-    except Exception as e:
-        _l("ÉCHEC raster : %s" % e)
-        return False, "\n".join(lignes)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-# ────────────────────────────────────────────────────────────────────
-#  Partie 4 — fenêtre
-# ────────────────────────────────────────────────────────────────────
-
-def _lire_cfg_valeur(cfg_path, cle):
-    try:
-        if not os.path.isfile(cfg_path):
-            return ""
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            for l in f:
-                if l.startswith(cle + "="):
-                    return l.split("=", 1)[1].strip()
-    except Exception:
-        pass
-    return ""
-
-
-def open_altimetrie_window(gui):
-    """Point d'entrée du module, appelé par le bouton « Altimétrie / DEM ».
+def open_bathymetrie_window(gui):
+    """Point d'entrée du module, appelé par le bouton « Bathymétrie ».
 
     Au premier lancement, un assistant crée la structure imposée. Ensuite,
     le module trouve seul les sources qui recouvrent la tuile.
@@ -943,7 +196,7 @@ def open_altimetrie_window(gui):
         lat = int(gui.lat.get() or 0)
         lon = int(gui.lon.get() or 0)
     except Exception:
-        messagebox.showerror(_tr("Altimétrie / DEM"),
+        messagebox.showerror(_tr("Bathymétrie"),
                              _tr("Latitude / longitude invalides."))
         return
 
@@ -967,7 +220,7 @@ def open_altimetrie_window(gui):
     except Exception:
         pass
     win = tk.Toplevel(root_ref) if root_ref else tk.Toplevel(gui)
-    win.title(_tr("Altimétrie / DEM — Ortho4XP V3"))
+    win.title(_tr("Bathymétrie — Ortho4XP V3"))
     win.configure(bg=BG)
     # Rattachée au GUI : elle ne se perd jamais derrière la fenêtre
     # principale après une boîte de dialogue.
@@ -1063,7 +316,7 @@ def open_altimetrie_window(gui):
     sw = win.winfo_screenwidth()
     sh = win.winfo_screenheight()
 
-    tk.Label(win, text=_tr("Altimétrie / DEM") + "  —  " + cle,
+    tk.Label(win, text=_tr("Bathymétrie") + "  —  " + cle,
              font=FONT_T, bg=BG, fg=FG).pack(pady=(12, 2))
     tk.Label(win,
              text=_tr("Structure  →  Préparer les données (une fois par "
@@ -1168,10 +421,10 @@ def open_altimetrie_window(gui):
 
     # ── Assistant : désignation des deux dossiers ────────────────────
     def _choisir_stock():
-        """Dossier où l'utilisateur dépose ses altimétries sources."""
+        """Dossier où l'utilisateur dépose ses bathymétries sources."""
         d = filedialog.askdirectory(
             parent=win, initialdir=_stock[0] or os.path.expanduser("~"),
-            title=_tr("Dossier de vos altimétries sources (.tif, .asc…)"))
+            title=_tr("Dossier de vos bathymétries sources (.tif, .asc…)"))
         _remonter()
         if not d:
             return False
@@ -1185,7 +438,7 @@ def open_altimetrie_window(gui):
         d = filedialog.askdirectory(
             parent=win,
             initialdir=_sortie[0] or _stock[0] or os.path.expanduser("~"),
-            title=_tr("Dossier de destination des altimétries assemblées"))
+            title=_tr("Dossier de destination des bathymétries assemblées"))
         _remonter()
         if not d:
             return False
@@ -1200,14 +453,14 @@ def open_altimetrie_window(gui):
         de s'en servir : ceux qui ont déjà leurs dossiers utilisent les
         boutons « Dossier des sources » et « Dossier de sortie »."""
         messagebox.showinfo(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             _tr("Choisissez le disque ou le dossier où créer votre "
-                "organisation des altimétries (un disque externe "
+                "organisation des bathymétries (un disque externe "
                 "convient)."), parent=win)
         _remonter()
         base = filedialog.askdirectory(
             parent=win,
-            title=_tr("Où créer l'organisation des altimétries"))
+            title=_tr("Où créer l'organisation des bathymétries"))
         _remonter()
         if not base:
             return False
@@ -1218,7 +471,7 @@ def open_altimetrie_window(gui):
         if DOSSIER_RACINE in _parts:
             base = os.sep.join(_parts[:_parts.index(DOSSIER_RACINE)]) or os.sep
         pays = _saisie(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             _tr("Nom du pays (ex. : France, Suisse, Allemagne) :"),
             parent=win, initialvalue="France")
         _remonter()
@@ -1232,7 +485,7 @@ def open_altimetrie_window(gui):
             racine, stock_pays, assemble_pays = creer_structure(base, pays)
         except Exception as e:
             _etat("")
-            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            messagebox.showerror(_tr("Bathymétrie"), str(e), parent=win)
             _remonter()
             return False
         _stock[0] = stock_pays
@@ -1257,18 +510,18 @@ def open_altimetrie_window(gui):
         _log(_tr("Le résultat assemblé sera écrit dans :"))
         _log("   " + os.path.join(assemble_pays, cle, cle + ".tif"))
         messagebox.showinfo(
-            _tr("Altimétrie / DEM"),
-            _tr("Structure créée.\n\nDéposez vos altimétries dans :\n{d}"
+            _tr("Bathymétrie"),
+            _tr("Structure créée.\n\nDéposez vos bathymétries dans :\n{d}"
                 "\n\nFormat requis : EPSG:4326.").format(d=stock_pays),
             parent=win)
         _remonter()
         return True
 
     def _racine_structure():
-        """Déduit la racine <...>/Altimétrie d'une structure DÉJÀ créée,
+        """Déduit la racine <...>/Bathymétrie d'une structure DÉJÀ créée,
         à partir du dossier des sources courant. Retourne la racine si
         le dossier courant appartient bien à la structure imposée
-        (<racine>/Altimétrie TIFF/…), sinon None (dossiers personnels ou
+        (<racine>/Bathymétrie TIFF/…), sinon None (dossiers personnels ou
         aucune structure en place)."""
         s = _stock[0]
         if not s:
@@ -1282,10 +535,10 @@ def open_altimetrie_window(gui):
         return None
 
     def _resoudre_racine():
-        """Retrouve la racine <...>/Altimétrie de la structure existante
+        """Retrouve la racine <...>/Bathymétrie de la structure existante
         sans jamais la recréer : d'abord depuis le dossier des sources,
         sinon depuis le dossier de sortie, sinon en demandant à
-        l'utilisateur d'ouvrir son dossier « Altimétrie ». Retourne la
+        l'utilisateur d'ouvrir son dossier « Bathymétrie ». Retourne la
         racine ou None si l'utilisateur annule."""
         r = _racine_structure()
         if r:
@@ -1298,14 +551,14 @@ def open_altimetrie_window(gui):
                 if os.path.isdir(os.path.join(rr, DOSSIER_ASSEMBLE)):
                     return rr
         messagebox.showinfo(
-            _tr("Altimétrie / DEM"),
-            _tr("Ouvrez le dossier « Altimétrie » de votre structure."),
+            _tr("Bathymétrie"),
+            _tr("Ouvrez le dossier « Bathymétrie » de votre structure."),
             parent=win)
         _remonter()
         base = filedialog.askdirectory(
             parent=win,
             initialdir=_stock[0] or os.path.expanduser("~"),
-            title=_tr("Ouvrir la racine Altimétrie"))
+            title=_tr("Ouvrir la racine Bathymétrie"))
         _remonter()
         if not base:
             return None
@@ -1318,8 +571,8 @@ def open_altimetrie_window(gui):
 
     def _ajouter_pays():
         """Bouton « Ajouter un pays ».
-        1) Une fenêtre demande le dossier de destination : Altimétrie TIFF
-           OU Altimétrie assemble.
+        1) Une fenêtre demande le dossier de destination : Bathymétrie TIFF
+           OU Bathymétrie assemble.
         2) Une seconde fenêtre demande le nom du pays.
         3) À la validation, le dossier est créé UNIQUEMENT dans le dossier
            choisi — jamais dans les deux — et devient le dossier courant
@@ -1337,7 +590,7 @@ def open_altimetrie_window(gui):
         cible_txt = DOSSIER_STOCK if choix == "stock" else DOSSIER_ASSEMBLE
         # 2) Saisie du nom du pays.
         pays = _saisie(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             _tr("Nom du pays (ex. : France, Suisse, Allemagne) :")
             + "\n→ " + cible_txt,
             parent=win, initialvalue="")
@@ -1353,7 +606,7 @@ def open_altimetrie_window(gui):
             pays_dir = creer_pays_dans(racine, pays, choix)
         except Exception as e:
             _etat("")
-            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            messagebox.showerror(_tr("Bathymétrie"), str(e), parent=win)
             _remonter()
             return False
         # 4) Le dossier créé devient le dossier courant correspondant ;
@@ -1378,13 +631,13 @@ def open_altimetrie_window(gui):
         return True
 
     def _choix_tiff_assemble(racine):
-        """Ouvre la racine Altimétrie et demande dans lequel des deux
+        """Ouvre la racine Bathymétrie et demande dans lequel des deux
         dossiers de la structure l'utilisateur veut travailler.
-        Retourne "stock" (Altimétrie TIFF), "sortie" (Altimétrie assemble)
+        Retourne "stock" (Bathymétrie TIFF), "sortie" (Bathymétrie assemble)
         ou None si annulation."""
         res = {"v": None}
         dlg = tk.Toplevel(win)
-        dlg.title(_tr("Altimétrie / DEM"))
+        dlg.title(_tr("Bathymétrie"))
         dlg.configure(bg=BG)
         try:
             dlg.transient(win)
@@ -1395,7 +648,7 @@ def open_altimetrie_window(gui):
         dlg.columnconfigure(1, weight=1)
 
         tk.Label(dlg,
-                 text=_tr("Dans quel dossier de la structure Altimétrie "
+                 text=_tr("Dans quel dossier de la structure Bathymétrie "
                           "voulez-vous travailler ?"),
                  bg=BG, fg=FG, font=FONT, justify="left",
                  anchor="w", wraplength=520).grid(
@@ -1441,13 +694,13 @@ def open_altimetrie_window(gui):
 
     def _choisir_dans_structure():
         """Bouton « Emplacement TIFF / assemble » : ouvre la racine
-        Altimétrie de la structure existante, demande à l'utilisateur s'il
-        veut travailler dans Altimétrie TIFF (sources) ou Altimétrie
+        Bathymétrie de la structure existante, demande à l'utilisateur s'il
+        veut travailler dans Bathymétrie TIFF (sources) ou Bathymétrie
         assemble (sortie), puis lui laisse désigner le dossier exact
         (un pays, par exemple). Ne redemande PAS le disque si la structure
         est déjà connue. Ne modifie QUE le chemin correspondant au choix,
         jamais l'autre."""
-        # 1) Retrouver la racine <...>/Altimétrie sans rien redemander.
+        # 1) Retrouver la racine <...>/Bathymétrie sans rien redemander.
         racine = _racine_structure()
         if not racine and _sortie[0]:
             parts = os.path.normpath(_sortie[0]).split(os.sep)
@@ -1456,17 +709,17 @@ def open_altimetrie_window(gui):
                 r = os.sep.join(parts[:i]) or os.sep
                 if os.path.isdir(os.path.join(r, DOSSIER_ASSEMBLE)):
                     racine = r
-        # 2) Structure inconnue : demander d'ouvrir la racine Altimétrie.
+        # 2) Structure inconnue : demander d'ouvrir la racine Bathymétrie.
         if not racine:
             messagebox.showinfo(
-                _tr("Altimétrie / DEM"),
-                _tr("Ouvrez le dossier « Altimétrie » de votre structure."),
+                _tr("Bathymétrie"),
+                _tr("Ouvrez le dossier « Bathymétrie » de votre structure."),
                 parent=win)
             _remonter()
             base = filedialog.askdirectory(
                 parent=win,
                 initialdir=_stock[0] or os.path.expanduser("~"),
-                title=_tr("Ouvrir la racine Altimétrie"))
+                title=_tr("Ouvrir la racine Bathymétrie"))
             _remonter()
             if not base:
                 return False
@@ -1489,10 +742,10 @@ def open_altimetrie_window(gui):
             return False
         if choix == "stock":
             depart = os.path.join(racine, DOSSIER_STOCK)
-            titre = _tr("Dossier de vos altimétries sources (.tif, .asc…)")
+            titre = _tr("Dossier de vos bathymétries sources (.tif, .asc…)")
         else:
             depart = os.path.join(racine, DOSSIER_ASSEMBLE)
-            titre = _tr("Dossier de destination des altimétries assemblées")
+            titre = _tr("Dossier de destination des bathymétries assemblées")
         os.makedirs(depart, exist_ok=True)
         # 4) Laisser désigner le dossier exact, ouvert directement dans le
         #    dossier choisi (l'utilisateur peut entrer dans un pays).
@@ -1522,10 +775,10 @@ def open_altimetrie_window(gui):
         # celui qui part de zéro. On lui demande lequel il est plutôt que
         # d'imposer une organisation à tout le monde.
         _neuf = messagebox.askyesno(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             _tr("Deux dossiers sont nécessaires :\n\n"
-                "1) celui où se trouvent vos altimétries sources ;\n"
-                "2) celui où écrire les altimétries assemblées.\n\n"
+                "1) celui où se trouvent vos bathymétries sources ;\n"
+                "2) celui où écrire les bathymétries assemblées.\n\n"
                 "Voulez-vous qu'Ortho4XP crée cette organisation pour "
                 "vous ?\n\n"
                 "OUI  →  la structure est créée automatiquement.\n"
@@ -1552,7 +805,7 @@ def open_altimetrie_window(gui):
         _log(_tr("Le résultat assemblé sera écrit dans :"))
         _log("   " + os.path.join(_sortie[0], cle, cle + ".tif"))
         messagebox.showinfo(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             _tr("Dossiers enregistrés.\n\nSources :\n{s}\n\n"
                 "Sortie :\n{d}").format(s=_stock[0], d=_sortie[0]),
             parent=win)
@@ -1565,8 +818,8 @@ def open_altimetrie_window(gui):
     # "Ortho4XP_<short_latlon>.cfg" — même calcul que
     # O4_Config_Utils.load_tile_cfg(). L'ancien chemin
     # (Tile_dir/<tuile>/…) désignait un fichier que personne ne lit :
-    # custom_dem y était écrit sans jamais apparaître dans le champ
-    # « custom_dem » du GUI, qui restait sur une autre altimétrie.
+    # custom_bathy_dem y était écrit sans jamais apparaître dans le champ
+    # « custom_bathy_dem » du GUI, qui restait sur une autre bathymétrie.
     def _custom_build_dir():
         for _att in ("custom_build_dir_entry", "custom_build_dir"):
             try:
@@ -1598,14 +851,14 @@ def open_altimetrie_window(gui):
 
         Le dossier de sortie CHOISI par l'utilisateur est prioritaire :
         le module y crée le sous-dossier au nom de la tuile (+49-002),
-        puis y écrit +49-002.tif. Un custom_dem déjà présent dans le cfg
+        puis y écrit +49-002.tif. Un custom_bathy_dem déjà présent dans le cfg
         n'est qu'un repli, pour les tuiles configurées avant que les
         dossiers ne soient désignés — sinon la sortie repartirait vers
-        l'altimétrie d'une autre tuile.
+        l'bathymétrie d'une autre tuile.
         """
         if _sortie[0]:
             return os.path.join(_sortie[0], cle)
-        dem = _lire_cfg_valeur(tile_cfg, "custom_dem") if tile_cfg else ""
+        dem = _lire_cfg_valeur(tile_cfg, "custom_bathy_dem") if tile_cfg else ""
         if dem and os.path.isdir(os.path.dirname(dem)):
             return os.path.dirname(dem)
         return ""
@@ -1642,13 +895,13 @@ def open_altimetrie_window(gui):
         _maj_bandeaux()
         if not _stock[0] or not os.path.isdir(_stock[0]):
             _etat(_tr("Dossiers non configurés."), "#ffaa00")
-            _log(_tr("Aucun dossier d'altimétries n'est configuré."))
+            _log(_tr("Aucun dossier de bathymétries n'est configuré."))
             _log(_tr("Cliquez sur « Dossier des sources »."))
             if _stock[0]:
                 _log()
                 _log(_tr("Chemin mémorisé introuvable :"))
                 _log("   " + _stock[0])
-                _log(_tr("Si vos altimétries sont sur un disque externe,"))
+                _log(_tr("Si vos bathymétries sont sur un disque externe,"))
                 _log(_tr("vérifiez qu'il est branché."))
             return
         b = tile_bounds(lat, lon, _debord())
@@ -1663,7 +916,7 @@ def open_altimetrie_window(gui):
         _etat("")
         if not srcs:
             _etat(_tr("Aucune source pour cette tuile."), "#ffaa00")
-            _log(_tr("Aucun fichier altimétrique ne recouvre cette tuile."))
+            _log(_tr("Aucun fichier bathymétrique ne recouvre cette tuile."))
             _log(_tr("Déposez vos données dans le dossier des sources, "
                      "en EPSG:4326."))
             return
@@ -1680,28 +933,28 @@ def open_altimetrie_window(gui):
     def _assembler():
         if not rasterio_disponible():
             messagebox.showerror(
-                _tr("Altimétrie / DEM"),
+                _tr("Bathymétrie"),
                 _tr("rasterio est introuvable dans l'installation "
                     "d'Ortho4XP."), parent=win)
             _remonter()
             return
         srcs, _o = _sources()
         if not srcs:
-            messagebox.showinfo(_tr("Altimétrie / DEM"),
+            messagebox.showinfo(_tr("Bathymétrie"),
                                 _tr("Aucune source pour cette tuile."),
                                 parent=win)
             _remonter()
             return
         dest = _dossier_sortie()
         if not dest:
-            messagebox.showinfo(_tr("Altimétrie / DEM"),
+            messagebox.showinfo(_tr("Bathymétrie"),
                                 _tr("Dossiers non configurés."), parent=win)
             _remonter()
             return
         try:
             os.makedirs(dest, exist_ok=True)
         except Exception as e:
-            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            messagebox.showerror(_tr("Bathymétrie"), str(e), parent=win)
             _remonter()
             return
         sortie = os.path.join(dest, cle + ".tif")
@@ -1709,7 +962,7 @@ def open_altimetrie_window(gui):
         # de sortie mémorisé mais devenu faux ferait écrire le fichier
         # ailleurs, et on ne s'en apercevrait qu'à la fin.
         if not messagebox.askyesno(
-                _tr("Altimétrie / DEM"),
+                _tr("Bathymétrie"),
                 _tr("Le fichier assemblé sera écrit ici :\n\n{f}\n\n"
                     "Est-ce le bon emplacement ?\n\n"
                     "NON  →  utilisez le bouton « Dossier de sortie ».")
@@ -1719,7 +972,7 @@ def open_altimetrie_window(gui):
         _remonter()
         if os.path.isfile(sortie):
             if not messagebox.askyesno(
-                    _tr("Altimétrie / DEM"),
+                    _tr("Bathymétrie"),
                     _tr("{f} existe déjà. Le remplacer ?").format(
                         f=cle + ".tif"), parent=win):
                 _remonter()
@@ -1764,7 +1017,7 @@ def open_altimetrie_window(gui):
                 _etat(_tr("Échec."), "#ff4444")
                 _log()
                 _log(_tr("ÉCHEC :") + " " + _res["err"])
-                messagebox.showerror(_tr("Altimétrie / DEM"), _res["err"],
+                messagebox.showerror(_tr("Bathymétrie"), _res["err"],
                                      parent=win)
                 _remonter()
                 return
@@ -1772,29 +1025,29 @@ def open_altimetrie_window(gui):
             if tile_cfg:
                 try:
                     os.makedirs(os.path.dirname(tile_cfg), exist_ok=True)
-                    ecrire_custom_dem(tile_cfg, chemin)
+                    ecrire_custom_bathy_dem(tile_cfg, chemin)
                     _log()
-                    _log(_tr("custom_dem renseigné dans le cfg de la tuile."))
+                    _log(_tr("custom_bathy_dem renseigné dans le cfg de la tuile."))
                     _log(tile_cfg)
                 except Exception as _e:
-                    _log(_tr("custom_dem non écrit :") + " " + str(_e))
+                    _log(_tr("custom_bathy_dem non écrit :") + " " + str(_e))
             # Le fichier ne suffit pas : si la fenêtre de configuration est
-            # déjà ouverte, son champ « custom_dem » garde en mémoire la
-            # valeur chargée au départ (une autre altimétrie). On la met
+            # déjà ouverte, son champ « custom_bathy_dem » garde en mémoire la
+            # valeur chargée au départ (une autre bathymétrie). On la met
             # à jour directement pour que l'affichage corresponde au cfg.
             try:
                 _cw = getattr(gui, "_config_win", None)
                 if _cw is not None and _cw.winfo_exists():
-                    _cw.v_["custom_dem"].set(chemin)
+                    _cw.v_["custom_bathy_dem"].set(chemin)
             except Exception:
                 pass
             _etat(_tr("Terminé."), FG)
             _log()
             _log(_tr("TERMINÉ."))
             messagebox.showinfo(
-                _tr("Altimétrie / DEM"),
+                _tr("Bathymétrie"),
                 _tr("Assemblage terminé.\n\n{f}\n\n"
-                    "custom_dem est renseigné : la tuile est prête pour "
+                    "custom_bathy_dem est renseigné : la tuile est prête pour "
                     "l'étape mesh.").format(f=chemin), parent=win)
             _remonter()
 
@@ -1813,7 +1066,7 @@ def open_altimetrie_window(gui):
               + (_tr("SUCCÈS") if ok else _tr("ÉCHEC")),
               FG if ok else "#ff4444")
         messagebox.showinfo(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             (_tr("Auto-test réussi : le moteur d'assemblage fonctionne.")
              if ok else
              _tr("Auto-test en échec — voir le détail dans la fenêtre.")),
@@ -1839,7 +1092,7 @@ def open_altimetrie_window(gui):
         if p:
             _cfg_set(CFG_QGIS, p)
             _qgis_var.set(p)
-            messagebox.showinfo(_tr("Altimétrie / DEM"),
+            messagebox.showinfo(_tr("Bathymétrie"),
                                 _tr("Application QGIS enregistrée."),
                                 parent=win)
             _remonter()
@@ -1848,7 +1101,7 @@ def open_altimetrie_window(gui):
         app = _qgis_var.get().strip()
         if not app:
             messagebox.showinfo(
-                _tr("Altimétrie / DEM"),
+                _tr("Bathymétrie"),
                 _tr("Aucune application QGIS définie.\n"
                     "Cliquez d'abord sur « Choisir QGIS »."), parent=win)
             _remonter()
@@ -1862,20 +1115,20 @@ def open_altimetrie_window(gui):
                 subprocess.Popen([app] + args)
             _etat(_tr("QGIS lancé."), FG)
         except Exception as e:
-            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            messagebox.showerror(_tr("Bathymétrie"), str(e), parent=win)
             _remonter()
 
     # ── Préparer un pays (chaîne A : brut → EPSG:4326 → réduit) ──────
     def _preparer():
         if not rasterio_disponible():
             messagebox.showerror(
-                _tr("Altimétrie / DEM"),
+                _tr("Bathymétrie"),
                 _tr("rasterio est introuvable dans l'installation "
                     "d'Ortho4XP."), parent=win)
             _remonter()
             return
         if not _stock[0] or not os.path.isdir(_stock[0]):
-            messagebox.showinfo(_tr("Altimétrie / DEM"),
+            messagebox.showinfo(_tr("Bathymétrie"),
                                 _tr("Dossiers non configurés."), parent=win)
             _remonter()
             return
@@ -1901,8 +1154,8 @@ def open_altimetrie_window(gui):
             res_m = None
         if res_m is None:
             messagebox.showerror(
-                _tr("Altimétrie / DEM"),
-                _tr("Aucun fichier altimétrique lisible dans ce dossier."),
+                _tr("Bathymétrie"),
+                _tr("Aucun fichier bathymétrique lisible dans ce dossier."),
                 parent=win)
             _remonter()
             return
@@ -1911,7 +1164,7 @@ def open_altimetrie_window(gui):
         # source est déjà grossière.
         defaut = "25" if res_m <= 2.0 else "100"
         rep_ratio = _saisie(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             _tr("Résolution source détectée : {r} m\n\n"
                 "Ratio de réduction en % (25 = diviser par 4) :\n"
                 "100 = aucune réduction.").format(r=("%.1f" % res_m)),
@@ -1922,7 +1175,7 @@ def open_altimetrie_window(gui):
         try:
             ratio = float(rep_ratio.replace(",", ".").replace("%", "")) / 100.0
         except Exception:
-            messagebox.showerror(_tr("Altimétrie / DEM"),
+            messagebox.showerror(_tr("Bathymétrie"),
                                  _tr("Ratio invalide."), parent=win)
             _remonter()
             return
@@ -1930,7 +1183,7 @@ def open_altimetrie_window(gui):
         res_finale = res_m / ratio
         if ratio < 1.0 and res_m > 5.0:
             if not messagebox.askyesno(
-                    _tr("Altimétrie / DEM"),
+                    _tr("Bathymétrie"),
                     _tr("La source est déjà à {a} m. Réduire encore "
                         "donnerait {b} m et ferait perdre du relief.\n\n"
                         "Continuer quand même ?").format(
@@ -1944,7 +1197,7 @@ def open_altimetrie_window(gui):
         nom_def = "%s-%s-reduit.tif" % (os.path.basename(
             os.path.normpath(src)), suffixe)
         nom = _saisie(
-            _tr("Altimétrie / DEM"),
+            _tr("Bathymétrie"),
             _tr("Nom du fichier produit :"),
             parent=win, initialvalue=nom_def)
         _remonter()
@@ -1958,7 +1211,7 @@ def open_altimetrie_window(gui):
         dest = os.path.join(_stock[0], nom)
         if os.path.isfile(dest):
             if not messagebox.askyesno(
-                    _tr("Altimétrie / DEM"),
+                    _tr("Bathymétrie"),
                     _tr("{f} existe déjà. Le remplacer ?").format(f=nom),
                     parent=win):
                 _remonter()
@@ -2006,7 +1259,7 @@ def open_altimetrie_window(gui):
                 _etat(_tr("Échec."), "#ff4444")
                 _log()
                 _log(_tr("ÉCHEC :") + " " + _res["err"])
-                messagebox.showerror(_tr("Altimétrie / DEM"), _res["err"],
+                messagebox.showerror(_tr("Bathymétrie"), _res["err"],
                                      parent=win)
                 _remonter()
                 return
@@ -2014,7 +1267,7 @@ def open_altimetrie_window(gui):
             _log()
             _log(_tr("TERMINÉ."))
             messagebox.showinfo(
-                _tr("Altimétrie / DEM"),
+                _tr("Bathymétrie"),
                 _tr("Fichier préparé :\n\n{f}\n\n"
                     "Il est maintenant dans le stock et sera utilisé "
                     "automatiquement pour les tuiles qu'il "

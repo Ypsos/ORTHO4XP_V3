@@ -47,6 +47,15 @@ try:
 except Exception:
     def tr(k): return k   # fallback si O4_Lang absent
 
+# ── Version affichée — lue automatiquement depuis O4_Version.py ───────────────
+# Le numéro n'est plus écrit en dur dans le titre : modifier 'version_short'
+# dans src/O4_Version.py suffit à mettre à jour le titre partout.
+try:
+    import O4_Version as _O4V
+    APP_VERSION = getattr(_O4V, "version_short", None) or "V3.0"
+except Exception:
+    APP_VERSION = "V3.0"
+
 # ── Vérification nom de dossier GitHub ──────────────────────────────────────
 # GitHub crée automatiquement un double nom : ORTHO4XP-V3-ORTHO4XP_V3
 # Le lanceur fonctionne quand même, mais on avertit l'utilisateur pour éviter
@@ -124,11 +133,11 @@ class HoverButton(tk.Canvas):
 class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Ortho4XP V3.0 Launcher - Roland Edition")
+        self.title(f"Ortho4XP {APP_VERSION} Launcher - Roland Edition")
         self.geometry("950x950")
         self.configure(bg=BG_GLOBAL)
 
-        tk.Label(self, text="Ortho4XP V3.0", font=("Helvetica", 36, "bold"),
+        tk.Label(self, text=f"Ortho4XP {APP_VERSION}", font=("Helvetica", 36, "bold"),
                  fg="#a6e3a1", bg=BG_GLOBAL).pack(pady=(20, 0))
         tk.Label(self, text="Version : Mac • Linux • Windows", 
                  font=("Helvetica", 14, "bold"), fg="#a6e3a1", bg=BG_GLOBAL).pack(pady=(0, 15))
@@ -172,10 +181,12 @@ class Launcher(tk.Tk):
         col1 = tk.Frame(btn_container, bg=BG_GLOBAL)
         col1.grid(row=0, column=0, padx=15)
         HoverButton(col1, tr("1. Installer les Modules"), self.open_install_menu).pack(pady=8)
+        HoverButton(col1, tr("📖 Historique"), self.show_history).pack(pady=8)
 
         col2 = tk.Frame(btn_container, bg=BG_GLOBAL)
         col2.grid(row=0, column=1, padx=15)
         HoverButton(col2, tr("🔍 Vérifier Intégrité"), self.check_integrity).pack(pady=8)
+        HoverButton(col2, tr("📜 Crédits & Licence"), self.show_credits).pack(pady=8)
 
         # ── Sélecteur de thème ────────────────────────────────────────────
         theme_frame = tk.Frame(self, bg=BG_GLOBAL)
@@ -563,6 +574,64 @@ class Launcher(tk.Tk):
         self.log.insert("end", f"> {msg}\n")
         self.log.see("end")
         self.update_idletasks()
+
+    def show_credits(self):
+        """Affiche AVERTISSEMENT_LICENCE_LEGAL.md (bouton Crédits & Licence)."""
+        self._show_md_window("AVERTISSEMENT_LICENCE_LEGAL.md", tr("📜 Crédits & Licence"))
+
+    def show_history(self):
+        """Affiche HISTORIQUE.md (bouton Historique)."""
+        self._show_md_window("HISTORIQUE.md", tr("📖 Historique"))
+
+    def _show_md_window(self, filename, title):
+        """Affiche un fichier .md dans une fenêtre défilante au thème du lanceur.
+
+        Le fichier est cherché à la racine du dossier (BASE_DIR), donc l'affichage
+        suit automatiquement le dossier courant, quelle que soit la version.
+        """
+        md_path = BASE_DIR / filename
+        try:
+            with open(md_path, "r", encoding="utf-8", errors="replace") as fh:
+                contenu = fh.read()
+        except Exception:
+            contenu = tr("Fichier introuvable :") + f"\n\n{md_path}"
+
+        win = tk.Toplevel(self)
+        win.title(title)
+        win.configure(bg=BG_GLOBAL)
+        win.geometry("760x640")
+
+        tk.Label(win, text=title, font=("Helvetica", 18, "bold"),
+                 fg="#a6e3a1", bg=BG_GLOBAL).pack(pady=(15, 10))
+
+        txt_frame = tk.Frame(win, bg=BG_GLOBAL)
+        txt_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+
+        scroll = tk.Scrollbar(txt_frame)
+        scroll.pack(side="right", fill="y")
+
+        txt = tk.Text(txt_frame, wrap="word", bg="#0f0f1a", fg="#50fa7b",
+                      font=("Courier", 12), relief="flat", padx=15, pady=15,
+                      yscrollcommand=scroll.set, exportselection=False)
+        txt.pack(side="left", fill="both", expand=True)
+        scroll.config(command=txt.yview)
+
+        txt.insert("1.0", contenu)
+        txt.config(state="disabled")   # lecture seule
+
+        def _wheel(e):
+            delta = -1 * (e.delta // 120) if e.delta else (1 if getattr(e, "num", 0) == 5 else -1)
+            txt.yview_scroll(delta, "units")
+            return "break"
+        txt.bind("<MouseWheel>", _wheel)
+        txt.bind("<Button-4>", _wheel)
+        txt.bind("<Button-5>", _wheel)
+
+        # Bouton Fermer — on utilise HoverButton (basé sur tk.Canvas) comme les
+        # autres boutons du lanceur. Un tk.Button natif ignore le fond sur macOS
+        # (d'où le fond blanc) ; le Canvas, lui, affiche toujours la bonne couleur.
+        HoverButton(win, tr("Fermer"), win.destroy,
+                    width=200, height=45, font_size=13).pack(pady=(0, 15))
 
     def open_install_menu(self):
         """Ouvre la fenêtre de sélection de plateforme pour l'installation."""

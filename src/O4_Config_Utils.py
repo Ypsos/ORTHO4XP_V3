@@ -1,5 +1,7 @@
 import os
 import sys
+import ast
+import re
 from math import ceil
 import tkinter as tk
 import tkinter.ttk as ttk
@@ -319,6 +321,11 @@ too low to grab these details.",
         "default": 1.0,
         "hint": 'Bathymetry multiplier for near shore vertices. In the range [0,1].'
     },
+    "bathy_max_depth": {
+        "type": float,
+        "default": 100,
+        "hint": "Reference depth (in meters) used when a surveyed bathymetry source is set in custom_bathy_dem. Depths at or beyond this value get the deepest rendering. Lower it for shallow coastal areas, raise it where real trenches are present. Ignored when custom_bathy_dem is empty.",
+    },
     "normal_map_strength": {
         "type": float,
         "default": 1,
@@ -345,6 +352,11 @@ too low to grab these details.",
         "type": str,
         "default": "",
         "hint": "Path to an elevation data file to be used instead of the default Viewfinderpanoramas.org ones (J. de Ferranti). The raster must be in geopgraphical coordinates (EPSG:4326) but the extent need not match the tile boundary (requires Gdal). Regions of the tile that are not covered by the raster are mapped to zero altitude (can be useful for high resolution data over islands in particular).     ",
+    },
+    "custom_bathy_dem": {
+        "type": str,
+        "default": "",
+        "hint": "Optional path to a SURVEYED BATHYMETRY raster (seabed soundings), kept separate from custom_dem which stays the land mesh elevation source. When set, sea node depths are read from this raster instead of being estimated from the distance to the coastline. Same format requirements as custom_dem (EPSG:4326). Leave empty to keep the historical behaviour: nothing changes as long as this field is blank.",
     },
     "fill_nodata": {
         "type": bool,
@@ -412,6 +424,7 @@ list_dsf_vars = [
     "cover_zl",
     "water_tech",
     "ratio_bathy",
+    "bathy_max_depth",
     "ratio_water",
     "overlay_lod",
     "sea_texture_blur",
@@ -421,7 +434,7 @@ list_dsf_vars = [
     "terrain_casts_shadows",
     "use_decal_on_terrain",
 ]
-list_other_vars = ["custom_dem", "fill_nodata"]
+list_other_vars = ["custom_dem", "custom_bathy_dem", "fill_nodata"]
 list_tile_vars = (
     list_vector_vars
     + list_mesh_vars
@@ -441,14 +454,121 @@ list_global_cfg = (
 )
 
 ################################################################################
+# Lecture sécurisée des configurations (aucun exec / eval)
+#
+# Les fichiers .cfg sont désormais interprétés comme des DONNÉES uniquement :
+# nombres, textes, booléens et listes littérales. Aucun code contenu dans un
+# fichier de configuration ne peut plus être exécuté.
+################################################################################
+
+# Modules pouvant héberger une variable de configuration (champ "module").
+_CFG_MODULES = {
+    "UI": UI,
+    "DEM": DEM,
+    "OSM": OSM,
+    "VMAP": VMAP,
+    "IMG": IMG,
+    "TILE": TILE,
+    "OVL": OVL,
+}
+
+_TRUE_STRINGS = ("true", "1", "yes", "on")
+_FALSE_STRINGS = ("false", "0", "no", "off")
+
+# Compatibilité avec les fichiers .cfg de version <= 1.20 :
+#   zone_list.append([...])  /  self.zone_list.append([...])
+_ZONE_APPEND_RE = re.compile(
+    r"^\s*zone_list\.append\s*\((.*)\)\s*$", re.S
+)
+
+
+def cfg_parse_literal(value):
+    """Interprète une donnée littérale Python (nombre, texte, liste, tuple,
+    booléen, None). Remplace l'ancien exec : même résultat pour toutes les
+    valeurs légitimes, mais aucun code ne peut être exécuté."""
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text:
+        # Comportement historique : une valeur vide est une ligne invalide,
+        # la variable conserve alors sa valeur en cours.
+        raise ValueError("Empty literal value")
+    return ast.literal_eval(text)
+
+
+def cfg_parse_bool(value):
+    """Convertit une valeur de configuration destinée à un champ booléen."""
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in _TRUE_STRINGS:
+        return True
+    if text in _FALSE_STRINGS:
+        return False
+    # Fidélité au comportement historique : toute autre donnée littérale
+    # est conservée telle quelle (ex. 0 / 1 déjà gérés ci-dessus).
+    return cfg_parse_literal(value)
+
+
+def cfg_parse_value(var, value):
+    """Convertit la valeur texte lue dans un .cfg selon le type déclaré.
+
+    Les types bool et list sont historiquement notés sous forme de littéral
+    Python dans les fichiers .cfg (le champ masks_width, par exemple, est
+    déclaré de type list mais contient un entier). L'interprétation se fait
+    donc par lecture littérale stricte, jamais par exécution de code.
+    """
+    var_type = cfg_vars[var]["type"]
+    if var_type is bool:
+        return cfg_parse_bool(value)
+    if var_type is list:
+        return cfg_parse_literal(value)
+    return var_type(value)
+
+
+def cfg_target_module(var):
+    """Retourne le module hébergeant la variable, ou None."""
+    module_name = cfg_vars[var].get("module")
+    if not module_name:
+        return None
+    if module_name not in _CFG_MODULES:
+        raise KeyError("Unknown config module: " + str(module_name))
+    return _CFG_MODULES[module_name]
+
+
+def cfg_get(var):
+    """Lecture de la valeur courante d'une variable de configuration."""
+    module = cfg_target_module(var)
+    if module is not None:
+        return getattr(module, var)
+    return globals()[var]
+
+
+def cfg_set(var, value):
+    """Écriture de la valeur courante d'une variable de configuration."""
+    module = cfg_target_module(var)
+    if module is not None:
+        setattr(module, var, value)
+    else:
+        globals()[var] = value
+
+
+def cfg_parse_zone_append(line):
+    """Extrait l'argument d'une ligne héritée zone_list.append(...).
+
+    Retourne l'élément à ajouter, ou lève une exception si la ligne n'est
+    pas une simple donnée littérale.
+    """
+    match = _ZONE_APPEND_RE.match(line)
+    if not match:
+        raise ValueError("Not a zone_list.append line: " + str(line))
+    return ast.literal_eval(match.group(1))
+
+
+################################################################################
 # Initialization to default values
 for var in cfg_vars:
-    target = (
-        cfg_vars[var]["module"] + "." + var
-        if "module" in cfg_vars[var]
-        else var
-    )
-    exec(target + "=cfg_vars['" + var + "']['default']")
+    cfg_set(var, cfg_vars[var]["default"])
 ################################################################################
 # Update from Global Ortho4XP.cfg
 try:
@@ -466,16 +586,7 @@ try:
                 value = value[1:]
             if value and value[-1] in ('"', "'"):
                 value = value[:-1]
-            target = (
-                cfg_vars[var]["module"] + "." + var
-                if "module" in cfg_vars[var]
-                else var
-            )
-            if cfg_vars[var]["type"] in (bool, list):
-                cmd = target + "=" + value
-            else:
-                cmd = target + "=cfg_vars['" + var + "']['type'](value)"
-            exec(cmd)
+            cfg_set(var, cfg_parse_value(var, value))
         except:
             UI.lvprint(1, "Global config file contains an invalid line:", line)
             pass
@@ -503,7 +614,7 @@ class Tile:
         self.build_dir = FNAMES.build_dir(lat, lon, custom_build_dir)
         self.dem = None
         for var in list_tile_vars:
-            exec("self." + var + "=" + var)
+            setattr(self, var, cfg_get(var))
 
     def make_dirs(self):
         if os.path.isdir(self.build_dir):
@@ -557,23 +668,15 @@ class Tile:
                         value = value[1:]
                     if value and value[-1] in ('"', "'"):
                         value = value[:-1]
-                    if cfg_vars[var]["type"] in (bool, list):
-                        cmd = "self." + var + "=" + value
-                    else:
-                        cmd = (
-                            "self."
-                            + var
-                            + "=cfg_vars['"
-                            + var
-                            + "']['type'](value)"
-                        )
-                    exec(cmd)
+                    setattr(self, var, cfg_parse_value(var, value))
                 except Exception as e:
                     # compatibility with zone_list config files from 
                     # version <= 1.20
                     if "zone_list.append" in line:
                         try:
-                            exec("self." + line)
+                            self.zone_list.append(
+                                cfg_parse_zone_append(line)
+                            )
                         except:
                             pass
                     else:
@@ -603,7 +706,7 @@ class Tile:
         try:
             f = open(config_file, "w")
             for var in list_tile_vars:
-                f.write(var + "=" + str(eval("self." + var)) + "\n")
+                f.write(var + "=" + str(getattr(self, var)) + "\n")
             f.close()
             return 1
         except Exception as e:
@@ -768,6 +871,27 @@ class Ortho4XP_Config(tk.Toplevel):
         )
         dem_button.grid(row=0, column=2, padx=2, pady=0, sticky=W)
         dem_button.bind("<Shift-ButtonPress-1>", self.add_dem)
+
+        item = "custom_bathy_dem"
+        ttk.Button(
+            self.frame_dem,
+            text=item,
+            takefocus=False,
+            command=lambda item=item: self.popup(item, cfg_vars[item]["hint"]),
+        ).grid(row=1, column=0, padx=2, pady=2, sticky=E + W)
+        self.entry_[item] = ttk.Entry(
+            self.frame_dem, textvariable=self.v_[item], width=80
+        )
+        self.entry_[item].grid(
+            row=1, column=1, padx=(2, 0), pady=8, sticky=N + S + W + E
+        )
+        ttk.Button(
+            self.frame_dem,
+            image=self.folder_icon,
+            command=self.choose_bathy_dem,
+            style="Flat.TButton",
+        ).grid(row=1, column=2, padx=2, pady=0, sticky=W)
+
         item = "fill_nodata"
         ttk.Button(
             self.frame_cfg,
@@ -966,12 +1090,7 @@ class Ortho4XP_Config(tk.Toplevel):
         for var in cfg_vars:
             if var in ("default_website", "default_zl"):
                 continue
-            target = (
-                cfg_vars[var]["module"] + "." + var
-                if "module" in cfg_vars[var]
-                else var
-            )
-            self.v_[var].set(str(eval(target)))
+            self.v_[var].set(str(cfg_get(var)))
 
     def choose_dem(self):
         tmp = filedialog.askopenfilename(
@@ -984,6 +1103,18 @@ class Ortho4XP_Config(tk.Toplevel):
         )
         if tmp:
             self.v_["custom_dem"].set(str(tmp))
+
+    def choose_bathy_dem(self):
+        tmp = filedialog.askopenfilename(
+            parent=self,
+            title="Choose bathymetry file",
+            filetypes=[
+                ("DEM files", (".tif", ".hgt", ".raw", ".img")),
+                ("all files", ".*"),
+            ],
+        )
+        if tmp:
+            self.v_["custom_bathy_dem"].set(str(tmp))
 
     def add_dem(self, event):
         tmp = filedialog.askopenfilename(
@@ -1054,7 +1185,7 @@ class Ortho4XP_Config(tk.Toplevel):
                 # compatibility with zone_list config files from version <= 1.20
                 if "zone_list.append" in line:
                     try:
-                        exec(line)
+                        zone_list.append(cfg_parse_zone_append(line))
                     except Exception as e:
                         print(e)
                         pass
@@ -1204,38 +1335,10 @@ class Ortho4XP_Config(tk.Toplevel):
         errors = []
         for var in list_tile_vars + list_app_vars:
             try:
-                target = (
-                    cfg_vars[var]["module"] + "." + var
-                    if "module" in cfg_vars[var]
-                    else "globals()['" + var + "']"
-                )
-                if cfg_vars[var]["type"] in (bool, list):
-                    cmd = target + "=" + self.v_[var].get()
-                else:
-                    cmd = (
-                        target
-                        + "=cfg_vars['"
-                        + var
-                        + "']['type'](self.v_['"
-                        + var
-                        + "'].get())"
-                    )
-                exec(cmd)
+                cfg_set(var, cfg_parse_value(var, self.v_[var].get()))
             except:
-                target = (
-                    cfg_vars[var]["module"] + "." + var
-                    if "module" in cfg_vars[var]
-                    else "globals()['" + var + "']"
-                )
                 self.v_[var].set(str(cfg_vars[var]["default"]))
-                exec(
-                    target
-                    + "=cfg_vars['"
-                    + var
-                    + "']['type'](cfg_vars['"
-                    + var
-                    + "']['default'])"
-                )
+                cfg_set(var, cfg_parse_value(var, cfg_vars[var]["default"]))
                 errors.append(var)
         if errors:
             error_text = (

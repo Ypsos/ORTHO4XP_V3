@@ -43,6 +43,7 @@ _SCORE_FAILOVER_THRESHOLD = 72.0
 import time
 import os
 import sys
+import ast
 import subprocess
 import io
 import requests
@@ -68,6 +69,15 @@ except Exception:
     _scipy_enabled = False
 
 Image.MAX_IMAGE_PIXELS = 1000000000  # Not a decompression bomb attack!
+
+# Borne de bon sens appliquee UNIQUEMENT aux images telechargees depuis un
+# provider (contenu reseau non fiable). Une dalle provider fait au plus
+# quelques milliers de pixels de cote ; au-dela, il s'agit forcement d'une
+# image piegee (bombe de decompression) et non d'une dalle legitime, donc on
+# la rejette avant tout decodage complet. Le plafond global MAX_IMAGE_PIXELS
+# ci-dessus reste inchange : les grandes images LOCALES (masques, textures
+# assemblees) ne sont pas concernees.
+_MAX_DOWNLOAD_PIXELS = 64 * 1024 * 1024  # 67 Mpx (~8192 x 8192), tres large
 
 
 def _find_sea_mask(tile, til_x_left, til_y_top, zoomlevel, provider_code):
@@ -357,6 +367,19 @@ def initialize_color_filters_dict():
 ################################################################################
 
 ################################################################################
+def _read_provider_literal(value):
+    """Interprète une valeur de fichier .lay comme une DONNÉE littérale.
+
+    Remplace l'ancien eval() : un pack de fournisseur téléchargé sur un forum
+    ne peut plus exécuter de code sur la machine de l'utilisateur. Seuls les
+    littéraux Python sont acceptés (dictionnaire, booléen, nombre, texte,
+    liste). Toute autre écriture lève une exception, traitée exactement comme
+    l'était auparavant une valeur invalide.
+    """
+    return ast.literal_eval(value.strip())
+
+
+################################################################################
 def initialize_providers_dict():
     for dir_name in os.listdir(FNAMES.Provider_dir):
         if not os.path.isdir(os.path.join(FNAMES.Provider_dir, dir_name)):
@@ -401,7 +424,7 @@ def initialize_providers_dict():
                     valid_provider = False
                 elif key == "fake_headers":
                     try:
-                        provider[key] = eval(value)
+                        provider[key] = _read_provider_literal(value)
                         if type(provider[key]) is not dict:
                             print(
                                 "Definition of fake headers for provider",
@@ -428,7 +451,7 @@ def initialize_providers_dict():
                             valid_provider = False
                 elif key == "in_GUI":
                     try:
-                        provider["in_GUI"] = eval(value)
+                        provider["in_GUI"] = _read_provider_literal(value)
                         if not isinstance(provider["in_GUI"], bool):
                             UI.vprint(
                                 0, "Error in GUI status for provider",
@@ -1157,7 +1180,20 @@ def http_request_to_image(width, height, url, request_headers, http_session):
             ):
                 try:
                     small_image = Image.open(io.BytesIO(r.content))
-                    return (1, small_image)
+                    # Garde anti-bombe de decompression : sur le contenu
+                    # reseau uniquement. Image.open est paresseux (il ne lit
+                    # que l'entete), donc .size est disponible sans decoder
+                    # les pixels. Une dalle provider legitime est petite ;
+                    # une taille absurde => image piegee, on refuse.
+                    _w, _h = small_image.size
+                    if _w * _h > _MAX_DOWNLOAD_PIXELS:
+                        UI.vprint(
+                            2, "Server said 'OK', but the received image is",
+                            "abnormally large (%dx%d) and was rejected." % (_w, _h),
+                        )
+                        UI.vprint(3, url, r.headers)
+                    else:
+                        return (1, small_image)
                 except:
                     UI.vprint(
                         2, "Server said 'OK', but the received ",
@@ -1588,6 +1624,17 @@ def download_jpeg_ortho(
         if "grid_type" in provider and provider["grid_type"] == "webmercator":
             tilbox = [til_x_left, til_y_top, til_x_left + 16, til_y_top + 16]
             tilbox_mod = [int(round(p * super_resol_factor)) for p in tilbox]
+            # Filet de securite : quand on demande un ZL au-dessus du max_zl du
+            # provider, super_resol_factor est fractionnaire et l'arrondi de la
+            # boite ci-dessus peut la reduire a 0 tuile de large/haut. Une telle
+            # boite produit une image vide, ensuite redimensionnee en un 4096
+            # entierement NOIR, sauvegarde comme un succes. On garantit ici au
+            # moins 1 tuile dans chaque dimension : on obtient une texture floue
+            # (source moins detaillee agrandie) mais correcte, jamais noire.
+            if tilbox_mod[2] - tilbox_mod[0] < 1:
+                tilbox_mod[2] = tilbox_mod[0] + 1
+            if tilbox_mod[3] - tilbox_mod[1] < 1:
+                tilbox_mod[3] = tilbox_mod[1] + 1
             zoom_shift = round(log(super_resol_factor) / log(2))
             (success, big_image) = build_texture_from_tilbox(
                 tilbox_mod, zoomlevel + zoom_shift, provider
@@ -2502,10 +2549,16 @@ def convert_texture(
         1, "   Converting orthophoto(s) to build texture " + out_file_name + "."
     )
     # Lot A — NOTE : check_and_cleanup_memory() absent ici intentionnellement.
-    # convert_texture() tourne en parallèle (workers) — gc.collect() dans un
-    # thread parallèle peut libérer des objets PIL/masques actifs dans un autre
-    # thread → carrés bleus en mer. Surveillance mémoire réservée aux boucles
-    # séquentielles uniquement.
+    # Raison réelle : convert_texture() tourne en parallèle (workers) et
+    # gc.collect() est une opération bloquante qui interrompt tous les threads
+    # le temps du parcours ; l'appeler dans chaque worker sérialise le travail
+    # et coûte plus qu'il ne rapporte.
+    # CORRECTION 24/07/2026 : le ramasse-miettes n'est PAS la cause des carrés
+    # bleus en mer. gc.collect() ne libère jamais un objet encore référencé,
+    # donc il ne peut pas faire disparaître une image PIL ou un masque en cours
+    # d'utilisation dans un autre thread. Les carrés bleus proviennent d'une
+    # texture manquante ou entièrement transparente (voir pipeline mer, Cas 1).
+    # Surveillance mémoire réservée aux boucles séquentielles uniquement.
     # ── PROVIDER SCORE : évaluation qualité ────────────────────────────
     if _pscore_enabled:
         try:

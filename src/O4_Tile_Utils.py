@@ -15,6 +15,21 @@ import O4_Overlay_Utils as OVL
 from O4_Parallel_Utils import parallel_launch, parallel_join
 from O4_Lang import tr
 
+# Lot A — Memory Manager (non bloquant)
+# Appelé UNIQUEMENT en fin de build_tile() (étape 3), après la jointure de
+# tous les threads : build_dsf_thread.join(), download_thread.join() et
+# parallel_join() des workers de conversion. Aucun traitement parallèle n'est
+# alors en cours, gc.collect() ne peut figer personne — d'où allow_gc=True.
+# Ce point est traversé par tous les chemins : étape 3 seule, « All in one »
+# (build_all) et build_tile_list.
+# Ne JAMAIS appeler depuis download_textures(), convert_texture() ni aucun
+# worker parallèle.
+try:
+    from O4_Memory_Manager import check_and_cleanup_memory as _check_mem
+except Exception:
+    def _check_mem(context="", allow_gc=False):
+        pass
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1037,6 +1052,14 @@ def build_tile(tile):
 
     timer = time.time()
 
+    # Le cache aéroports (.apt) est relu pendant l'étape 3. Son format exécute
+    # du code au moment de l'ouverture : la vérification a donc lieu ici, dans
+    # le thread principal, AVANT que le moindre traitement ne démarre. Un cache
+    # non authentique est effacé et l'étape 3 se poursuit sans lui, exactement
+    # comme lorsqu'il a été supprimé par le nettoyage.
+    # Voir O4_File_Names.check_apt_file().
+    FNAMES.check_apt_file(tile)
+
     tile.write_to_config()
 
     if not IMG.initialize_local_combined_providers_dict(tile):
@@ -1168,7 +1191,6 @@ def build_tile(tile):
                 if _patches_p2:
                     UI.vprint(1, f"   [SeaTex] Passage 2 : {len(_patches_p2)} patch(es)...")
                     import subprocess as _sp
-                    import O4_Geo_Utils as _GEO_p2
                     _terrain_dir_p2 = os.path.join(tile.build_dir, 'terrain')
                     os.makedirs(_terrain_dir_p2, exist_ok=True)
                     _done_p2 = 0
@@ -1260,8 +1282,25 @@ def build_tile(tile):
             os.remove(FNAMES.apt_file(tile))
         except:
             pass
+        # La signature suit le sort de son cache : la laisser seule n'aurait
+        # aucun effet, mais autant garder le dossier propre.
+        try:
+            os.remove(FNAMES.apt_sig_file(tile))
+        except:
+            pass
     if UI.cleaning_level > 1 and not tile.grouped:
         remove_unwanted_textures(tile)
+    # Lot A — surveillance mémoire en fin d'étape 3.
+    # Tous les threads sont joints à ce point (build_dsf_thread.join,
+    # download_thread.join, parallel_join des workers de conversion), donc
+    # aucun traitement parallèle n'est en cours et gc.collect() ne peut figer
+    # personne — d'où allow_gc=True. C'est le moment où la RAM est la plus
+    # haute du build, et le seul point traversé par TOUS les chemins :
+    # étape 3 seule, « All in one » (build_all) et build_tile_list.
+    _check_mem(
+        context=f"fin étape 3 tuile {FNAMES.short_latlon(tile.lat, tile.lon)}",
+        allow_gc=True,
+    )
     UI.timings_and_bottom_line(timer)
     UI.logprint(
         "Step 3 for tile lat=", tile.lat, ", lon=", tile.lon, ": normal exit."

@@ -558,7 +558,10 @@ if HAS_TK:
 
             if py and venv_ok and launcher_ok and modules_ok:
                 self._log("✅ Python 3.12 et venv déjà présents.", tag="ok")
-                self._log("✅ Tout est configuré — lancement d'Ortho4XP...", tag="ok")
+                self._log("✅ Tout est configuré.", tag="ok")
+                if SYSTEM == "Darwin":
+                    self._create_mac_launcher_app()
+                self._log("✅ Lancement d'Ortho4XP...", tag="ok")
                 self.status_var.set("✅ Tout est prêt — lancement dans 3 secondes...")
                 self.set_progress(100)
                 self.btn_install.set_enabled(False)
@@ -569,6 +572,94 @@ if HAS_TK:
             if not launcher_ok:
                 self._log("❌ Ortho4XP_Launcher.py introuvable !", tag="err")
                 self._log("   Vérifiez que l'archive est bien décompressée.", tag="warn")
+
+        def _create_mac_launcher_app(self):
+            """Crée Lanceur ORTHO4XP.app — binaire C universel arm64+x86_64."""
+            import shutil, stat as st
+            self._log("🔧 Création de Lanceur ORTHO4XP.app...", tag=None)
+            LAUNCHER_C = r"""
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <limits.h>
+#include <libgen.h>
+#include <stdint.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+extern int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
+static int path_exists(const char *p) { struct stat s; return stat(p,&s)==0; }
+int main(int argc, char **argv) {
+    char exe[PATH_MAX]; uint32_t sz = sizeof(exe);
+    if (_NSGetExecutablePath(exe, &sz) != 0) return 1;
+    char real[PATH_MAX];
+    if (!realpath(exe, real)) strncpy(real, exe, PATH_MAX-1);
+    char t1[PATH_MAX],t2[PATH_MAX],t3[PATH_MAX],tmp[PATH_MAX],root[PATH_MAX];
+    strncpy(t1,real,PATH_MAX-1); strncpy(t2,dirname(t1),PATH_MAX-1);
+    strncpy(t3,dirname(t2),PATH_MAX-1); strncpy(tmp,dirname(t3),PATH_MAX-1);
+    strncpy(root,dirname(tmp),PATH_MAX-1);
+    chdir(root);
+    char venv_py[PATH_MAX], launcher[PATH_MAX], sh_path[PATH_MAX];
+    snprintf(venv_py,  sizeof(venv_py),  "%s/venv/bin/python3",     root);
+    snprintf(launcher, sizeof(launcher), "%s/Ortho4XP_Launcher.py", root);
+    snprintf(sh_path,  sizeof(sh_path),  "%s/_ortho_run.sh",        root);
+    if (!path_exists(venv_py)) {
+        char *args[] = {"/usr/bin/osascript","-e",
+            "display dialog \"Lancez d\'abord INSTALL_PREREQUIS.py\" "
+            "buttons {\"OK\"} default button \"OK\" "
+            "with title \"Ortho4XP\" with icon caution", NULL};
+        pid_t p=fork(); if(p==0){execv("/usr/bin/osascript",args);_exit(1);}
+        if(p>0){int s;waitpid(p,&s,0);} return 1;
+    }
+    FILE *sh=fopen(sh_path,"w");
+    if(sh){fprintf(sh,"#!/bin/sh\ncd \"%s\"\nexec \"%s\" \"%s\"\n",root,venv_py,launcher);fclose(sh);chmod(sh_path,0755);}
+    char *a[]={"/bin/sh",sh_path,NULL};
+    pid_t p=fork(); if(p==0){execv("/bin/sh",a);_exit(1);}
+    return 0;
+}
+"""
+            INFO_PLIST = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>CFBundleExecutable</key><string>launch</string>
+    <key>CFBundleIdentifier</key><string>com.ypsos.ortho4xp.daily</string>
+    <key>CFBundleName</key><string>ORTHO4XP V3 Lanceur</string>
+    <key>CFBundleDisplayName</key><string>ORTHO4XP V3 Lanceur</string>
+    <key>CFBundleVersion</key><string>3.0</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>LSMinimumSystemVersion</key><string>12.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+</dict></plist>"""
+            app_path  = BASE_DIR / "Lanceur ORTHO4XP.app"
+            macos_dir = app_path / "Contents" / "MacOS"
+            res_dir   = app_path / "Contents" / "Resources"
+            if app_path.exists():
+                shutil.rmtree(str(app_path))
+            macos_dir.mkdir(parents=True)
+            res_dir.mkdir(parents=True)
+            (app_path / "Contents" / "Info.plist").write_text(INFO_PLIST, encoding="utf-8")
+            c_file  = BASE_DIR / "_tmp_install.c"
+            exe_out = macos_dir / "launch"
+            c_file.write_text(LAUNCHER_C, encoding="utf-8")
+            compiled = False
+            for arch_flags in [["-arch", "arm64", "-arch", "x86_64"], []]:
+                cmd = ["gcc"] + arch_flags + [str(c_file), "-o", str(exe_out), "-O2"]
+                r = subprocess.run(cmd, capture_output=True, text=True)
+                if r.returncode == 0:
+                    compiled = True
+                    break
+            c_file.unlink(missing_ok=True)
+            if compiled:
+                exe_out.chmod(exe_out.stat().st_mode | st.S_IEXEC | st.S_IXGRP | st.S_IXOTH)
+                try:
+                    subprocess.run(["xattr", "-cr", str(app_path)], capture_output=True, timeout=10)
+                    subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_path)],
+                                   capture_output=True, timeout=30)
+                except Exception:
+                    pass
+                self._log("✅ Lanceur ORTHO4XP.app créé !", tag="ok")
+            else:
+                self._log("⚠️  Compilation gcc échouée — Lanceur .app non créé.", tag="warn")
 
         def _auto_launch(self):
             """Lancement direct quand tout est déjà installé.

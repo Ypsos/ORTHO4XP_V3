@@ -836,12 +836,22 @@ def update_airport_boundaries(tile, dico_airports):
     try:
         with open(FNAMES.apt_file(tile), "wb") as outf:
             pickle.dump(dico_airports, outf)
+        # Signature du cache : ce fichier est relu (et donc ouvert) aux étapes
+        # 2 et 3. La signature permet de refuser un cache qui n'aurait pas été
+        # écrit par cette installation. Voir O4_File_Names.check_apt_file().
+        FNAMES.sign_apt_file(tile)
     except:
         UI.vprint(
             1,
             "WARNING: Could not save airport info to file",
             FNAMES.apt_file(tile),
         )
+        # Cache absent ou incomplet : on retire une éventuelle signature
+        # devenue caduque, sans quoi le cache suivant serait rejeté à tort.
+        try:
+            os.remove(FNAMES.apt_sig_file(tile))
+        except:
+            pass
     export_airports_png(tile, dico_airports)
     return
 

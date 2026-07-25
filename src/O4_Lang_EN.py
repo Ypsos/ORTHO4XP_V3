@@ -319,6 +319,10 @@ T = {
     # ── LAUNCHER WINDOW ────────────────────────────────────────────
     "1. Installer les Modules"              : "1. Install Modules",
     "🔍 Vérifier Intégrité"                : "🔍 Check Integrity",
+    "📜 Crédits & Licence"                 : "📜 Credits & License",
+    "📖 Historique"                        : "📖 History",
+    "Fichier introuvable :"                : "File not found:",
+    "Fichier de crédits introuvable :"     : "Credits file not found:",
     "▶️ LANCER ORTHO4XP"                   : "▶️ LAUNCH ORTHO4XP",
     "Installer les Modules — Choisir la plateforme"
                                             : "Install Modules — Choose platform",
@@ -1250,4 +1254,50 @@ T = {
         : '⚠ XP11+bathy: XP12 waves disabled',
     '🎚  Simulateur Ortho4XP — tuile '
         : '🎚  Ortho4XP Simulator — tile ',
+
+    # ── BATHYMÉTRIE / fonds marins (module O4_Bathymetrie_Utils) ──
+    '🌊 Bathymétrie'
+        : '🌊 Bathymetry',
+    'Bathymétrie'
+        : 'Bathymetry',
+    'Le module O4_Bathymetrie_Utils.py est introuvable dans le dossier src/.'
+        : 'The O4_Bathymetrie_Utils.py module was not found in the src/ folder.',
+    'Bathymétrie — Ortho4XP V3'
+        : 'Bathymetry — Ortho4XP V3',
+    "Assemblage terminé.\n\n{f}\n\ncustom_bathy_dem est renseigné : la tuile est prête pour l'étape mesh."
+        : 'Assembly complete.\n\n{f}\n\ncustom_bathy_dem is set: the tile is ready for the mesh step.',
+    "Aucun dossier de bathymétries n'est configuré."
+        : 'No bathymetry folder is set.',
+    'Aucun fichier bathymétrique lisible dans ce dossier.'
+        : 'No readable bathymetry file in this folder.',
+    'Aucun fichier bathymétrique ne recouvre cette tuile.'
+        : 'No bathymetry file covers this tile.',
+    'Choisissez le disque ou le dossier où créer votre organisation des bathymétries (un disque externe convient).'
+        : 'Choose the drive or folder where your bathymetry data structure should be created (an external drive works fine).',
+    'Dans quel dossier de la structure Bathymétrie voulez-vous travailler ?'
+        : 'Which folder of the Bathymetry structure do you want to work in?',
+    "Deux dossiers sont nécessaires :\n\n1) celui où se trouvent vos bathymétries sources ;\n2) celui où écrire les bathymétries assemblées.\n\nVoulez-vous qu'Ortho4XP crée cette organisation pour vous ?\n\nOUI  →  la structure est créée automatiquement.\nNON  →  vous désignez vos propres dossiers, qui sont utilisés tels quels."
+        : 'Two folders are needed:\n\n1) the one holding your source bathymetry files;\n2) the one where assembled bathymetry files are written.\n\nDo you want Ortho4XP to create this structure for you?\n\nYES  →  the structure is created automatically.\nNO  →  you designate your own folders, used as-is.',
+    'Dossier de destination des bathymétries assemblées'
+        : 'Destination folder for assembled bathymetry files',
+    'Dossier de vos bathymétries sources (.tif, .asc…)'
+        : 'Folder holding your source bathymetry files (.tif, .asc…)',
+    'Dossier enregistré.'
+        : 'Folder saved.',
+    'Emplacement TIFF / assemble'
+        : 'TIFF / assemble location',
+    'Ouvrez le dossier « Bathymétrie » de votre structure.'
+        : 'Open the « Bathymetry » folder of your structure.',
+    'Ouvrir la racine Bathymétrie'
+        : 'Open the Bathymetry root',
+    "Où créer l'organisation des bathymétries"
+        : 'Where to create the bathymetry data structure',
+    'Si vos bathymétries sont sur un disque externe,'
+        : 'If your bathymetry data is on an external drive,',
+    'Structure créée.\n\nDéposez vos bathymétries dans :\n{d}\n\nFormat requis : EPSG:4326.'
+        : 'Structure created.\n\nDrop your bathymetry files into:\n{d}\n\nRequired format: EPSG:4326.',
+    'custom_bathy_dem non écrit :'
+        : 'custom_bathy_dem not written:',
+    'custom_bathy_dem renseigné dans le cfg de la tuile.'
+        : 'custom_bathy_dem set in the tile cfg.',
 }

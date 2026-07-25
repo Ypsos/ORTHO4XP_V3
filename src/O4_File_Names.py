@@ -1,5 +1,8 @@
 import os
 import sys
+import hmac
+import hashlib
+import binascii
 from math import floor
 
 g2xpl_16_prefix = ""
@@ -183,6 +186,125 @@ def apt_file(tile):
     return os.path.join(
         tile.build_dir, "Data" + short_latlon(tile.lat, tile.lon) + ".apt"
     )
+
+
+##############################################################################
+# SIGNATURE DU CACHE AÉROPORTS
+#
+# Le cache aéroports (.apt) est relu à l'étape 2 et à l'étape 3. Son format
+# exécute du code au moment de l'ouverture : un fichier .apt fabriqué ailleurs
+# et déposé dans un dossier de tuile suffirait à faire tourner n'importe quel
+# programme sur la machine.
+#
+# Chaque cache écrit par Ortho4XP est donc accompagné d'une signature calculée
+# avec une clé propre à cette installation. Avant toute relecture, la signature
+# est vérifiée : si elle est absente ou ne correspond pas, le cache est
+# simplement effacé et sera régénéré normalement. Aucun changement visible
+# pour l'utilisateur.
+##############################################################################
+
+apt_cache_key_file = os.path.join(Ortho4XP_dir, ".apt_cache_key")
+
+
+def apt_sig_file(tile):
+    return apt_file(tile) + ".sig"
+
+
+def _apt_notify(*args):
+    """Message d'information, sans dépendance d'import au chargement."""
+    try:
+        import O4_UI_Utils as UI
+
+        UI.lvprint(1, *args)
+    except Exception:
+        print(" ".join(str(x) for x in args))
+
+
+def apt_cache_key():
+    """Clé de signature propre à cette installation.
+
+    Créée au premier usage à partir du générateur aléatoire du système, puis
+    conservée. Elle ne quitte jamais la machine : un cache signé ailleurs ne
+    peut donc pas être accepté ici.
+    """
+    try:
+        with open(apt_cache_key_file, "rb") as f:
+            key = f.read().strip()
+        if len(key) >= 32:
+            return key
+    except Exception:
+        pass
+    key = binascii.hexlify(os.urandom(32))
+    try:
+        fd = os.open(
+            apt_cache_key_file,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o600,
+        )
+        with os.fdopen(fd, "wb") as f:
+            f.write(key)
+    except Exception:
+        # Clé non conservée (dossier en lecture seule) : la vérification
+        # échouera au build suivant et le cache sera régénéré. Sans danger.
+        pass
+    return key
+
+
+def apt_signature(file_name):
+    """Empreinte signée du contenu d'un fichier."""
+    h = hmac.new(apt_cache_key(), digestmod=hashlib.sha256)
+    with open(file_name, "rb") as f:
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest().encode("ascii")
+
+
+def sign_apt_file(tile):
+    """Écrit la signature du cache aéroports. Retourne True si réussi."""
+    try:
+        with open(apt_sig_file(tile), "wb") as f:
+            f.write(apt_signature(apt_file(tile)))
+        return True
+    except Exception:
+        _apt_notify(
+            "WARNING: Could not sign airport cache", apt_file(tile)
+        )
+        return False
+
+
+def check_apt_file(tile):
+    """Vérifie le cache aéroports avant toute relecture.
+
+    Retourne True si le cache est présent et authentique. Sinon le cache et sa
+    signature sont effacés : le programme se comporte alors exactement comme
+    si le fichier n'avait jamais existé (cas déjà prévu partout).
+    """
+    apt = apt_file(tile)
+    sig = apt_sig_file(tile)
+    if not os.path.isfile(apt):
+        return False
+    try:
+        with open(sig, "rb") as f:
+            expected = f.read().strip()
+        if expected and hmac.compare_digest(expected, apt_signature(apt)):
+            return True
+        reason = "signature does not match"
+    except Exception:
+        reason = "signature missing"
+    _apt_notify(
+        "WARNING: Airport cache",
+        apt,
+        "rejected (" + reason + "), it will be rebuilt.",
+    )
+    for f_name in (apt, sig):
+        try:
+            os.remove(f_name)
+        except Exception:
+            pass
+    return False
 
 
 def weight_file(tile):

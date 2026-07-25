@@ -15,7 +15,7 @@
 >
 > **Pour télécharger la version officielle et obtenir les dernières mises à jour, utilisez toujours ce dépôt GitHub.**
 >
-**Développée et maintenue par Roland (Ypsos) avec l'assistance de Claude IA (Anthropic)**
+**Conçue, réalisée et maintenue par Roland (Ypsos) — assisté de Claude (IA, Anthropic) comme outil d'aide au développement**
 >
 **La version moderne d'Ortho4XP**  
 Installation automatique • Sans terminal • Pour X-Plane 12
@@ -23,15 +23,13 @@ Installation automatique • Sans terminal • Pour X-Plane 12
 >
 
 ---
-ℹ️ À propos des forks
+### ℹ️ À propos des forks
 >
-OrthoForge (xbard / xpconnect.me) est un fork indépendant qui utilise une grande partie des fichiers et modules que j’ai développés pour ORTHO4XP V3.
+Ortho4XP V3 est libre sous GPL v3, et je m'en réjouis : d'autres projets peuvent reprendre son architecture et ses modules pour les faire évoluer à leur façon. C'est l'esprit même du logiciel libre.
 >
-Ils ont ajouté leurs propres évolutions en surcouche. 
+Une seule règle, celle de la licence : lorsqu'une partie du travail développé pour ORTHO4XP V3 est réutilisée dans un autre projet, la **paternité d'origine doit être conservée**. Je ne peux garantir ni la stabilité ni la compatibilité des versions dérivées avec la mienne.
 >
-Je ne peux pas garantir la stabilité ni la compatibilité de ces modifications avec ma version officielle.
->
-La version officielle que je maintiens est entièrement gratuite, sans demande de donation ni bouton de soutien financier.
+La version officielle que je maintiens ici reste **gratuite**, sans aucune demande de donation ni bouton de soutien financier.
 >
 
 -
@@ -42,7 +40,7 @@ La version officielle que je maintiens est entièrement gratuite, sans demande d
 | --- | --- |
 | **Logiciel original** | Créé par Oscar Pilote → [github.com/oscarpilote/Ortho4XP](https://github.com/oscarpilote/Ortho4XP) |
 | **Version 1.40 maintenue** | Fork par Shred86 → [github.com/shred86/Ortho4XP](https://github.com/shred86/Ortho4XP) |
-| **Cette V3** | **Refonte complète par Roland (Ypsos)** avec l’aide de Claude (Anthropic AI) |
+| **Cette V3** | **Refonte modernisée de l'écosystème par Roland (Ypsos)**, autour du moteur d'origine préservé — assisté de Claude (Anthropic) comme outil |
 
 **Je suis l’auteur principal de l’architecture moderne V3** (Event Bus, Pipeline, Memory Manager, Provider Scoring, Altimétrie, JOSM, Correction image, Visualisateur, etc.).
 
@@ -288,9 +286,9 @@ Merci également à tous ceux qui remontent leurs retours sur les forums : chaqu
 
 |  |  |
 | --- | --- |
-| **Concept & Design** | Roland (Ypsos) |
-| **Codage & Support** | Claude (Anthropic AI) |
-| **Travaux originaux** | Oscar Pilote (Ortho4XP) |
+| **Idée, conception, réalisation, développement** | Roland (Ypsos) |
+| **Assistance au développement (outil IA)** | Claude (Anthropic) |
+| **Œuvre originale** | Oscar Pilote (Ortho4XP) |
 | **Adaptation 1.40** | Shred86 |
 | **Référence technique** | Jojo |
 | **Tests Windows / Linux** | Cricri |
@@ -331,12 +329,11 @@ Automatic installation • No terminal required • For X-Plane 12
 
 ## ℹ️ About Forks
 
-**OrthoForge** (xbard / xpconnect.me) is an **independent fork** that uses a large part of the files and modules I developed for ORTHO4XP V3.
+Ortho4XP V3 is free software under GPL v3, and I welcome it: other projects may reuse its architecture and modules to evolve them in their own way. This is the very spirit of open source.
 
-They have added their own features on top.  
-I cannot guarantee the stability or compatibility of these modifications with the official version.
+One rule only, the license's: when part of the work developed for ORTHO4XP V3 is reused in another project, the **original authorship must be preserved**. I cannot guarantee the stability or compatibility of derivative versions with mine.
 
-The official version I maintain is **completely free**, with no donation requests or support buttons.
+The official version I maintain here remains **completely free**, with no donation requests or support buttons.
 
 It is available here: **https://github.com/Ypsos/ORTHO4XP_V3**
 
@@ -588,8 +585,8 @@ Thanks as well to everyone posting feedback on the forums: every precise report 
 
 |  |  |
 | --- | --- |
-| **Concept & Design** | Roland (Ypsos) |
-| **Coding & Support** | Claude (Anthropic AI) |
+| **Idea, design, implementation, development** | Roland (Ypsos) |
+| **Development support (AI tool)** | Claude (Anthropic) |
 | **Original work** | Oscar Pilote (Ortho4XP) |
 | **1.40 adaptation** | Shred86 |
 | **Technical reference** | Jojo |

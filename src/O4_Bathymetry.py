@@ -182,8 +182,151 @@ def recut_water_tris(node_coords, tri_idx, tri_types):
             nbr_tris, tri_idx, tri_types)
 
 
+def _bathy_dem_source(tile):
+    # Source DEM bathymetrique dediee, distincte du DEM du mesh terrestre.
+    # Vide (defaut) => repli automatique sur le calcul par masques de distance.
+    source = getattr(tile, "custom_bathy_dem", "")
+    return source.strip() if isinstance(source, str) else ""
+
+
+# Extensions raster reconnues pour les releves de fonds.
+_BATHY_EXTS = (".tif", ".tiff", ".hgt", ".raw", ".img")
+
+
+def _tile_basename(lat, lon):
+    # Convention de nommage Ortho4XP d'une tuile : ex. lat=46, lon=-3 -> "+46-003".
+    return "{:+03d}{:+04d}".format(int(lat), int(lon))
+
+
+def _resolve_bathy_file(source, tile):
+    """Resout custom_bathy_dem vers un FICHIER concret.
+
+    - custom_bathy_dem pointe un FICHIER  -> ce fichier (comportement historique).
+    - custom_bathy_dem pointe un DOSSIER  -> on y cherche le releve de la tuile :
+        1) par nom conventionnel "+46-003.<ext>", cherche recursivement
+           (gere aussi ".../Assemble France/+46-003/+46-003.tif") ;
+        2) a defaut, si le dossier ne contient qu'UN seul raster, on le prend ;
+        3) sinon -> None (l'appelant retombe sur le calcul par masques).
+    - chemin inexistant -> renvoye tel quel : DEM levera son erreur, l'appelant
+      journalise et retombe sur les masques (comportement historique preserve).
+    """
+    if os.path.isfile(source):
+        return source
+    if not os.path.isdir(source):
+        # Ni fichier ni dossier : on laisse le comportement historique operer.
+        return source
+
+    base = _tile_basename(tile.lat, tile.lon)
+    cibles = set((base + e).lower() for e in _BATHY_EXTS)
+    rasters = []
+    for racine, _dirs, fichiers in os.walk(source):
+        for f in fichiers:
+            if f.lower() in cibles:
+                return os.path.join(racine, f)
+            if os.path.splitext(f)[1].lower() in _BATHY_EXTS:
+                rasters.append(os.path.join(racine, f))
+    if len(rasters) == 1:
+        # Cas courant : un unique releve depose dans le dossier du pays.
+        return rasters[0]
+    # Dossier vide, ou plusieurs fichiers a noms libres sans correspondance :
+    # on ne devine pas -> repli.
+    return None
+
+
+def compute_depth_ratio_bounds_from_bathy_dem(
+        nbr_nodes, node_coords, node_types, tile):
+    """Profondeurs issues de vrais releves bathymetriques.
+
+    Retourne None si aucune source n'est configuree ou si elle est
+    illisible : l'appelant retombe alors sur le calcul par masques.
+    """
+    source = _bathy_dem_source(tile)
+    if not source:
+        return None
+    try:
+        import O4_UI_Utils as UI
+        import O4_DEM_Utils as DEM_UTILS
+    except Exception:
+        return None
+
+    # custom_bathy_dem peut designer un FICHIER ou un DOSSIER de releves :
+    # dans le second cas on retrouve automatiquement le fichier de la tuile.
+    resolved = _resolve_bathy_file(source, tile)
+    if resolved is None:
+        UI.lvprint(
+            1,
+            "   WARNING: no bathymetry file found for this tile in folder",
+            source, "-> falling back on coastline distance masks.",
+        )
+        return None
+    if resolved != source:
+        UI.vprint(1, "    * Bathymetry file auto-selected:", resolved)
+
+    try:
+        dem = DEM_UTILS.DEM(tile.lat, tile.lon, resolved, fill_nodata="to zero")
+    except Exception as e:
+        UI.lvprint(
+            1,
+            "   WARNING: unreadable bathymetry source", resolved,
+            "->", e, "-> falling back on coastline distance masks.",
+        )
+        return None
+
+    max_depth = getattr(tile, "bathy_max_depth", 100)
+    try:
+        max_depth = float(max_depth)
+    except Exception:
+        max_depth = 100.0
+    if max_depth <= 0:
+        max_depth = 100.0
+
+    node_bathy = 255 * numpy.ones(nbr_nodes, dtype=numpy.uint8)
+    water_nodes = numpy.array(
+        [n for n in range(nbr_nodes) if (node_types[n] & 4 != 0)],
+        dtype=numpy.int64,
+    )
+    if not len(water_nodes):
+        return node_bathy
+
+    way = numpy.column_stack(
+        (
+            node_coords[5 * water_nodes + 0] - tile.lon,
+            node_coords[5 * water_nodes + 1] - tile.lat,
+        )
+    )
+    try:
+        alt = numpy.asarray(dem.alt_vec(way), dtype=numpy.float64)
+    except Exception as e:
+        UI.lvprint(
+            1,
+            "   WARNING: bathymetry sampling failed ->", e,
+            "-> falling back on coastline distance masks.",
+        )
+        return None
+
+    # Sous le niveau de la mer l'altitude est negative : la profondeur est
+    # son oppose. Terre emergee ou nodata ramene a zero => profondeur nulle.
+    depth = numpy.where(alt < 0, -alt, 0.0)
+    node_bathy[water_nodes] = numpy.clip(
+        depth / max_depth * 255.0, 0.0, 255.0
+    ).astype(numpy.uint8)
+
+    UI.vprint(
+        1,
+        "    * Bathymetry from", source,
+        ": max depth read", round(float(depth.max()), 1),
+        "m, reference", max_depth, "m.",
+    )
+    return node_bathy
+
+
 def compute_depth_ratio_bounds_from_masks(
         nbr_nodes, node_coords, node_types, tile):
+
+    node_bathy = compute_depth_ratio_bounds_from_bathy_dem(
+        nbr_nodes, node_coords, node_types, tile)
+    if node_bathy is not None:
+        return node_bathy
 
     water_nodes = [n for n in range(nbr_nodes) if (node_types[n] & 4 != 0)]
 

@@ -150,7 +150,7 @@ def show_language_dialog(parent=None, on_change=None):
 
     # Centrage
     win.update_idletasks()
-    w, h = 340, 190
+    w, h = 420, 190
     try:
         px = parent.winfo_rootx() + (parent.winfo_width()  - w) // 2
         py = parent.winfo_rooty() + (parent.winfo_height() - h) // 2

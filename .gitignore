@@ -159,3 +159,7 @@ Filters/
 Patches/
 _backups_O4/
 _score_exports/
+
+# Clé de signature du cache aéroport — unique par machine, ne JAMAIS publier
+.apt_cache_key
+_apt_cache_key

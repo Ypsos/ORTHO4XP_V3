@@ -135,6 +135,13 @@ def build_curv_tol_weight_map(tile, weight_array):
             1, "-> Modifying curv_tol weight map according to runway locations."
         )
         try:
+            # Le cache aéroports est vérifié AVANT d'être ouvert : ce format
+            # exécute du code à l'ouverture, un fichier .apt venu d'ailleurs
+            # ne doit donc jamais être lu. Un cache rejeté est effacé et le
+            # traitement se poursuit comme si le fichier était absent (cas
+            # déjà prévu ci-dessous). Voir O4_File_Names.check_apt_file().
+            if not FNAMES.check_apt_file(tile):
+                raise Exception("airport cache absent or not authentic")
             f = open(FNAMES.apt_file(tile), "rb")
             dico_airports = pickle.load(f)
             f.close()
