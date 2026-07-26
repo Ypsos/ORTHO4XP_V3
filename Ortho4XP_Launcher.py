@@ -268,9 +268,17 @@ class Launcher(tk.Tk):
             )
             self._lang_icon.pack(side="left", padx=(16, 4))
 
-            _O4Lang.make_language_button(
+            # Bouton "Changer la langue…" : HoverButton (canvas vert arrondi)
+            # identique aux autres boutons du lanceur. On n'utilise plus le
+            # ttk.Button de make_language_button, qui gardait l'apparence
+            # native (fond blanc) car le style "TButton" n'est pas configuré
+            # dans le lanceur. Le clic ouvre la fenetre de choix de langue.
+            HoverButton(
                 theme_frame,
-                on_change=self._restart_with_new_lang,
+                tr("language_menu_change_lang"),
+                lambda: _O4Lang.show_language_dialog(
+                    self, on_change=self._restart_with_new_lang),
+                width=250, height=44, font_size=13,
             ).pack(side="left", padx=(0, 4))
         except Exception:
             pass  # si O4_Lang absent → le lanceur fonctionne quand même
