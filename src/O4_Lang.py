@@ -69,6 +69,7 @@ _LANG_NATIVE = {
     "ES": "🇪🇸  Español",   "IT": "🇮🇹  Italiano",  "PT": "🇵🇹  Português",
     "NL": "🇳🇱  Nederlands", "IS": "🇮🇸  Íslenska",  "NO": "🇳🇴  Norsk",
     "SV": "🇸🇪  Svenska",   "FI": "🇫🇮  Suomi",     "GD": "🏴  Gàidhlig",
+    "DA": "🇩🇰  Dansk",
 }
 
 # ── État interne ───────────────────────────────────────────────────
@@ -409,30 +410,31 @@ def show_language_dialog(parent=None, on_change=None):
             width=190, height=50, font_size=14,
         ).pack(side=tk.LEFT, padx=12)
 
-    # Menu deroulant pour toutes les autres langues.
+    # "Menu deroulant" pour les autres langues : bouton canvas theme
+    # (rendu fiable sur macOS) qui ouvre un menu popup colore. On evite
+    # ainsi le rectangle blanc du tk.OptionMenu natif macOS.
     if _others:
-        _prompt = "Autres langues…" if _current_lang != "EN" else "Other languages…"
-        _labels, _lbl2code = [], {}
+        _prompt = "Autres langues…  ▾" if _current_lang != "EN" else "Other languages…  ▾"
+        _menu = tk.Menu(win, tearoff=0,
+                        bg=C["btn_bg"], fg=C["btn_fg"],
+                        activebackground=C["accent"], activeforeground=C["btn_fg"],
+                        bd=0)
         for _c in _others:
-            _l = _btn_label(_c)
-            _labels.append(_l)
-            _lbl2code[_l] = _c
-        _sel = tk.StringVar(win)
-        _sel.set(_prompt)
-        _om = tk.OptionMenu(win, _sel, *_labels,
-                            command=lambda s: _choose(_lbl2code[s]))
-        _om.configure(bg=C["btn_bg"], fg=C["btn_fg"],
-                      activebackground=C["accent"], activeforeground=C["btn_fg"],
-                      highlightthickness=0, relief="raised", bd=1,
-                      highlightbackground=C["btn_bg"],
-                      font=("Helvetica", 12, "bold"))
-        try:
-            _om["menu"].configure(bg=C["btn_bg"], fg=C["btn_fg"],
-                                  activebackground=C["accent"],
-                                  activeforeground=C["btn_fg"])
-        except Exception:
-            pass
-        _om.pack(pady=(12, 0), ipadx=8, ipady=3)
+            _menu.add_command(label=_btn_label(_c),
+                              command=(lambda c=_c: _choose(c)))
+        _drop = _themed_button(win, _prompt, (lambda: None), C,
+                               width=300, height=42, font_size=13)
+
+        def _open_menu():
+            try:
+                x = _drop.winfo_rootx()
+                y = _drop.winfo_rooty() + _drop.winfo_height()
+                _menu.tk_popup(x, y)
+            finally:
+                _menu.grab_release()
+
+        _drop._command = _open_menu   # le clic ouvre le menu popup
+        _drop.pack(pady=(12, 0))
 
     # Indicateur langue courante + nom du fichier cfg
     cfg_short = os.path.basename(_cfg_path)
