@@ -21,6 +21,7 @@ scikit-fmm>=2024.5.29
 py7zr>=0.20.0
 Shapely>=2.0.7
 urllib3>=2.3.0
+rasterio
 
 # GDAL — installation spéciale selon plateforme :
 # macOS   : brew install gdal

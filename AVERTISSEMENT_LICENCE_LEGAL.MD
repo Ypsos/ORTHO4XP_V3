@@ -1,4 +1,4 @@
-# ⚠ AVERTISSEMENT LÉGAL — ORTHO4XP (V2, V3 et versions ultérieures)
+# ⚠ AVERTISSEMENT LÉGAL — ORTHO4XP (V2, V3 et versions ultérieures) Officielle
 
 **IMPORTANT :**
 La version FRANÇAISE ci-dessous est la seule version officielle faisant foi.

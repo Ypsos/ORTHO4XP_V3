@@ -7,7 +7,12 @@
 ║   Roland (Ypsos) — Mars 2026                 ║
 ║   macOS (Apple Silicon + Intel) / Windows / Linux    ║
 ╚══════════════════════════════════════════════════════╝
-
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos).
+#  Ce module a été conçu et spécifié par Roland Lehmann (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+CREDIT — AUTHOR: Roland(Ypsos). # This module was designed and specified by Roland Lehmann (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
 Ce script est le PREMIER fichier lancé par l'utilisateur.
 Il ne dépend d'aucun module externe — uniquement stdlib Python.
 Compatible Python 3.8+ (détecte et installe 3.12 si absent).
@@ -146,8 +151,24 @@ def find_python312():
                         return path
                 except Exception:
                     pass
+        # Lanceur officiel « py -3.12 » (couvre Store et installations custom)
+        py_launcher = shutil.which("py")
+        if py_launcher:
+            try:
+                chk = subprocess.run([py_launcher, "-3.12", "--version"],
+                                     capture_output=True, text=True, timeout=5)
+                if "3.12" in chk.stdout + chk.stderr:
+                    loc = subprocess.run(
+                        [py_launcher, "-3.12", "-c", "import sys;print(sys.executable)"],
+                        capture_output=True, text=True, timeout=5)
+                    real = loc.stdout.strip()
+                    if real and Path(real).exists():
+                        return real
+            except Exception:
+                pass
         candidates = [
             r"C:\Python312\python.exe",
+            r"C:\Program Files\Python312\python.exe",
             r"C:\Users\{}\AppData\Local\Programs\Python\Python312\python.exe".format(
                 os.environ.get("USERNAME", "user")),
         ]
@@ -296,9 +317,9 @@ class Installer:
         self.log(f"📍 Dossier    : {BASE_DIR}")
         self.log("")
 
-        if not self._check_tkinter_mac():
-            return
-
+        # NOTE : sur macOS, la vérification Tkinter est effectuée dans
+        # _install_mac() APRÈS la résolution/installation de Python 3.12,
+        # afin de tester le bon interpréteur (et non le python3 système).
         if SYSTEM == "Darwin":
             self._install_mac()
         elif SYSTEM == "Windows":
@@ -321,7 +342,12 @@ class Installer:
             brew = find_homebrew()
             if not brew:
                 self.log("⚠️  Homebrew absent. Installation en cours...")
-                rc = run_cmd(["/bin/bash", "-c", 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash'], self.log)
+                # NONINTERACTIVE=1 : indispensable quand le script est lancé
+                # sans terminal (depuis la fenêtre graphique), sinon Homebrew
+                # attend une touche « RETURN » qu'il ne recevra jamais.
+                _brew_env = os.environ.copy()
+                _brew_env["NONINTERACTIVE"] = "1"
+                rc = run_cmd(["/bin/bash", "-c", 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash'], self.log, env=_brew_env)
                 brew = find_homebrew()
                 if not brew:
                     self._finish(False, "❌ Impossible d'installer Homebrew. Installez-le manuellement : https://brew.sh")
@@ -337,6 +363,11 @@ class Installer:
                 return
             self.log(f"✅ Python 3.12 installé : {self.python312}")
             self._set_progress(40)
+
+        # Vérification Tkinter sur le Python 3.12 réellement retenu/installé
+        # (déplacée ici depuis run() — corrige l'arrêt à tort sur machine neuve).
+        if not self._check_tkinter_mac():
+            return
 
         self._create_venv()
         if not self._venv_ok():
@@ -363,7 +394,7 @@ class Installer:
             rc = run_cmd(["winget", "install", "--id", "Python.Python.3.12", "--silent", "--accept-package-agreements", "--accept-source-agreements"], self.log)
             self.python312 = find_python312()
             if not self.python312:
-                webbrowser.open("https://www.python.org/downloads/release/python-3120/")
+                webbrowser.open("https://www.python.org/downloads/windows/")
                 self._finish(False, "⚠️ Installation automatique impossible.\nLa page de téléchargement Python 3.12 vient de s'ouvrir.\nInstallez-le puis relancez ce programme.\n⚠️ Cochez 'Add Python to PATH' !")
                 return
             self.log(f"✅ Python 3.12 installé : {self.python312}")
@@ -398,7 +429,9 @@ class Installer:
         if not self._venv_ok():
             return
         self._install_requirements()
-        self._set_progress(85)
+        self._set_progress(80)
+        self._install_gdal_linux()
+        self._set_progress(90)
         self._launch_launcher()
 
     def _create_venv(self):
@@ -436,6 +469,21 @@ class Installer:
         if not brew:
             return
         run_cmd([brew, "install", "gdal"], self.log)
+
+    def _install_gdal_linux(self):
+        self.log("── 🗺️ GDAL Linux ───────────────────────────")
+        # Déjà présent ? on évite de relancer sudo inutilement.
+        if shutil.which("gdalinfo") or shutil.which("gdal_translate"):
+            self.log("✅ GDAL déjà présent.")
+            return
+        if shutil.which("apt-get"):
+            run_cmd(["sudo", "apt-get", "install", "-y", "gdal-bin"], self.log)
+        elif shutil.which("dnf"):
+            run_cmd(["sudo", "dnf", "install", "-y", "gdal"], self.log)
+        elif shutil.which("pacman"):
+            run_cmd(["sudo", "pacman", "-S", "--noconfirm", "gdal"], self.log)
+        else:
+            self.log("⚠️  Gestionnaire de paquets inconnu — installez GDAL manuellement.")
 
     def _launch_launcher(self):
         if not LAUNCHER_PY.exists():
@@ -619,7 +667,12 @@ if HAS_TK:
 
         def _create_mac_launcher_app(self):
             """Crée Lanceur ORTHO4XP.app — binaire C universel arm64+x86_64."""
-            import shutil, stat as st
+            import stat as st  # shutil est déjà importé globalement
+            # Garde-fou : sans gcc (Xcode Command Line Tools), on ne tente pas
+            # la compilation — évite une exception non gérée dans __init__.
+            if not shutil.which("gcc"):
+                self._log("⚠️  gcc introuvable (Xcode CLT) — Lanceur .app non créé.", tag="warn")
+                return
             self._log("🔧 Création de Lanceur ORTHO4XP.app...", tag=None)
             LAUNCHER_C = r"""
 #include <stdio.h>

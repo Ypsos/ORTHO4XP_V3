@@ -29,6 +29,12 @@
 #      fichiers qui ne déclarent aucun CRS (cas des .asc IGN bruts).
 #    - L'arborescence de Roland n'est ni interprétée ni réorganisée.
 #    - Les fichiers sources ne sont jamais modifiés (lecture seule).
+#
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos).
+#  Ce module a été conçu et spécifié par Roland Lehmann (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+CREDIT — AUTHOR: Roland(Ypsos). # This module was designed and specified by Roland Lehmann (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
 # ============================================================
 
 import os
@@ -388,6 +394,79 @@ def _source_assainie(src_path, tmp_dir, marque, log=None):
     return tmp_path, tmp_path
 
 
+def _decouper_a_emprise(src_path, dst_path, bornes, log=None):
+    """Découpe une source DÉJÀ en EPSG:4326 à l'emprise de la tuile
+    élargie (bornes = ouest, sud, est, nord en degrés), et n'écrit QUE
+    ce petit morceau. Équivaut à : gdalwarp -te <ouest> <sud> <est> <nord>
+
+    C'est l'étape clef pour les fichiers géants (Sonny pays entier, des
+    centaines de Go) : au lieu de reprojeter puis borner le fichier
+    entier, on ne lit sur le disque QUE la fenêtre de la tuile. La
+    mémoire et le temps ne dépendent plus de la taille du fichier source
+    mais seulement de la surface de la tuile (1° + débord).
+
+    La source n'est jamais modifiée (lecture seule). Retourne dst_path si
+    la découpe a produit des pixels, ou None si la fenêtre tombe hors du
+    fichier (aucun recouvrement réel).
+    """
+    from math import floor, ceil
+    rasterio = _import_rasterio()[0]
+    from rasterio.windows import from_bounds, Window
+
+    with rasterio.open(src_path) as src:
+        # Intersection de l'emprise demandée avec l'emprise réelle du
+        # fichier : on ne lit jamais au-delà des bords de la source.
+        b = src.bounds
+        ouest = max(bornes[0], b.left)
+        sud = max(bornes[1], b.bottom)
+        est = min(bornes[2], b.right)
+        nord = min(bornes[3], b.top)
+        if est <= ouest or nord <= sud:
+            return None
+
+        # Fenêtre pixel correspondant à l'emprise intersectée, arrondie
+        # aux pixels entiers pour ne pas décaler la grille.
+        win = from_bounds(ouest, sud, est, nord, src.transform)
+        col0 = int(floor(win.col_off))
+        row0 = int(floor(win.row_off))
+        col1 = int(ceil(win.col_off + win.width))
+        row1 = int(ceil(win.row_off + win.height))
+        col0 = max(0, col0)
+        row0 = max(0, row0)
+        col1 = min(src.width, col1)
+        row1 = min(src.height, row1)
+        if col1 <= col0 or row1 <= row0:
+            return None
+        win = Window(col0, row0, col1 - col0, row1 - row0)
+
+        data = src.read(1, window=win)
+        # Transform du morceau découpé : origine au coin haut-gauche de
+        # la fenêtre, résolution inchangée.
+        win_transform = src.window_transform(win)
+
+        profil = src.profile.copy()
+        profil.update(driver="GTiff", height=int(win.height),
+                      width=int(win.width), transform=win_transform,
+                      count=1, dtype="float32", nodata=_NODATA,
+                      compress="DEFLATE")
+        profil.pop("blockxsize", None)
+        profil.pop("blockysize", None)
+        profil["tiled"] = (int(win.width) >= 256 and int(win.height) >= 256)
+
+        # Assainissement fait ICI, sur le petit morceau : les valeurs de
+        # remplissage non déclarées (-32767, -3.4e38, NaN) sont
+        # neutralisées avant reprojection, exactement comme avant, mais
+        # sans jamais recopier le fichier source entier.
+        data, nb = assainir_altitudes(data, src.nodata)
+        if log and nb:
+            log("      %d valeur(s) aberrante(s) neutralisée(s) : %s"
+                % (nb, os.path.basename(src_path)))
+
+        with rasterio.open(dst_path, "w", **profil) as dst:
+            dst.write(data.astype("float32"), 1)
+    return dst_path
+
+
 def _reprojeter(src_path, dst_path, log=None):
     """Reprojette en EPSG:4326 et impose le NoData de sortie.
     Équivaut à : gdalwarp -t_srs EPSG:4326 -dstnodata -99999"""
@@ -493,10 +572,35 @@ def assembler_tuile(lat, lon, dossier_tuile, debord=DEBORD_DEFAUT,
                 continue
 
             dst = os.path.join(tmp, "r%03d.tif" % i)
-            # Valeurs de remplissage non déclarées (-32767, -3.4e38, NaN)
-            # neutralisées AVANT la reprojection : sinon elles sont
-            # moyennées avec le relief réel et aplatissent le mesh sans
-            # qu'aucune erreur ne soit signalée.
+
+            if emprise is not None:
+                # ── Source DÉJÀ en EPSG:4326 ──────────────────────────
+                # On ne lit QUE la fenêtre de la tuile : indispensable
+                # pour les fichiers géants (Sonny pays entier, plusieurs
+                # centaines de Go). Le morceau découpé est déjà en 4326,
+                # à la bonne emprise et assaini → aucune reprojection ni
+                # copie du fichier entier. Plus de « Write failed » sur
+                # les gros fichiers.
+                try:
+                    decoupe = _decouper_a_emprise(s, dst, bornes, log=_log)
+                except Exception as e:
+                    ignorees.append((nom, "découpe : %s" % e))
+                    _log("      IGNORÉ (découpe) : %s" % nom)
+                    continue
+                if decoupe is None:
+                    ignorees.append(
+                        (nom, "aucun recouvrement réel avec la tuile"))
+                    _log("      IGNORÉ (hors emprise) : %s" % nom)
+                    continue
+                reprojetes.append(dst)
+                _log("      RETENU : %s" % nom)
+                continue
+
+            # ── Source dans une AUTRE projection ──────────────────────
+            # Emprise non comparable en degrés avant reprojection : on
+            # garde le chemin d'origine (assainissement puis reprojection
+            # complète), puis on teste l'emprise après coup. Ce cas
+            # concerne des fichiers non 4326, en pratique petits.
             src_reel, a_effacer = _source_assainie(s, tmp, "a%03d" % i,
                                                    log=_log)
             try:
@@ -1072,6 +1176,23 @@ def open_altimetrie_window(gui):
     lbl_etat = tk.Label(win, text="", font=FONT, bg=BG, fg="#888888")
     lbl_etat.pack(pady=(0, 6))
 
+    # ── Curseur d'avancement ─────────────────────────────────────────
+    # Barre verte animée pendant les travaux longs (préparation,
+    # assemblage). Elle remplace les trois petits points clignotants,
+    # qui passaient inaperçus : la barre, elle, est impossible à manquer.
+    try:
+        _pgr_style = ttk.Style()
+        _pgr_style.configure(
+            "O4Alti.Horizontal.TProgressbar",
+            troughcolor=PREV_BG, background=FG, bordercolor=PREV_BG,
+            lightcolor=FG, darkcolor=FG, thickness=20)
+        pgr = ttk.Progressbar(win, mode="indeterminate", length=620,
+                              style="O4Alti.Horizontal.TProgressbar")
+    except Exception:
+        pgr = ttk.Progressbar(win, mode="indeterminate", length=620)
+    pgr.pack(padx=14, pady=(0, 8), fill="x")
+    _pgr_on = [False]
+
     # ── Journal ──────────────────────────────────────────────────────
     frm_log = tk.Frame(win, bg=BG)
     frm_log.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 4))
@@ -1126,12 +1247,29 @@ def open_altimetrie_window(gui):
     _anim = [0]
 
     def _animer(message):
-        """Indicateur d'activité : l'utilisateur n'a jamais l'impression
-        que l'application est figée."""
+        """Curseur d'avancement : barre verte animée tant qu'un travail
+        de fond tourne. Bien plus visible que les trois petits points :
+        l'utilisateur voit clairement que l'application travaille et
+        n'est pas figée."""
         if not _travail[0]:
+            # Fin du travail : on stoppe et on efface la barre.
+            if _pgr_on[0]:
+                try:
+                    pgr.stop()
+                    pgr["value"] = 0
+                except Exception:
+                    pass
+                _pgr_on[0] = False
+            _pomper()
             return
-        _anim[0] = (_anim[0] + 1) % 4
-        _etat(message + " " + ("." * _anim[0]).ljust(3), FG)
+        # Démarrage de la barre (une seule fois) : ttk anime seul.
+        if not _pgr_on[0]:
+            try:
+                pgr.start(12)
+            except Exception:
+                pass
+            _pgr_on[0] = True
+        _etat(message, FG)
         _pomper()
         win.after(400, lambda: _animer(message))
 
@@ -1769,6 +1907,11 @@ def open_altimetrie_window(gui):
                 _remonter()
                 return
             chemin, ignorees = _res["ok"]
+            # ── custom_dem : chemin du .tif assemblé de la tuile ──────
+            # Le chemin du fichier assemblé de la tuile EN COURS est
+            # inscrit dans custom_dem, à la fois dans le cfg de la tuile
+            # (lu par Ortho4XP à l'étape mesh) et, si elle est ouverte,
+            # dans la rubrique « custom_dem » de la fenêtre de config.
             if tile_cfg:
                 try:
                     os.makedirs(os.path.dirname(tile_cfg), exist_ok=True)
@@ -1782,12 +1925,7 @@ def open_altimetrie_window(gui):
             # déjà ouverte, son champ « custom_dem » garde en mémoire la
             # valeur chargée au départ (une autre altimétrie). On la met
             # à jour directement pour que l'affichage corresponde au cfg.
-            try:
-                _cw = getattr(gui, "_config_win", None)
-                if _cw is not None and _cw.winfo_exists():
-                    _cw.v_["custom_dem"].set(chemin)
-            except Exception:
-                pass
+            _maj_champ_custom_dem(chemin)
             _etat(_tr("Terminé."), FG)
             _log()
             _log(_tr("TERMINÉ."))
@@ -1799,6 +1937,32 @@ def open_altimetrie_window(gui):
             _remonter()
 
         win.after(150, _fin)
+
+    def _maj_champ_custom_dem(chemin):
+        """Met à jour, si elle est ouverte, la rubrique « custom_dem » de
+        la fenêtre de configuration, pour qu'elle affiche le chemin du
+        .tif assemblé de la tuile courante. Silencieux si la fenêtre est
+        fermée ou si son champ porte un autre nom : le cfg reste la
+        source de vérité, écrite par ecrire_custom_dem()."""
+        for _att in ("_config_win", "config_win", "cfg_win"):
+            try:
+                _cw = getattr(gui, _att, None)
+                if _cw is not None and _cw.winfo_exists():
+                    _v = getattr(_cw, "v_", None)
+                    if isinstance(_v, dict) and "custom_dem" in _v:
+                        _v["custom_dem"].set(chemin)
+                        return
+            except Exception:
+                pass
+        # Repli : certains GUI exposent directement la variable Tk.
+        for _att in ("custom_dem", "custom_dem_var", "v_custom_dem"):
+            try:
+                _var = getattr(gui, _att, None)
+                if _var is not None and hasattr(_var, "set"):
+                    _var.set(chemin)
+                    return
+            except Exception:
+                pass
 
     def _auto_test():
         txt.delete("1.0", tk.END)
