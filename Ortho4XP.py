@@ -8,6 +8,43 @@ Compatible venv autonome + lancement automatique
 import sys
 import os
 
+# ============ GARDE-FOU DEMARRAGE (Python + tkinter) ============
+# But : eviter un plantage illisible (ex. "ModuleNotFoundError: No
+# module named '_tkinter'") quand Ortho est lance par erreur avec un
+# mauvais Python (par ex. un python3 systeme mis a jour tout seul et
+# depourvu de tkinter). Au lieu de crasher en charabia, on s'arrete
+# proprement avec un message clair en francais.
+_py = sys.version_info
+_py_str = "{}.{}.{}".format(_py[0], _py[1], _py[2])
+try:
+    import tkinter as _tk_check
+    del _tk_check
+    _has_tk = True
+except Exception:
+    _has_tk = False
+
+if not _has_tk:
+    print("=" * 60)
+    print("  ORTHO4XP - LANCEMENT ANNULE")
+    print("=" * 60)
+    print("  Python utilise : " + _py_str)
+    print("  Chemin Python  : " + str(sys.executable))
+    print("")
+    print("  Ce Python ne contient pas 'tkinter' (affichage des")
+    print("  fenetres). Ortho a besoin de ton environnement Python")
+    print("  3.11 ou 3.12 (ton venv), qui contient tkinter.")
+    print("")
+    print("  --> Relance Ortho avec ton lanceur habituel (ton venv).")
+    print("      Ne lance pas Ortho avec le python3 du systeme.")
+    print("=" * 60)
+    sys.exit(1)
+
+if (_py[0], _py[1]) not in ((3, 11), (3, 12)):
+    print("ATTENTION: Python " + _py_str + " detecte. Ortho est prevu")
+    print("pour Python 3.11 ou 3.12. Si tu rencontres un souci,")
+    print("relance Ortho avec ton venv habituel.")
+# ============ FIN GARDE-FOU ============
+
 # ====================== CONFIGURATION DES CHEMINS ======================
 # Détection du mode "frozen" (lanceur .app / .exe) et chemin de base
 if getattr(sys, 'frozen', False):

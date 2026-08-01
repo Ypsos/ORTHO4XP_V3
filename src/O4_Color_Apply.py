@@ -1,46 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+
 #  ============================================================
 #  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
 #  Ce module a été conçu et spécifié par Roland Lehmann (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
 #  ============================================================
-CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
 # This module was designed and specified by Roland Lehmann (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
 # ============================================================
+# O4_Color_Apply.py  —  ORTHO4XP V2  (Avril 2026)
+# ================================================
+# v1.1 — Correction apply_ccorr_jpg() (Roland/Ypsos, Avril 2026) :
+  # • apply_ccorr_jpg() cherchait le .ccorr dans jpg_dir (dossier source JPG)
+    # alors qu'il est sauvegardé dans textures_dir de la tuile.
+    # → Recherche multi-dossiers : jpg_dir, puis ../textures/, puis fallback.
+    # → La fonction est maintenant réellement active dans le flux
+      # combine_textures() via O4_Imagery_Utils.py.
 
-O4_Color_Apply.py  —  ORTHO4XP V2  (Avril 2026)
-================================================
-v1.1 — Correction apply_ccorr_jpg() (Roland/Ypsos, Avril 2026) :
-  • apply_ccorr_jpg() cherchait le .ccorr dans jpg_dir (dossier source JPG)
-    alors qu'il est sauvegardé dans textures_dir de la tuile.
-    → Recherche multi-dossiers : jpg_dir, puis ../textures/, puis fallback.
-    → La fonction est maintenant réellement active dans le flux
-      combine_textures() via O4_Imagery_Utils.py.
+# Deux fonctions principales appelées depuis O4_Imagery_Utils.convert_texture() :
 
-Deux fonctions principales appelées depuis O4_Imagery_Utils.convert_texture() :
+  # 1. apply_ccorr()      — Applique les corrections Color Check (.ccorr) sur le
+                          # PNG assemblé, APRÈS combine_textures() et Color Normalize.
 
-  1. apply_ccorr()      — Applique les corrections Color Check (.ccorr) sur le
-                          PNG assemblé, APRÈS combine_textures() et Color Normalize.
+  # 2. apply_ccorr_jpg()  — Applique les corrections Color Check sur chaque JPG source
+                          # AVANT assemblage, dans combine_textures().
 
-  2. apply_ccorr_jpg()  — Applique les corrections Color Check sur chaque JPG source
-                          AVANT assemblage, dans combine_textures().
+  # 3. apply_feathering() — Détecte les bords nets (jointures entre sources JPG
+                          # différentes) dans l'image assemblée et applique un
+                          # fondu progressif (feathering) sur une largeur variable.
+                          # Fonction en réserve — le grain de sable d'Imagery_Utils
+                          # est le système principal de feathering.
 
-  3. apply_feathering() — Détecte les bords nets (jointures entre sources JPG
-                          différentes) dans l'image assemblée et applique un
-                          fondu progressif (feathering) sur une largeur variable.
-                          Fonction en réserve — le grain de sable d'Imagery_Utils
-                          est le système principal de feathering.
+# Ordre d'appel dans combine_textures() (par JPG source) :
+    # normalize_if_enabled(jpg)
+    # → apply_ccorr_jpg(jpg)
+    # → composite + grain de sable
+    # → apply_ccorr(assembled)
+    # → DDS
 
-Ordre d'appel dans combine_textures() (par JPG source) :
-    normalize_if_enabled(jpg)
-    → apply_ccorr_jpg(jpg)
-    → composite + grain de sable
-    → apply_ccorr(assembled)
-    → DDS
-
-Le JPG source n'est JAMAIS modifié.
-"""
+# Le JPG source n'est JAMAIS modifié.
+# """
 
 import os
 import json

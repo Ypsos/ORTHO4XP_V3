@@ -561,6 +561,8 @@ T = {
         : 'Folder structure not created.',
     'Structure créée.'
         : 'Folder structure created.',
+    "Ce dossier existe déjà :\n{d}\n\nIl devient le dossier courant."
+        : 'This folder already exists:\n{d}\n\nIt becomes the current folder.',
     'Structure créée :'
         : 'Folder structure created:',
     'Création de la structure…'

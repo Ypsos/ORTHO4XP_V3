@@ -32,9 +32,9 @@
 #
 #  ============================================================
 #  CRÉDIT — AUTEUR : Roland(Ypsos).
-#  Ce module a été conçu et spécifié par Roland Lehmann (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
 #  ============================================================
-CREDIT — AUTHOR: Roland(Ypsos). # This module was designed and specified by Roland Lehmann (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# CREDIT — AUTHOR: Roland(Ypsos). # This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
 # ============================================================
 
 import os
@@ -1365,6 +1365,43 @@ def open_altimetrie_window(gui):
         pays = pays.strip().replace("/", "-").replace("\\", "-")
         if not pays:
             return False
+        # Informer si le dossier du pays existe déjà : aucune création n'est
+        # effectuée, on ne fait qu'avertir l'utilisateur (non destructif).
+        _racine_prevue = os.path.join(base, DOSSIER_RACINE) \
+            if os.path.basename(os.path.normpath(base)) != DOSSIER_RACINE \
+            else base
+        _stock_dir, _assemble_dir = chemins_structure(_racine_prevue)
+        _stock_pays_prevu = os.path.join(_stock_dir, pays)
+        _assemble_pays_prevu = os.path.join(
+            _assemble_dir, PREFIXE_PAYS_ASSEMBLE + pays)
+        if os.path.isdir(_stock_pays_prevu) or \
+                os.path.isdir(_assemble_pays_prevu):
+            _deja = _stock_pays_prevu if os.path.isdir(_stock_pays_prevu) \
+                else _assemble_pays_prevu
+            # La structure existe déjà : rien n'est écrasé (creer_structure
+            # est idempotent, il complète seulement ce qui manque), puis on
+            # pointe le dossier courant sur ce dossier existant.
+            try:
+                racine, stock_pays, assemble_pays = creer_structure(base, pays)
+            except Exception as e:
+                _etat("")
+                messagebox.showerror(
+                    _tr("Altimétrie / DEM"), str(e), parent=win)
+                _remonter()
+                return False
+            _stock[0] = stock_pays
+            _sortie[0] = assemble_pays
+            _cfg_set(CFG_STOCK, stock_pays)
+            _cfg_set(CFG_SORTIE, assemble_pays)
+            _maj_bandeaux()
+            _etat("")
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _tr("Ce dossier existe déjà :\n{d}\n\n"
+                    "Il devient le dossier courant.").format(d=_deja),
+                parent=win)
+            _remonter()
+            return True
         _etat(_tr("Création de la structure…"), FG)
         try:
             racine, stock_pays, assemble_pays = creer_structure(base, pays)
@@ -1485,6 +1522,32 @@ def open_altimetrie_window(gui):
         pays = pays.strip().replace("/", "-").replace("\\", "-")
         if not pays:
             return False
+        # Informer si le dossier du pays existe déjà dans le dossier choisi :
+        # aucune création n'est effectuée (non destructif).
+        _stock_dir, _assemble_dir = chemins_structure(racine)
+        if choix == "stock":
+            _pays_dir_prevu = os.path.join(_stock_dir, pays)
+        else:
+            _pays_dir_prevu = os.path.join(
+                _assemble_dir, PREFIXE_PAYS_ASSEMBLE + pays)
+        if os.path.isdir(_pays_dir_prevu):
+            # Le dossier existe déjà : aucune création, il devient simplement
+            # le dossier courant correspondant (l'autre chemin est inchangé).
+            if choix == "stock":
+                _stock[0] = _pays_dir_prevu
+                _cfg_set(CFG_STOCK, _pays_dir_prevu)
+            else:
+                _sortie[0] = _pays_dir_prevu
+                _cfg_set(CFG_SORTIE, _pays_dir_prevu)
+            _maj_bandeaux()
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _tr("Ce dossier existe déjà :\n{d}\n\n"
+                    "Il devient le dossier courant.").format(
+                        d=_pays_dir_prevu),
+                parent=win)
+            _remonter()
+            return True
         # 3) Création dans le SEUL dossier choisi.
         _etat(_tr("Création de la structure…"), FG)
         try:

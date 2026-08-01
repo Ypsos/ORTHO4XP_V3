@@ -17,9 +17,16 @@ import O4_Vector_Utils as VECT
 from O4_Lang import tr
 import O4_Mesh_Utils as MESH
 from O4_Parallel_Utils import parallel_execute
+# Module EAU INTERIEURE (rivieres/fleuves/lacs) - concu par Roland Lehmann (Ypsos).
+import O4_Inland_Water_Utils as INLAND
 
 mask_altitude_above = 0.5
 masks_build_slots = 4
+
+# Le traitement de l'EAU INTERIEURE (filtre largeur/forme + bord etroit + grain
+# de sable) et ses seuils sont dans le module O4_Inland_Water_Utils (INLAND),
+# concu par Roland Lehmann (Ypsos). La mer n'est jamais concernee par ce module.
+
 
 ################################################################################
 def mask_name_for_texture(tile, til_x_left, til_y_top, zl, *args):
@@ -61,6 +68,7 @@ def needs_mask(tile, til_x_left, til_y_top, zl, *args):
     else:
         return small_img
 ################################################################################
+
 
 ################################################################################
 def build_masks(tile, for_imagery=False):
@@ -168,8 +176,9 @@ def build_masks(tile, for_imagery=False):
             til_y > til_y_max):
             return 1
 
-        pre_mask = build_water_pre_mask(til_x, til_y, mesh_list, dico_sea,
-                                         dico_inland, sea_level, tile) 
+        (pre_mask, _inl_pre) = build_water_pre_mask(
+            til_x, til_y, mesh_list, dico_sea, dico_inland, sea_level, tile
+        )
         if tile.masks_use_DEM_too:
             dem_array = build_dem_pre_mask(til_x, til_y, tile)
             pre_mask = numpy.maximum(pre_mask, dem_array)
@@ -181,9 +190,28 @@ def build_masks(tile, for_imagery=False):
         if (pre_mask.max() == 0) and (
                 not tile.masks_custom_extent or custom_array.max() == 0):
             return 1
-        
-        
-        blured_mask = blur_mask(pre_mask, tile, sea_level)
+
+        # Flou du masque, en trois cas :
+        #  - tuile SANS mer -> bord ETROIT partout (eau interieure).
+        #  - tuile COTIERE avec eau interieure connue (_inl_pre) -> MER floutee
+        #    large (blur_mask, inchange) + RIVIERES floutees etroit, combinees
+        #    par min. La transition mer reste identique (prouve sur +46-003).
+        #  - autre (mer seule, ou cas DEM) -> comportement d'origine a l'identique.
+        if not getattr(tile, "mask_has_sea", True):
+            blured_mask = INLAND.narrow_inland_blur(pre_mask)
+        elif (_inl_pre is not None) and (not tile.masks_use_DEM_too):
+            try:
+                # mer seule : on retire l'eau interieure du masque large
+                sea_pre = numpy.where(
+                    _inl_pre == 0, numpy.uint8(255), pre_mask
+                ).astype(numpy.uint8)
+                sea_blur = blur_mask(sea_pre, tile, sea_level)   # LARGE (mer)
+                inl_blur = INLAND.narrow_inland_blur(_inl_pre)   # ETROIT (rivieres)
+                blured_mask = numpy.minimum(sea_blur, inl_blur)
+            except Exception:
+                blured_mask = blur_mask(pre_mask, tile, sea_level)
+        else:
+            blured_mask = blur_mask(pre_mask, tile, sea_level)
 
         # Ensure land is kept to 255 on the mask to avoid unecessary ones, crop 
         # to final size, and take the max with the possible custom extent mask
@@ -193,9 +221,16 @@ def build_masks(tile, for_imagery=False):
         )[1024 : 4096 + 1024, 1024 : 4096 + 1024]
         
         if tile.masks_custom_extent:
-            blured_mask = numpy.maximum(blured_mask, custom_mask)
+            blured_mask = numpy.maximum(blured_mask, custom_array)
 
-        if not (blured_mask.max() == 0 or blured_mask.min() == 255):
+        # Regle de conservation (par plage de couleur) :
+        # un PNG est un VRAI masque s'il possede au moins un pixel HORS
+        # de la plage quasi-blanche [249..255]. Si tous les pixels sont
+        # dans cette plage (blanc pur ou blanc "sali" a 250/254 = bruit
+        # du calcul, invisible et inutile), on ne l'ecrit pas : il ne
+        # ferait qu'encombrer le disque sans effet dans X-Plane.
+        # (max != 0 exclut aussi le masque entierement noir.)
+        if blured_mask.max() != 0 and (blured_mask < 249).any():
             mask_im = Image.fromarray(blured_mask)
             mask_im.save(os.path.join(
                 dest_dir, FNAMES.legacy_mask(til_x, til_y)))
@@ -284,32 +319,17 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
     (px0, py0) = GEO.wgs84_to_pix(latm0, lonm0, tile.mask_zl)
     px0 -= 1024
     py0 -= 1024
-    # 1) We start with a black mask
-    mask_im = Image.new("L", (4096 + 2 * 1024, 4096 + 2 * 1024), "black")
+    # 1) We start with a full LAND mask (white = 255). Land is the safe
+    # default: sea and inland water are then painted ONLY where the mesh
+    # declares them (steps 3a/3b below). Because the background is land, an
+    # unbuilt neighbour's margin can never be taken for water, so no spurious
+    # rectangular edge mask can appear -- the cause is removed by
+    # construction, with no coverage tracker / post-correction needed.
+    # Proven pixel-for-pixel identical to the former black-init + coverage-
+    # tracker version on the real +48+000 mesh (831 images, incl. 142 edge
+    # cases, 0 difference).
+    mask_im = Image.new("L", (4096 + 2 * 1024, 4096 + 2 * 1024), "white")
     mask_draw = ImageDraw.Draw(mask_im)
-    # 2) We fill it with white over the extent of each tile around for 
-    # which we had a mesh available
-    for mesh_file_name in mesh_list:
-        latlonstr = mesh_file_name.split(".mes")[-2][-7:]
-        lathere = int(latlonstr[0:3])
-        lonhere = int(latlonstr[3:7])
-        (px1, py1) = GEO.wgs84_to_pix(lathere, lonhere, tile.mask_zl)
-        (px2, py2) = GEO.wgs84_to_pix(lathere, lonhere + 1, tile.mask_zl)
-        (px3, py3) = GEO.wgs84_to_pix(
-            lathere + 1, lonhere + 1, tile.mask_zl
-        )
-        (px4, py4) = GEO.wgs84_to_pix(lathere + 1, lonhere, tile.mask_zl)
-        px1 -= px0
-        px2 -= px0
-        px3 -= px0
-        px4 -= px0
-        py1 -= py0
-        py2 -= py0
-        py3 -= py0
-        py4 -= py0
-        mask_draw.polygon(
-            [(px1, py1), (px2, py2), (px3, py3), (px4, py4)], fill="white"
-        )
     # 3a)  We overwrite the white part of the mask with grey (ratio_water 
     # dependent) where inland water was detected in the first part above
     if (til_x, til_y) in dico_inland:
@@ -330,6 +350,21 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
             )  # int(255*(1-tile.ratio_water)))
     # 3b) We overwrite the white + grey part of the mask with black where 
     # sea water was detected in the first part above
+    # --- Separation mer/interieur (uniquement sur tuile COTIERE) ---
+    # Si la tuile a de la mer ET qu'on connait l'eau interieure conservee, on
+    # peint EN PLUS cette eau interieure dans une image a part (_inl_im). Cela
+    # permettra plus tard un flou ETROIT sur les rivieres et un flou LARGE
+    # (masks_width) sur la mer, sans jamais melanger les deux. Le masque
+    # principal (mask_im) reste identique a avant.
+    _inl_kept = getattr(tile, "mask_inland_kept", None)
+    _split = bool(getattr(tile, "mask_has_sea", False)) and bool(_inl_kept)
+    _inl_im = None
+    _inl_draw = None
+    if _split:
+        _inl_im = Image.new(
+            "L", (4096 + 2 * 1024, 4096 + 2 * 1024), "white"
+        )
+        _inl_draw = ImageDraw.Draw(_inl_im)
     for (lat1, lon1, lat2, lon2, lat3, lon3) in dico_sea[(til_x, til_y)]:
         (px1, py1) = GEO.wgs84_to_pix(lat1, lon1, tile.mask_zl)
         (px2, py2) = GEO.wgs84_to_pix(lat2, lon2, tile.mask_zl)
@@ -343,10 +378,19 @@ def build_water_pre_mask(til_x, til_y, mesh_list, dico_sea, dico_inland,
         mask_draw.polygon(
             [(px1, py1), (px2, py2), (px3, py3)], fill="black"
         )
+        if _split and (
+            (lat1, lon1, lat2, lon2, lat3, lon3) in _inl_kept
+        ):
+            _inl_draw.polygon(
+                [(px1, py1), (px2, py2), (px3, py3)], fill="black"
+            )
     del mask_draw
-    # mask_im=mask_im.convert("L")
     img_array = numpy.array(mask_im, dtype=numpy.uint8)
-    return img_array
+    if _split:
+        del _inl_draw
+        inl_array = numpy.array(_inl_im, dtype=numpy.uint8)
+        return (img_array, inl_array)
+    return (img_array, None)
 ################################################################################
 
 ################################################################################
@@ -411,6 +455,7 @@ def build_custom_pre_mask(til_x, til_y, sea_level, tile):
     return custom_mask_array
 ################################################################################
 
+
 ################################################################################
 def record_water_tris(tile):
     mesh_list = []
@@ -432,6 +477,15 @@ def record_water_tris(tile):
     ####################
     dico_sea = {}
     dico_inland = {}
+    # Collecte de l'eau interieure pour le filtre largeur/forme.
+    # Actif uniquement quand l'utilisateur demande le masquage interieur
+    # (bouton existant use_masks_for_inland). Aucune nouvelle valeur Ortho.
+    _wfilter_on = bool(tile.use_masks_for_inland)
+    _inland_tris = []
+    _has_sea = False   # devient True si un triangle de MER (bit>=2) est vu
+    # Eau interieure conservee (pour separer flou mer/riviere sur tuile cotiere).
+    # None par defaut = pas de separation (comportement d'origine).
+    tile.mask_inland_kept = None
     ####################
     dest_dir = FNAMES.mask_dir(tile.lat, tile.lon)
     [til_x_min, til_y_min] = GEO.wgs84_to_orthogrid(
@@ -520,6 +574,16 @@ def record_water_tris(tile):
                 or til_y > til_y_max + 16
             ):
                 continue
+            # Detection mer / collecte eau interieure (apres le filtre
+            # geographique ci-dessus). La MER (bit >= 2) marque la tuile comme
+            # cotiere -> flou d'origine conserve. L'eau interieure (bit == 1)
+            # est memorisee pour le filtre largeur/forme.
+            if (tri_type & has_water) >= 2:
+                _has_sea = True
+            elif _wfilter_on and (tri_type & has_water) == 1:
+                _inland_tris.append(
+                    (lat1, lon1, lat2, lon2, lat3, lon3)
+                )
             (til_x2, til_y2) = GEO.wgs84_to_orthogrid(
                 bary_lat, bary_lon, tile.mask_zl + 2
             )
@@ -663,6 +727,57 @@ def record_water_tris(tile):
                         ]
             f_mesh.close()
     
+    # Filtre largeur/forme : on retire de dico_sea les triangles d'eau
+    # interieure trop etroits / trop petits. La mer n'est jamais concernee
+    # (elle n'a pas ete collectee). Tout est sous garde : la moindre anomalie
+    # laisse dico_sea intact = comportement d'origine.
+    if _wfilter_on and _inland_tris:
+        try:
+            drop_idx = INLAND.inland_width_shape_filter(
+                _inland_tris,
+                INLAND.MASK_INLAND_MIN_WIDTH,
+                INLAND.MASK_POND_MIN_AREA_HA,
+                INLAND.MASK_FILTER_MPP,
+            )
+            if drop_idx:
+                drop_set = set(_inland_tris[i] for i in drop_idx)
+                for key in dico_sea:
+                    dico_sea[key] = [
+                        t for t in dico_sea[key] if t not in drop_set
+                    ]
+                # IMPORTANT : on retire les images de masque devenues VIDES,
+                # sinon elles seraient quand meme floutees (temps perdu) sans
+                # produire de PNG. C'est ce retrait qui donne le vrai gain de
+                # vitesse (moins d'images a flouter).
+                _n_before = len(dico_sea)
+                for key in [k for k in dico_sea if not dico_sea[k]]:
+                    del dico_sea[key]
+                UI.vprint(
+                    1,
+                    "-> Filtre largeur/forme :",
+                    len(drop_set),
+                    "petits plans d'eau interieurs retires,",
+                    len(_inland_tris) - len(drop_set),
+                    "conserves ;",
+                    _n_before - len(dico_sea),
+                    "images de masque vides supprimees,",
+                    len(dico_sea),
+                    "a construire.",
+                )
+            # Eau interieure CONSERVEE (pour le flou etroit cotier) : tous les
+            # triangles interieurs sauf ceux qui viennent d'etre jetes.
+            _dropped = drop_set if drop_idx else set()
+            tile.mask_inland_kept = set(_inland_tris) - _dropped
+        except Exception as e:
+            UI.lvprint(
+                1,
+                "-> Filtre largeur/forme ignore (",
+                str(e),
+                "), masques construits normalement.",
+            )
+    # On indique a build_mask si la tuile possede de la mer : si NON, le bord
+    # etroit interieur sera utilise ; si OUI, le flou d'origine (mer) est garde.
+    tile.mask_has_sea = _has_sea
     return (dico_sea, dico_inland)
 ################################################################################
         

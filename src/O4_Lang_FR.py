@@ -562,6 +562,8 @@ T = {
         : 'Structure non créée.',
     'Structure créée.'
         : 'Structure créée.',
+    "Ce dossier existe déjà :\n{d}\n\nIl devient le dossier courant."
+        : "Ce dossier existe déjà :\n{d}\n\nIl devient le dossier courant.",
     'Structure créée :'
         : 'Structure créée :',
     'Création de la structure…'

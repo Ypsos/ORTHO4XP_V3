@@ -5,73 +5,73 @@
 #  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
 #  Ce module a été conçu et spécifié par Roland Lehmann (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
 #  ============================================================
-CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
 # This module was designed and specified by Roland Lehmann (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
 # ============================================================
 
-"""
-O4_Color_Check.py - Version ORTHO4XP V2.0 (Avril 2026) - REFONTE v2.9
-Corrections v2.9 (Roland/Ypsos, Avril 2026) :
-  • FusionPreviewWindow — déplacement fluide :
-    pendant le drag → rendu rapide (NEAREST, sans overlay orange, délai 8ms)
-    à l'arrêt de la souris → rendu complet (BILINEAR + overlay orange, délai 25ms)
-  • BatchPreviewWindow — résumé des corrections actives affiché sous le titre
-  • BatchPreviewWindow — points jaunes parasites supprimés (nettoyage morphologique)
-  • BatchPreviewWindow — trait séparateur orig/corrigé réduit à 1px centré
-Corrections v2.8 (Roland/Ypsos, Avril 2026) :
-  • BatchPreviewWindow : self.textures_dir manquant ajouté → crash masque mer corrigé
-  • _apply_group_correction : rescan après sauvegarde → indicateur ✏ mis à jour en temps réel
-  • Double-clic groupe ZL dans liste gauche → ouvre Batch Preview directement
-  • _filter_left : recherche connectée aux labels de zones .comb (pas seulement le nom DDS)
-  • analyze_dds renforcé : dérive vs cube de référence calibré (R=86.5 G=96.5 B=86.9)
-    → pixels eau/nuage exclus de la moyenne, drift_r/g/b/max calculés et affichés
-  • Liste gauche : colonne Δ (dérive vs référence) affichée si > 5 pts
-Corrections v2.7 (Roland/Ypsos, Avril 2026) :
-  • DPI Aware réel : détection winfo_fpixels("1i") au lieu de s=1.3 fixe
-    → adaptatif Windows/macOS/Linux, plafond ×2.0 pour écrans 4K
-    → fallback s=1.3 si détection impossible
-  • FusionPreviewWindow — points jaunes parasites supprimés :
-    nettoyage morphologique du masque seam (composantes < 1% de la principale
-    supprimées) → seule la vraie ligne de jointure reste visible
-  • FusionPreviewWindow — vue initiale = tuile ENTIÈRE dans le canvas :
-    zoom calculé automatiquement pour fit-to-canvas au premier rendu
-    (plus de tuile coupée au démarrage)
-  • Commentaire dupliqué "Sélection dans les listes" supprimé (lignes 1110-1112)
-  • Fonctions get_zl_factor() et find_by_dds_id() dupliquées supprimées
-    (seconde définition redondante en fin de fichier)
-Nouveautés v2.6 :
-  - Rayon de dégradé par défaut porté à 96px (était 24px) : jointures invisibles
-  - Facteurs ZL bas (ZL13-16) renforcés : transitions très larges vue globale
-  - Réduction ombres locales (shadow_reduce) activée ZL13-16 : vagues/bandes éliminées
-  - Correction strength ZL13-16 renforcée : uniformité globale accrue
-Nouveautés v2.5 :
-  - Dégradé de jointure (seams) amélioré :
-    * Affichage du rayon effectif par ZL dans la section dégradé (table ZL13→ZL20)
-    * Conseils intégrés : seam persistante → augmenter rayon ou générer .comb seam
-    * Nouveau bouton "Générer .comb seam" : détecte automatiquement la jointure
-      dans le DDS sélectionné et génère un masque de protection (.comb) sur la zone
-    * FusionPreviewWindow : affichage ΔE colorimétrique entre les deux sources
-      + conseils adaptatifs (faible/modéré/fort/critique) + table rayons ZL
-    * Rayon adaptatif automatique selon ΔE : si l'écart est fort, le rayon est
-      majoré localement au Build (×1.3 à ×2.0 selon ΔE, plafonné ZL18+)
-Nouveautés v2.4 :
-  - Listes gauche/droite entièrement refondues : organisées par couche ZL / extend
-  - Chaque entrée affiche : numéro JPG, couche ZL, couleur dominante, valeur, masques .comb
-  - Champ de recherche par numéro JPG ou DDS dans chaque liste
-  - Fenêtre "Couleur Cible" affiche les extends et JPG regroupés sans dominante
-  - Génération de fichiers .comb par Color Check (numéro JPG, couche, corrections)
-  - Mode batch preview : évalue l'impact des corrections sur une couche entière avant application
-  - Suppression définitive de la détection des dominantes > 8 pts et liste "DDS à dominante colorée"
-Corrections v2.3 :
-  - Section ① "Identifier dominantes" : scan + correction colorimétrique
-  - Section ② "Dégradé de jointure sources" : OFF / 24 / 48 / 64 / 128 px
-Corrections v2.2 :
-  - Sélection conservée visuellement (exportselection=0)
-Corrections v2.1 :
-  - Curseurs Saturation R/G/B corrigés
-  - Build relance : supprime DDS du groupe sélectionné
-  - Taille minimale de fenêtre bloquée (minsize)
-"""
+# """
+# O4_Color_Check.py - Version ORTHO4XP V2.0 (Avril 2026) - REFONTE v2.9
+# Corrections v2.9 (Roland/Ypsos, Avril 2026) :
+  # • FusionPreviewWindow — déplacement fluide :
+    # pendant le drag → rendu rapide (NEAREST, sans overlay orange, délai 8ms)
+    # à l'arrêt de la souris → rendu complet (BILINEAR + overlay orange, délai 25ms)
+  # • BatchPreviewWindow — résumé des corrections actives affiché sous le titre
+  # • BatchPreviewWindow — points jaunes parasites supprimés (nettoyage morphologique)
+  # • BatchPreviewWindow — trait séparateur orig/corrigé réduit à 1px centré
+# Corrections v2.8 (Roland/Ypsos, Avril 2026) :
+  # • BatchPreviewWindow : self.textures_dir manquant ajouté → crash masque mer corrigé
+  # • _apply_group_correction : rescan après sauvegarde → indicateur ✏ mis à jour en temps réel
+  # • Double-clic groupe ZL dans liste gauche → ouvre Batch Preview directement
+  # • _filter_left : recherche connectée aux labels de zones .comb (pas seulement le nom DDS)
+  # • analyze_dds renforcé : dérive vs cube de référence calibré (R=86.5 G=96.5 B=86.9)
+    # → pixels eau/nuage exclus de la moyenne, drift_r/g/b/max calculés et affichés
+  # • Liste gauche : colonne Δ (dérive vs référence) affichée si > 5 pts
+# Corrections v2.7 (Roland/Ypsos, Avril 2026) :
+  # • DPI Aware réel : détection winfo_fpixels("1i") au lieu de s=1.3 fixe
+    # → adaptatif Windows/macOS/Linux, plafond ×2.0 pour écrans 4K
+    # → fallback s=1.3 si détection impossible
+  # • FusionPreviewWindow — points jaunes parasites supprimés :
+    # nettoyage morphologique du masque seam (composantes < 1% de la principale
+    # supprimées) → seule la vraie ligne de jointure reste visible
+  # • FusionPreviewWindow — vue initiale = tuile ENTIÈRE dans le canvas :
+    # zoom calculé automatiquement pour fit-to-canvas au premier rendu
+    # (plus de tuile coupée au démarrage)
+  # • Commentaire dupliqué "Sélection dans les listes" supprimé (lignes 1110-1112)
+  # • Fonctions get_zl_factor() et find_by_dds_id() dupliquées supprimées
+    # (seconde définition redondante en fin de fichier)
+# Nouveautés v2.6 :
+  # - Rayon de dégradé par défaut porté à 96px (était 24px) : jointures invisibles
+  # - Facteurs ZL bas (ZL13-16) renforcés : transitions très larges vue globale
+  # - Réduction ombres locales (shadow_reduce) activée ZL13-16 : vagues/bandes éliminées
+  # - Correction strength ZL13-16 renforcée : uniformité globale accrue
+# Nouveautés v2.5 :
+  # - Dégradé de jointure (seams) amélioré :
+    # * Affichage du rayon effectif par ZL dans la section dégradé (table ZL13→ZL20)
+    # * Conseils intégrés : seam persistante → augmenter rayon ou générer .comb seam
+    # * Nouveau bouton "Générer .comb seam" : détecte automatiquement la jointure
+      # dans le DDS sélectionné et génère un masque de protection (.comb) sur la zone
+    # * FusionPreviewWindow : affichage ΔE colorimétrique entre les deux sources
+      # + conseils adaptatifs (faible/modéré/fort/critique) + table rayons ZL
+    # * Rayon adaptatif automatique selon ΔE : si l'écart est fort, le rayon est
+      # majoré localement au Build (×1.3 à ×2.0 selon ΔE, plafonné ZL18+)
+# Nouveautés v2.4 :
+  # - Listes gauche/droite entièrement refondues : organisées par couche ZL / extend
+  # - Chaque entrée affiche : numéro JPG, couche ZL, couleur dominante, valeur, masques .comb
+  # - Champ de recherche par numéro JPG ou DDS dans chaque liste
+  # - Fenêtre "Couleur Cible" affiche les extends et JPG regroupés sans dominante
+  # - Génération de fichiers .comb par Color Check (numéro JPG, couche, corrections)
+  # - Mode batch preview : évalue l'impact des corrections sur une couche entière avant application
+  # - Suppression définitive de la détection des dominantes > 8 pts et liste "DDS à dominante colorée"
+# Corrections v2.3 :
+  # - Section ① "Identifier dominantes" : scan + correction colorimétrique
+  # - Section ② "Dégradé de jointure sources" : OFF / 24 / 48 / 64 / 128 px
+# Corrections v2.2 :
+  # - Sélection conservée visuellement (exportselection=0)
+# Corrections v2.1 :
+  # - Curseurs Saturation R/G/B corrigés
+  # - Build relance : supprime DDS du groupe sélectionné
+  # - Taille minimale de fenêtre bloquée (minsize)
+# """
 
 import os
 import json
