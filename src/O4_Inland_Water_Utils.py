@@ -10,7 +10,7 @@
 """
 O4_Inland_Water_Utils.py - Module EAU INTERIEURE (rivieres, fleuves, lacs)
 ==========================================================================
-Concu et specifie par Roland Lehmann (Ypsos) pour Ortho4XP V3.
+Concu et specifie par Roland (Ypsos) pour Ortho4XP V3.
 
 Ce module regroupe le traitement PROPRE de l'eau interieure, separe de la mer :
   1) inland_width_shape_filter : garde les cours d'eau larges (fleuves,
