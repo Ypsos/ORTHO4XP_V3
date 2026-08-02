@@ -364,14 +364,19 @@ class Ortho4XP_GUI(tk.Tk):
             width=22).grid(row=0, column=1, padx=5, pady=2, sticky=W)
 
         ttk.Button(self.frame_data,
+            text=tr("🖼 Ajout Fournisseur Images"),
+            command=self.open_lay_generator_module,
+             width=22).grid(row=0, column=2, padx=5, pady=2, sticky=W)
+
+        ttk.Button(self.frame_data,
             text=tr("🗺 Cache OSM local (.pbf)"),
             command=self.open_pbf_module,
-            width=22).grid(row=0, column=2, padx=5, pady=2, sticky=W)
+            width=22).grid(row=0, column=3, padx=5, pady=2, sticky=W)
 
         ttk.Button(self.frame_data,
             text=tr("⏱ Timeline"),
             command=self._show_timeline,
-            width=14).grid(row=0, column=3, padx=5, pady=2, sticky=W)
+            width=14).grid(row=0, column=4, padx=5, pady=2, sticky=W)
 
         # Label RAM live (mise à jour périodique conservée à l'identique)
         self._ram_label = tk.Label(self.frame_data,
@@ -789,6 +794,10 @@ class Ortho4XP_GUI(tk.Tk):
             except Exception:
                 pass
             messagebox.showerror(tr("Bathymétrie"), str(_e))
+
+    def open_lay_generator_module(self):
+        import O4_lay_generator
+        O4_lay_generator.run_lay_generator(parent=self)
 
     def open_avance_module(self):
         """Point d'entrée du bouton « Avancé (JOSM) ».

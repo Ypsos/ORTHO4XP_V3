@@ -7,7 +7,7 @@ user_agent_generic="Mozilla/5.0 (X11; Linux x86_64; rv:52.0) Gecko/20100101 Fire
 
 ############################################################################################################
 # list of affected provider_codes
-custom_url_list=('DK','DOP40','NIB','Here')
+custom_url_list=('DK','DOP40','NIB','Here','PCRS_IGN')
 custom_url_list = custom_url_list+tuple([x + '_NAIP' for x in (
      'AL','AR','AZ','CA','CO','CT','DE','FL','GA','IA','ID','IL',
      'IN','KS','KY','LA','MA','MD','ME','MI','MN','MO','MS','MT',
@@ -37,7 +37,7 @@ def get_DK_ticket():
         DK_time=time.time()
     return DK_ticket
 
-# Germany DOP40
+# Germany DOP40  (version récente 0.12.5)
 DOP40_time=time.time()
 DOP40_cookie=None
 def get_DOP40_cookie():
@@ -64,8 +64,8 @@ def get_NIB_token():
         NIB_token=str(requests.get('https://www.norgeibilder.no').content).split('nibToken')[1].split("'")[1][:-1]
         NIB_time=time.time()
     return NIB_token
-        
-# Here
+
+# Here  (version récente APP_KEY + script defer)
 Here_time=time.time()
 Here_value=None
 def get_Here_value():
@@ -100,6 +100,46 @@ def custom_wms_request(bbox,width,height,provider):
         (xmin,ymax,xmax,ymin)=bbox
         url="https://gis.apfo.usda.gov/arcgis/rest/services/NAIP_Historical/"+provider['code']+"/ImageServer/exportImage?f=image&bbox="+str(xmin)+"%2C"+str(ymin)+"%2C"+str(xmax)+"%2C"+str(ymax)+"&imageSR=102100&bboxSR=102100&size="+str(width)+"%2C"+str(height)
         return (url,None)
+
+    # PCRS_IGN — contribution Grok (Roland (Ypsos) V3)
+    # Sleep volontairement plus long pour limiter le risque de blacklist avec max_threads élevé
+    #============================================================
+    # CRÉDIT — IDEE : PCRS_IGN.lay: Len0y
+    # Ce bloc est une contribution pour Ortho4XP V3 de Len0Y. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+    # ============================================================
+    # CREDIT - IDEA: PCRS_IGN.lay: Len0y
+    # This block is a contribution for Len0Y's Ortho4XP V3. This mention of paternity MUST NEVER BE DELETED, regardless of the subsequent evolution of the file.
+    #============================================================
+    elif provider['code']=='PCRS_IGN':
+        (xmin,ymax,xmax,ymin)=bbox
+        # WMS 1.3.0 + CRS=EPSG:3857 → ordre axis X/Y = minx,miny,maxx,maxy
+        bbox_string = str(xmin)+','+str(ymin)+','+str(xmax)+','+str(ymax)
+        time.sleep(random.uniform(0.4, 1.1))
+
+        url = (
+            "https://data.geopf.fr/wms-r/wms?"
+            "SERVICE=WMS"
+            "&REQUEST=GetMap"
+            "&VERSION=1.3.0"
+            "&LAYERS=PCRS.LAMB93"
+            "&STYLES="
+            "&CRS=EPSG:3857"
+            "&WIDTH="+str(width)
+            +"&HEIGHT="+str(height)
+            +"&FORMAT=image/png"
+            +"&TRANSPARENT=FALSE"
+            +"&TILED=TRUE"
+            +"&BBOX="+bbox_string
+        )
+
+        fake_headers = {
+            "User-Agent": user_agent_generic,
+            "Accept": "image/png,image/*;q=0.9,*/*;q=0.8",
+            "Connection": "keep-alive",
+            "Accept-Encoding": "gzip, deflate"
+        }
+
+        return (url, fake_headers)
 
 def custom_tms_request(tilematrix,til_x,til_y,provider):
     if provider['code']=='NIB':
