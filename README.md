@@ -247,6 +247,18 @@ Choix de l'application de retouche d'image (exemple : GIMP)
 
 <img width="921" height="453" alt="Gestion cache OSM Local" src="https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc" />
 
+---
+🛠️ Ortho4XP V3 — Provider PCRS_IGN & Générateur .lay
+Cet outil ajoute le support du provider PCRS_IGN à Ortho4XP V3 et intègre un générateur automatique de fichiers de configuration .lay.
+
+✨ Ce que fait l'outil
+Images Ultra Haute Définition (jusqu'au ZL 21) : Permet de générer des tuiles orthophotos d'une précision extrême grâce au Plan Corps de Rue Simplifié (PCRS) de l'IGN.
+Génération de .lay 100% Automatisée : Un nouvel outil graphique (O4_lay_generator.py) permet de créer, charger et enregistrer les fichiers de configuration de provider en un clic.
+Préréglage inclus : Bouton Preset PCRS_IGN pour pré-remplir instantanément tous les paramètres WMS requis.
+Protection anti-bannissement IP : Gestion intégrée d'une temporisation dynamique (time.sleep) dans O4_Custom_URL.py pour sécuriser les requêtes massives et éviter les blocages sur les serveurs de l'IGN.
+Interface multiplateforme : Totalement thématisée et optimisée pour macOS, Windows et Linux.
+
+<img width="1660" height="1638" alt="Générateur Lay  02" src="https://github.com/user-attachments/assets/4440001a-58e3-4c0c-bc74-b34251c427f4" />
 
 ---
 ## 🛠 Utilisation rapide
@@ -545,6 +557,24 @@ Choosing the image editor (example: GIMP)
 ### Local OSM cache management Multi-file
 
 <img width="921" height="453" alt="Gestion cache OSM Local" src="https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc" />
+---
+🛠️ Ortho4XP V3 — Provider PCRS_IGN & .lay Generator
+
+This tool adds PCRS_IGN provider support to Ortho4XP V3 and integrates an automatic .lay configuration file generator.
+
+✨ What the tool does
+
+Ultra High Definition Images (up to ZL 21): Allows you to generate extremely accurate orthophoto tiles thanks to the IGN's Simplified Street Body Plan (PCRS).
+
+100% Automated .lay generation: A new graphical tool (O4_lay_generator.py) allows you to create, load and save provider configuration files in one click.
+
+Preset included: PCRS_IGN Preset button to instantly pre-fill all required WMS parameters.
+
+IP anti-ban protection: Integrated management of dynamic timing (time.sleep) in O4_Custom_URL.py to secure massive requests and avoid blockages on IGN servers.
+
+Cross-platform interface: Fully themed and optimized for macOS, Windows and Linux.
+<img width="1660" height="1638" alt="Générateur Lay  02" src="https://github.com/user-attachments/assets/4440001a-58e3-4c0c-bc74-b34251c427f4" />
+
 
 ---
 ## 🛠 Quick start
