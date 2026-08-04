@@ -407,6 +407,7 @@ T = {
     "personal_provider_err_name_invalid"    : "Le nom doit être alphanumérique (sans espaces).",
     "personal_provider_err_reserved"        : "Ce nom est réservé. Veuillez en choisir un autre.",
     "personal_provider_select_hint"         : "← Sélectionnez un provider pour modifier/supprimer",
+    "🖼 Add Image Provider"                  : "🖼 Ajouter un fournisseur d'images",
 
     # ── COLOR CHECK — boutons et labels dynamiques ─────────────────
     "🗑 Supprimer TOUS DDS ZL"          : "🗑 Supprimer TOUS DDS ZL",
@@ -1303,4 +1304,37 @@ T = {
         : 'custom_bathy_dem non écrit :',
     'custom_bathy_dem renseigné dans le cfg de la tuile.'
         : 'custom_bathy_dem renseigné dans le cfg de la tuile.',
-}
+        
+# ── Provider Analysis (Provider Score) ────────────────────────────
+    "📊 Analyse Fournisseurs"           : "📊 Analyse Fournisseurs",
+    "Analyse Fournisseurs"              : "Analyse Fournisseurs",
+    "Le module O4_Provider_Score.py est introuvable dans le dossier src/."
+                                        : "Le module O4_Provider_Score.py est introuvable dans le dossier src/.",
+
+    # ── FENÊTRE ANALYSE FOURNISSEURS ──
+    "Analyse du fournisseur d'images"   : "Analyse du fournisseur d'images",
+    "Rapport d'analyse"                 : "Rapport d'analyse",
+    "Statut de la connexion"            : "Statut de la connexion",
+    "Détails de l'analyse"              : "Détails de l'analyse",
+    "🔍 Lancer l'analyse"               : "🔍 Lancer l'analyse",
+    "📊 Analyser le fournisseur"        : "📊 Analyser le fournisseur",
+    "🔄 Tester la connexion"            : "🔄 Tester la connexion",
+    "📋 Copier le rapport"              : "📋 Copier le rapport",
+    "⚠ Analyse terminée avec succès."   : "⚠ Analyse terminée avec succès.",
+    "⚠ Échec de l'analyse du fournisseur." : "⚠ Échec de l'analyse du fournisseur.",
+    "⚠ Impossible de contacter le serveur." : "⚠ Impossible de contacter le serveur.",
+    "⚠ Fournisseur non valide ou indisponible." : "⚠ Fournisseur non valide ou indisponible.",
+    "⚠ Aucun fournisseur sélectionné pour l'analyse." : "⚠ Aucun fournisseur sélectionné pour l'analyse.",
+    "⚠ Erreur lors du téléchargement de la tuile test." : "⚠ Erreur lors du téléchargement de la tuile test.",
+
+    # ── AVERTISSEMENT USAGE PERSONNEL ──
+    "Fournisseur d'images à usage strictement personnel.\n\n"
+    "Les tuiles générées à partir de ces sources ne pourront "
+    "en aucun cas être diffusées ou redistribuées.\n\n"
+    "Confirmez-vous cet usage strictement personnel ?": (
+        "Fournisseur d'images à usage strictement personnel.\n\n"
+        "Les tuiles générées à partir de ces sources ne pourront "
+        "en aucun cas être diffusées ou redistribuées.\n\n"
+        "Confirmez-vous cet usage strictement personnel ?"
+    ),
+}                          

@@ -1302,4 +1302,42 @@ T = {
         : 'custom_bathy_dem not written:',
     'custom_bathy_dem renseigné dans le cfg de la tuile.'
         : 'custom_bathy_dem set in the tile cfg.',
+# ── Provider Analysis (Provider Score) ────────────────────────────
+    "📊 Analyse Fournisseurs"           : "📊 Provider Analysis",
+    "Analyse Fournisseurs"              : "Provider Analysis",
+    "Le module O4_Provider_Score.py est introuvable dans le dossier src/."
+                                        : "The O4_Provider_Score.py module was not found in the src/ folder.",
+# ── FENÊTRE ANALYSE FOURNISSEURS ──
+    "Analyse du fournisseur d'images"   : "Image Provider Analysis",
+    "Rapport d'analyse"                 : "Analysis Report",
+    "Statut de la connexion"            : "Connection Status",
+    "Détails de l'analyse"              : "Analysis Details",
+    "🔍 Lancer l'analyse"               : "🔍 Run Analysis",
+    "📊 Analyser le fournisseur"        : "📊 Analyze Provider",
+    "🔄 Tester la connexion"            : "🔄 Test Connection",
+    "📋 Copier le rapport"              : "📋 Copy Report",
+    "⚠ Analyse terminée avec succès."   : "⚠ Analysis completed successfully.",
+    "⚠ Échec de l'analyse du fournisseur." : "⚠ Provider analysis failed.",
+    "⚠ Impossible de contacter le serveur." : "⚠ Unable to contact server.",
+    "⚠ Fournisseur non valide ou indisponible." : "⚠ Provider invalid or unavailable.",
+    "⚠ Aucun fournisseur sélectionné pour l'analyse." : "⚠ No provider selected for analysis.",
+    "⚠ Erreur lors du téléchargement de la tuile test." : "⚠ Error downloading test tile.",
+
+   # ── AVERTISSEMENT USAGE PERSONNEL ──
+   "Fournisseur d'images à usage strictement personnel.\n\n"
+    "Les tuiles générées à partir de ces sources ne pourront "
+    "en aucun cas être diffusées ou redistribuées.\n\n"
+    "Confirmez-vous cet usage strictement personnel ?": (
+        "Image provider for strictly personal use only.\n\n"
+        "Tiles generated from these sources may not under any "
+        "circumstances be distributed or redistributed.\n\n"
+        "Do you confirm this strictly personal use?"
+    ),
+    # ── AVERTISSEMENT ET BOUTONS DE DIALOGUE ──
+    "Avertissement — Usage Strictement Personnel": "Warning — Strictly Personal Use",
+    "Je valide": "I agree",
+    "Je quitte": "Exit",
+    # ── PROVIDER SCORE / BEST PROVIDER ────────────────────────────────
+    "Utiliser le meilleur provider pour la tuile active": "Use best provider for active tile",
+    "Meilleur provider détecté :"                       : "Best provider detected:",
 }
