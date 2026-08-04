@@ -261,6 +261,19 @@ Interface multiplateforme : Totalement thématisée et optimisée pour macOS, Wi
 <img width="1660" height="1638" alt="Générateur Lay  02" src="https://github.com/user-attachments/assets/4440001a-58e3-4c0c-bc74-b34251c427f4" />
 
 ---
+🚀 NOUVEAU : Module ProviderScore (Choix Intelligent de Fournisseurs)
+Optimisez la qualité visuelle de vos scènes Ortho4XP V3 grâce à un système d'analyse automatique et multicritères des fournisseurs d'imagerie satellite (Bing, ESRI, Google, etc.).
+
+✨ Fonctionnalités & Nouveautés
+📊 Évaluation Automatique (Score /100) : Analyse de la netteté, du contraste, de l'homogénéité et de la couverture nuageuse.
+⚡ Sélection & Sélection Auto : Identification et application automatique du meilleur fournisseur directement dans la liste imagery.
+📈 Comparatif Historisé : Conservation des notes au fil des générations pour un suivi fiable.
+🖥️ UI Multiplateforme (Windows, macOS, Linux) : Interface fluide adaptée aux contraintes d'affichage Tkinter sous Windows, Linux et macOS (boutons personnalisés contre les bugs visuels).
+🌐 Multilingue : Module nativement compatible avec le système de traduction d'Ortho4XP (O4_Lang).
+🛡️ Gestion des Droits & Protection de Diffusion : Fenêtre d'avertissement intégrée pour les fournisseurs réservés à un usage strictement personnel. Le choix « Je quitte » empêche l'utilisation des sources interdisant la redistribution gratuite des tuiles.
+
+-----
+
 ## 🛠 Utilisation rapide
 
 ### 🍎 Mac
@@ -574,7 +587,19 @@ IP anti-ban protection: Integrated management of dynamic timing (time.sleep) in 
 
 Cross-platform interface: Fully themed and optimized for macOS, Windows and Linux.
 <img width="1660" height="1638" alt="Générateur Lay  02" src="https://github.com/user-attachments/assets/4440001a-58e3-4c0c-bc74-b34251c427f4" />
+---
+🚀 NEW: ProviderScore Module (Smart Provider Selection)
+Optimize the visual quality of your Ortho4XP V3 scenes using an automated, multi-criteria analysis system for satellite imagery providers (Bing, ESRI, Google, etc.).
 
+✨ Features & What’s New
+📊 Automatic Evaluation (Score /100): Analysis of sharpness, contrast, uniformity, and cloud cover.
+⚡ Selection & Auto-Selection: Automatic identification and application of the best provider directly in the imagery list.
+📈 Historical Comparison: Scores are saved across generations for reliable tracking.
+🖥️ Cross-Platform UI (Windows, macOS, Linux): A smooth interface adapted to Tkinter display constraints on Windows, Linux, and macOS (custom buttons to prevent visual glitches).
+🌐 Multilingual: Module natively compatible with the Ortho4XP translation system (O4_Lang).
+🛡️ Rights Management & Distribution Protection: Integrated warning window for providers restricted to strictly personal use. Selecting “Exit” prevents the use of sources that prohibit the free redistribution of tiles.
+
+Translated with DeepL.com (free version)
 
 ---
 ## 🛠 Quick start
