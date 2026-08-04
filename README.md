@@ -270,7 +270,14 @@ Optimisez la qualité visuelle de vos scènes Ortho4XP V3 grâce à un système 
 📈 Comparatif Historisé : Conservation des notes au fil des générations pour un suivi fiable.
 🖥️ UI Multiplateforme (Windows, macOS, Linux) : Interface fluide adaptée aux contraintes d'affichage Tkinter sous Windows, Linux et macOS (boutons personnalisés contre les bugs visuels).
 🌐 Multilingue : Module nativement compatible avec le système de traduction d'Ortho4XP (O4_Lang).
+
+<img width="762" height="537" alt="Annalyse Fournisseur01" src="https://github.com/user-attachments/assets/df0b4271-8724-4f4e-8fbd-ead4b321ab3d" />
+
+
 🛡️ Gestion des Droits & Protection de Diffusion : Fenêtre d'avertissement intégrée pour les fournisseurs réservés à un usage strictement personnel. Le choix « Je quitte » empêche l'utilisation des sources interdisant la redistribution gratuite des tuiles.
+
+<img width="958" height="462" alt="Annalyse Fournisseur" src="https://github.com/user-attachments/assets/a1ee2ec2-ab90-4a6f-879d-9c9d40c4eede" />
+
 
 -----
 
@@ -597,9 +604,15 @@ Optimize the visual quality of your Ortho4XP V3 scenes using an automated, multi
 📈 Historical Comparison: Scores are saved across generations for reliable tracking.
 🖥️ Cross-Platform UI (Windows, macOS, Linux): A smooth interface adapted to Tkinter display constraints on Windows, Linux, and macOS (custom buttons to prevent visual glitches).
 🌐 Multilingual: Module natively compatible with the Ortho4XP translation system (O4_Lang).
-🛡️ Rights Management & Distribution Protection: Integrated warning window for providers restricted to strictly personal use. Selecting “Exit” prevents the use of sources that prohibit the free redistribution of tiles.
+<img width="770" height="546" alt="Provider Analysis" src="https://github.com/user-attachments/assets/43e36f2f-bb65-41dc-bcd0-f1d0f095ab90" />
 
-Translated with DeepL.com (free version)
+
+
+🛡️ Rights Management & Distribution Protection: Integrated warning window for providers restricted to strictly personal use. Selecting “Exit” prevents the use of sources that prohibit the free redistribution of tiles.
+<img width="946" height="488" alt="Provider Analysis01" src="https://github.com/user-attachments/assets/6c9113fe-ccae-4814-a0a9-5c3ec4cb3707" />
+
+---
+
 
 ---
 ## 🛠 Quick start
