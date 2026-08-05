@@ -1,6 +1,5 @@
 #!/usr/bin/env python3.11
 # -*- coding: utf-8 -*-
-#  ============================================================
 #  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
 #  Ce module a été conçu et spécifié par Roland  (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
 #  ============================================================
