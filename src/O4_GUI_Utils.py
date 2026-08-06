@@ -21,6 +21,7 @@ import O4_Config_Utils as CFG
 import O4_Color_Normalize as CNORM
 import O4_Color_Check as CC
 from O4_Lang import tr
+import O4_UI_Dialogs as DIALOGS
 
 # ── Module de correction imagerie/zone (non bloquant) ────────────────────
 #  Fichier autonome hébergeant, à terme, le preview des DDS, la correction
@@ -83,6 +84,14 @@ try:
 except Exception:
     _PBFMOD = None
     _pbfmod_enabled = False
+
+# ── Module Provider Score / Analyse Fournisseurs (non bloquant) ────
+try:
+    import O4_Provider_Score as _SCOREMOD
+    _scoremod_enabled = True
+except Exception:
+    _SCOREMOD = None
+    _scoremod_enabled = False
 
 # ── Nouveaux modules Phase 3 (non bloquants) ─────────────────────────────
 try:
@@ -347,11 +356,11 @@ class Ortho4XP_GUI(tk.Tk):
             kw_folder["text"] = "📁"; kw_folder["width"] = 4
         ttk.Button(self.frame_folder, **kw_folder).grid(row=0, column=2, padx=0, pady=0, sticky=N+S+E+W)
 
-        # ══ RUBRIQUE 2 : Gestion des Données ══════════════════════════
+               # ══ RUBRIQUE 2 : Gestion des Données ══════════════════════════
         sec_data = _section(tr('Gestion des Données'), 1)
         self.frame_data = tk.Frame(sec_data, border=0, padx=5, pady=2, bg=_BG)
         self.frame_data.grid(row=0, column=0, sticky=N+S+W+E)
-        self.frame_data.columnconfigure(4, weight=1)
+        self.frame_data.columnconfigure(5, weight=1)
 
         ttk.Button(self.frame_data,
             text=tr("⛰ Altimétrie / DEM"),
@@ -364,21 +373,31 @@ class Ortho4XP_GUI(tk.Tk):
             width=22).grid(row=0, column=1, padx=5, pady=2, sticky=W)
 
         ttk.Button(self.frame_data,
+            text=tr("🖼 Add Image Provider"),
+            command=self.open_lay_generator_module,
+            width=30).grid(row=0, column=2, padx=5, pady=2, sticky=W)
+
+        ttk.Button(self.frame_data,
             text=tr("🗺 Cache OSM local (.pbf)"),
             command=self.open_pbf_module,
-            width=22).grid(row=0, column=2, padx=5, pady=2, sticky=W)
+            width=22).grid(row=0, column=3, padx=5, pady=2, sticky=W)
+
+        ttk.Button(self.frame_data,
+            text=tr("📊 Analyse Fournisseurs"),
+            command=self.open_provider_score_module,
+            width=22).grid(row=0, column=4, padx=5, pady=2, sticky=W)
 
         ttk.Button(self.frame_data,
             text=tr("⏱ Timeline"),
             command=self._show_timeline,
-            width=14).grid(row=0, column=3, padx=5, pady=2, sticky=W)
+            width=14).grid(row=0, column=5, padx=5, pady=2, sticky=W)
 
         # Label RAM live (mise à jour périodique conservée à l'identique)
         self._ram_label = tk.Label(self.frame_data,
             text="RAM: --",
             bg=_BG, fg=_FG2,
             font=("TkFixedFont", fs(10)))
-        self._ram_label.grid(row=0, column=4, padx=12, sticky=E)
+        self._ram_label.grid(row=0, column=5, padx=12, sticky=E)
         self._update_ram_label()
 
         # ══ RUBRIQUE 3 : Gestion des Couleurs automatisée ═════════════
@@ -790,6 +809,10 @@ class Ortho4XP_GUI(tk.Tk):
                 pass
             messagebox.showerror(tr("Bathymétrie"), str(_e))
 
+    def open_lay_generator_module(self):
+        import O4_lay_generator
+        O4_lay_generator.run_lay_generator(parent=self)
+
     def open_avance_module(self):
         """Point d'entrée du bouton « Avancé (JOSM) ».
 
@@ -843,6 +866,177 @@ class Ortho4XP_GUI(tk.Tk):
             except Exception:
                 pass
             messagebox.showerror(tr("Cache OSM local (.pbf)"), str(_e))
+    def open_provider_score_module(self):
+        """Fenêtre Analyse Fournisseurs avec validation préalable et exclusion de ZonePhoto."""
+        from tkinter import messagebox
+        import O4_UI_Dialogs as DIALOGS
+
+        if not (_scoremod_enabled and _SCOREMOD is not None):
+            messagebox.showinfo(
+                tr("Analyse Fournisseurs"),
+                tr("Le module O4_Provider_Score.py est introuvable dans le dossier src/."))
+            return
+
+        # 1. On lance d'abord la fenêtre d'avertissement d'usage personnel
+        # On passe 'self' (la fenêtre principale) et la fonction de création réelle
+        def afficher_analyse_apres_validation():
+            self._creer_fenetre_analyse_fournisseurs()
+
+        # Ouvre la boîte de dialogue (Je valide / Je quitte)
+        DIALOGS.valider_usage_personnel_callback(self, action_valider=afficher_analyse_apres_validation)
+
+    def _creer_fenetre_analyse_fournisseurs(self):
+        """Création de la fenêtre Analyse Fournisseurs (exclut automatique de ZonePhoto.comb)."""
+        import os
+        from tkinter import messagebox
+
+        try:
+            report_raw = _SCOREMOD.report_all()
+            data       = _SCOREMOD._load_all_scores()
+
+            # --- 1. CHARGEMENT AUTOMATIQUE DE ZONEPHOTO.COMB ---
+            zonephoto_providers = {"zonephoto"}  # Inclut le nom principal par défaut
+
+            # Emplacements possibles pour trouver ZonePhoto.comb
+            possible_paths = [
+                os.path.join(os.path.dirname(__file__), "..", "Providers", "ZonePhoto.comb"),
+                os.path.join(os.path.dirname(__file__), "Providers", "ZonePhoto.comb"),
+                "ZonePhoto.comb",
+                "Providers/ZonePhoto.comb"
+            ]
+
+            for path in possible_paths:
+                if os.path.exists(path):
+                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#"):
+                                parts = line.split()
+                                if parts:
+                                    # Ajoute le nom du provider en minuscules
+                                    zonephoto_providers.add(parts[0].lower())
+                    break
+
+            # Helper pour vérifier si un nom appartient à la liste ZonePhoto
+            def est_zonephoto(nom):
+                if not nom:
+                    return False
+                nom_low = nom.lower().strip()
+                return any(nom_low.startswith(zp) for zp in zonephoto_providers)
+
+            # --- 2. FILTRAGE DU TEXTE DU RAPPORT ---
+            lines = report_raw.splitlines() if report_raw else []
+            filtered_lines = []
+            for l in lines:
+                l_strip = l.strip()
+                if not l_strip:
+                    continue
+                # Extrait le premier mot de la ligne (nom du provider dans le rapport)
+                first_word = l_strip.split()[0]
+                if not est_zonephoto(first_word):
+                    filtered_lines.append(l)
+
+            report = "\n".join(filtered_lines)
+
+            # --- 3. EXCLUSION POUR LE CALCUL DU MEILLEUR PROVIDER ---
+            best_code  = None
+            best_score = -1.0
+            for key, s in data.items():
+                p_code = s.get("provider_code", "")
+                
+                # On ignore tout ce qui vient de ZonePhoto / ZonePhoto.comb
+                if est_zonephoto(p_code):
+                    continue
+
+                g = s.get("global_score", 0)
+                if g > best_score:
+                    best_score = g
+                    best_code  = p_code
+
+            # --- 4. CRÉATION DE LA FENÊTRE ---
+            win = tk.Toplevel(self)
+            win.title(tr("Analyse Fournisseurs"))
+            win.configure(bg=_BG)
+            win.geometry("780x520")
+            win.minsize(600, 400)
+
+            # Zone de texte (rapport)
+            txt = tk.Text(win, bg=_CON_BG, fg=_CON_FG,
+                          font=("TkFixedFont", 10), wrap="none")
+            txt.pack(fill="both", expand=True, padx=8, pady=(8, 4))
+            txt.insert("1.0", report if data else tr(
+                "Aucun score enregistré.\n\nLancez d'abord un Build Imagery/DSF\npour générer des scores."))
+            txt.config(state="disabled")
+
+            # Cadre boutons
+            frame_btn = tk.Frame(win, bg=_BG)
+            frame_btn.pack(fill="x", padx=8, pady=8)
+
+            info_label = tk.Label(frame_btn, bg=_BG, fg=_FG2,
+                                  font=("TkFixedFont", 10))
+            info_label.pack(side="left", padx=5)
+
+            if best_code:
+                info_label.config(
+                    text=f"{tr('Meilleur provider détecté :')} {best_code}  ({best_score:.1f}/100)")
+            else:
+                info_label.config(text=tr("Aucun score disponible pour cette tuile."))
+
+            def apply_best():
+                if not best_code:
+                    messagebox.showinfo(tr("Analyse Fournisseurs"),
+                                        tr("Aucun score disponible pour cette tuile."))
+                    return
+                # Applique le provider dans la liste déroulante principale
+                self.default_website.set(best_code)
+                messagebox.showinfo(
+                    tr("Analyse Fournisseurs"),
+                    f"{tr('Provider appliqué :')} {best_code}")
+                win.destroy()
+
+            # 3. Boutons avec gestion Mac / highlightbackground pour éviter les carrés blancs
+            import sys
+            if sys.platform == "darwin":
+                btn_apply = tk.Button(
+                    frame_btn,
+                    text=tr("Utiliser le meilleur provider pour la tuile active"),
+                    command=apply_best,
+                    fg="black", highlightbackground=_BTN_BG,
+                    font=("TkFixedFont", 10, "bold"),
+                    padx=10, pady=4)
+                
+                btn_close = tk.Button(
+                    frame_btn,
+                    text=tr("Fermer"),
+                    command=win.destroy,
+                    fg="black", highlightbackground=_BTN_BG,
+                    padx=10, pady=4)
+            else:
+                btn_apply = tk.Button(
+                    frame_btn,
+                    text=tr("Utiliser le meilleur provider pour la tuile active"),
+                    command=apply_best,
+                    bg=_BTN_BG, fg=_BTN_FG,
+                    activebackground=_ACCENT,
+                    font=("TkFixedFont", 10, "bold"),
+                    padx=10, pady=4)
+
+                btn_close = tk.Button(
+                    frame_btn,
+                    text=tr("Fermer"),
+                    command=win.destroy,
+                    bg=_BTN_BG, fg=_BTN_FG,
+                    padx=10, pady=4)
+
+            btn_apply.pack(side="right", padx=5)
+            btn_close.pack(side="right", padx=5)
+
+        except Exception as _e:
+            try:
+                UI.vprint(1, "[ProviderScore] " + str(_e))
+            except Exception:
+                pass
+            messagebox.showerror(tr("Analyse Fournisseurs"), str(_e))
 
     def open_correction_module(self):
         """Point d'entrée du bouton « Correction imagerie/zone ».
