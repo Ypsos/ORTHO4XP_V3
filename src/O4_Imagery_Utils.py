@@ -2740,9 +2740,21 @@ def convert_texture(
         big_image = CNORM.normalize_if_enabled(big_image)
         # ---- COLOR CHECK CORRECTIONS (2e : corrige le résidu) ----
         big_image = CAPPLY.apply_ccorr(big_image, out_file_name, os.path.join(tile.build_dir, "textures"))
+        # Si une correction Color Check existe pour ce DDS, il FAUT convertir
+        # l'image corrigée (PNG temporaire) et non le JPG source — sinon la
+        # correction appliquée juste au-dessus serait ignorée (DDS non corrigé).
+        _has_ccorr = False
+        try:
+            import json as _json
+            _cc_path = os.path.join(tile.build_dir, "textures", CAPPLY.CORRECTIONS_FILE)
+            if os.path.isfile(_cc_path):
+                with open(_cc_path) as _cf:
+                    _has_ccorr = os.path.basename(out_file_name) in _json.load(_cf)
+        except Exception:
+            _has_ccorr = False
         # -----------------------------
 
-        if CNORM.color_normalization_enabled or dxt5:
+        if CNORM.color_normalization_enabled or dxt5 or _has_ccorr:
             file_to_convert = os.path.join(UI.Ortho4XP_dir, "tmp", png_file_name)
             erase_tmp_png = True
             big_image.save(file_to_convert)

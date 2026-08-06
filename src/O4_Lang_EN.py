@@ -415,8 +415,37 @@ T = {
     "  Effective radii (base {base}px):" : "  Effective radii (base {base}px):",
     "💡 Persistent seam: increase radius\n   or generate a .comb mask on the area."
                                         : "💡 Persistent seam: increase radius\n   or generate a .comb mask on the area.",
+    '🔨 Construire cette image'
+                                        : '🔨 Build this image',
+    "Reconstruit UNIQUEMENT l'image sélectionnée (pas tout le groupe) avec la correction des curseurs. Idéal pour peaufiner une seule image à la main."
+                                        : 'Rebuilds ONLY the selected image (not the whole group) with the slider correction. Ideal to fine-tune a single image by hand.',
+    '✅ Build lancé — image seule : {name}'
+                                        : '✅ Build launched — single image: {name}',
+    "⚠ Sélectionnez d'abord une image dans la liste."
+                                        : '⚠ Select an image in the list first.',
     "⚠ too low"                         : "⚠ too low",
     "⚠ detail risk"                     : "⚠ detail risk",
+
+    # Drift grouping + status (left column)
+    "Dérive"                            : "Drift",
+    "Dérive faible"                     : "Weak drift",
+    "{total} DDS — {n_corr} à corriger ({n_grp} groupes) — {n_ok} conformes (±{tol})"
+                                        : "{total} DDS — {n_corr} to correct ({n_grp} groups) — {n_ok} conforming (±{tol})",
+    "{title} — {n} DDS — « Correction en série » corrige tout ce chapitre"
+                                        : "{title} — {n} DDS — « Batch correction » corrects this whole chapter",
+    "Auto-détecter : corr R{r:+d} G{g:+d} B{b:+d} | Cont {cr:+d}/{cg:+d}/{cb:+d} | Sat {sr:+d}/{sg:+d}/{sb:+d}"
+                                        : "Auto-detect: corr R{r:+d} G{g:+d} B{b:+d} | Cont {cr:+d}/{cg:+d}/{cb:+d} | Sat {sr:+d}/{sg:+d}/{sb:+d}",
+    "Auto depuis cible : corr R{r:+d} G{g:+d} B{b:+d} | Cont {cr:+d}/{cg:+d}/{cb:+d} | Sat {sr:+d}/{sg:+d}/{sb:+d}"
+                                        : "Auto from target: corr R{r:+d} G{g:+d} B{b:+d} | Cont {cr:+d}/{cg:+d}/{cb:+d} | Sat {sr:+d}/{sg:+d}/{sb:+d}",
+    "🎨 Correction en série"            : "🎨 Batch correction",
+    "Enregistre la correction du groupe SANS lancer le build.\nCorrigez un groupe → Correction en série → recommencez pour d'autres groupes → puis « Lancer construction » UNE seule fois pour tout construire (économise des builds)."
+                                        : "Saves the group's correction WITHOUT building.\nCorrect a group → Batch correction → repeat for other groups → then « Launch build » ONCE to build everything (saves builds).",
+    "Supprime les DDS du groupe, enregistre la correction, puis lance la construction (utilise votre quota). Traite d'un coup toutes les corrections enregistrées en série."
+                                        : "Deletes the group's DDS, saves the correction, then builds (uses your quota). Processes all batch-saved corrections at once.",
+    "  → recommencez pour d'autres groupes, puis « Lancer construction »"
+                                        : "  → repeat for other groups, then « Launch build »",
+    "🔨 Build en cours… {done}/{total} DDS régénérés — rescan automatique à la fin."
+                                        : "🔨 Building… {done}/{total} DDS regenerated — auto-rescan when done.",
 
 
     # ── LOGS CONSOLE — O4_Sea_Texture.py ──────────────────────────

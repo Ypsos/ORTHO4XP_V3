@@ -1,68 +1,77 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-O4_Color_Check.py - Version ORTHO4XP V2.0 (Avril 2026) - REFONTE v2.9
-Corrections v2.9 (Roland/Ypsos, Avril 2026) :
-  • FusionPreviewWindow — déplacement fluide :
-    pendant le drag → rendu rapide (NEAREST, sans overlay orange, délai 8ms)
-    à l'arrêt de la souris → rendu complet (BILINEAR + overlay orange, délai 25ms)
-  • BatchPreviewWindow — résumé des corrections actives affiché sous le titre
-  • BatchPreviewWindow — points jaunes parasites supprimés (nettoyage morphologique)
-  • BatchPreviewWindow — trait séparateur orig/corrigé réduit à 1px centré
-Corrections v2.8 (Roland/Ypsos, Avril 2026) :
-  • BatchPreviewWindow : self.textures_dir manquant ajouté → crash masque mer corrigé
-  • _apply_group_correction : rescan après sauvegarde → indicateur ✏ mis à jour en temps réel
-  • Double-clic groupe ZL dans liste gauche → ouvre Batch Preview directement
-  • _filter_left : recherche connectée aux labels de zones .comb (pas seulement le nom DDS)
-  • analyze_dds renforcé : dérive vs cube de référence calibré (R=86.5 G=96.5 B=86.9)
-    → pixels eau/nuage exclus de la moyenne, drift_r/g/b/max calculés et affichés
-  • Liste gauche : colonne Δ (dérive vs référence) affichée si > 5 pts
-Corrections v2.7 (Roland/Ypsos, Avril 2026) :
-  • DPI Aware réel : détection winfo_fpixels("1i") au lieu de s=1.3 fixe
-    → adaptatif Windows/macOS/Linux, plafond ×2.0 pour écrans 4K
-    → fallback s=1.3 si détection impossible
-  • FusionPreviewWindow — points jaunes parasites supprimés :
-    nettoyage morphologique du masque seam (composantes < 1% de la principale
-    supprimées) → seule la vraie ligne de jointure reste visible
-  • FusionPreviewWindow — vue initiale = tuile ENTIÈRE dans le canvas :
-    zoom calculé automatiquement pour fit-to-canvas au premier rendu
-    (plus de tuile coupée au démarrage)
-  • Commentaire dupliqué "Sélection dans les listes" supprimé (lignes 1110-1112)
-  • Fonctions get_zl_factor() et find_by_dds_id() dupliquées supprimées
-    (seconde définition redondante en fin de fichier)
-Nouveautés v2.6 :
-  - Rayon de dégradé par défaut porté à 96px (était 24px) : jointures invisibles
-  - Facteurs ZL bas (ZL13-16) renforcés : transitions très larges vue globale
-  - Réduction ombres locales (shadow_reduce) activée ZL13-16 : vagues/bandes éliminées
-  - Correction strength ZL13-16 renforcée : uniformité globale accrue
-Nouveautés v2.5 :
-  - Dégradé de jointure (seams) amélioré :
-    * Affichage du rayon effectif par ZL dans la section dégradé (table ZL13→ZL20)
-    * Conseils intégrés : seam persistante → augmenter rayon ou générer .comb seam
-    * Nouveau bouton "Générer .comb seam" : détecte automatiquement la jointure
-      dans le DDS sélectionné et génère un masque de protection (.comb) sur la zone
-    * FusionPreviewWindow : affichage ΔE colorimétrique entre les deux sources
-      + conseils adaptatifs (faible/modéré/fort/critique) + table rayons ZL
-    * Rayon adaptatif automatique selon ΔE : si l'écart est fort, le rayon est
-      majoré localement au Build (×1.3 à ×2.0 selon ΔE, plafonné ZL18+)
-Nouveautés v2.4 :
-  - Listes gauche/droite entièrement refondues : organisées par couche ZL / extend
-  - Chaque entrée affiche : numéro JPG, couche ZL, couleur dominante, valeur, masques .comb
-  - Champ de recherche par numéro JPG ou DDS dans chaque liste
-  - Fenêtre "Couleur Cible" affiche les extends et JPG regroupés sans dominante
-  - Génération de fichiers .comb par Color Check (numéro JPG, couche, corrections)
-  - Mode batch preview : évalue l'impact des corrections sur une couche entière avant application
-  - Suppression définitive de la détection des dominantes > 8 pts et liste "DDS à dominante colorée"
-Corrections v2.3 :
-  - Section ① "Identifier dominantes" : scan + correction colorimétrique
-  - Section ② "Dégradé de jointure sources" : OFF / 24 / 48 / 64 / 128 px
-Corrections v2.2 :
-  - Sélection conservée visuellement (exportselection=0)
-Corrections v2.1 :
-  - Curseurs Saturation R/G/B corrigés
-  - Build relance : supprime DDS du groupe sélectionné
-  - Taille minimale de fenêtre bloquée (minsize)
-"""
+
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
+
+# """
+# O4_Color_Check.py - Version ORTHO4XP V2.0 (Avril 2026) - REFONTE v2.9
+# Corrections v2.9 (Roland/Ypsos, Avril 2026) :
+  # • FusionPreviewWindow — déplacement fluide :
+    # pendant le drag → rendu rapide (NEAREST, sans overlay orange, délai 8ms)
+    # à l'arrêt de la souris → rendu complet (BILINEAR + overlay orange, délai 25ms)
+  # • BatchPreviewWindow — résumé des corrections actives affiché sous le titre
+  # • BatchPreviewWindow — points jaunes parasites supprimés (nettoyage morphologique)
+  # • BatchPreviewWindow — trait séparateur orig/corrigé réduit à 1px centré
+# Corrections v2.8 (Roland/Ypsos, Avril 2026) :
+  # • BatchPreviewWindow : self.textures_dir manquant ajouté → crash masque mer corrigé
+  # • _apply_group_correction : rescan après sauvegarde → indicateur ✏ mis à jour en temps réel
+  # • Double-clic groupe ZL dans liste gauche → ouvre Batch Preview directement
+  # • _filter_left : recherche connectée aux labels de zones .comb (pas seulement le nom DDS)
+  # • analyze_dds renforcé : dérive vs cube de référence calibré (R=86.5 G=96.5 B=86.9)
+    # → pixels eau/nuage exclus de la moyenne, drift_r/g/b/max calculés et affichés
+  # • Liste gauche : colonne Δ (dérive vs référence) affichée si > 5 pts
+# Corrections v2.7 (Roland/Ypsos, Avril 2026) :
+  # • DPI Aware réel : détection winfo_fpixels("1i") au lieu de s=1.3 fixe
+    # → adaptatif Windows/macOS/Linux, plafond ×2.0 pour écrans 4K
+    # → fallback s=1.3 si détection impossible
+  # • FusionPreviewWindow — points jaunes parasites supprimés :
+    # nettoyage morphologique du masque seam (composantes < 1% de la principale
+    # supprimées) → seule la vraie ligne de jointure reste visible
+  # • FusionPreviewWindow — vue initiale = tuile ENTIÈRE dans le canvas :
+    # zoom calculé automatiquement pour fit-to-canvas au premier rendu
+    # (plus de tuile coupée au démarrage)
+  # • Commentaire dupliqué "Sélection dans les listes" supprimé (lignes 1110-1112)
+  # • Fonctions get_zl_factor() et find_by_dds_id() dupliquées supprimées
+    # (seconde définition redondante en fin de fichier)
+# Nouveautés v2.6 :
+  # - Rayon de dégradé par défaut porté à 96px (était 24px) : jointures invisibles
+  # - Facteurs ZL bas (ZL13-16) renforcés : transitions très larges vue globale
+  # - Réduction ombres locales (shadow_reduce) activée ZL13-16 : vagues/bandes éliminées
+  # - Correction strength ZL13-16 renforcée : uniformité globale accrue
+# Nouveautés v2.5 :
+  # - Dégradé de jointure (seams) amélioré :
+    # * Affichage du rayon effectif par ZL dans la section dégradé (table ZL13→ZL20)
+    # * Conseils intégrés : seam persistante → augmenter rayon ou générer .comb seam
+    # * Nouveau bouton "Générer .comb seam" : détecte automatiquement la jointure
+      # dans le DDS sélectionné et génère un masque de protection (.comb) sur la zone
+    # * FusionPreviewWindow : affichage ΔE colorimétrique entre les deux sources
+      # + conseils adaptatifs (faible/modéré/fort/critique) + table rayons ZL
+    # * Rayon adaptatif automatique selon ΔE : si l'écart est fort, le rayon est
+      # majoré localement au Build (×1.3 à ×2.0 selon ΔE, plafonné ZL18+)
+# Nouveautés v2.4 :
+  # - Listes gauche/droite entièrement refondues : organisées par couche ZL / extend
+  # - Chaque entrée affiche : numéro JPG, couche ZL, couleur dominante, valeur, masques .comb
+  # - Champ de recherche par numéro JPG ou DDS dans chaque liste
+  # - Fenêtre "Couleur Cible" affiche les extends et JPG regroupés sans dominante
+  # - Génération de fichiers .comb par Color Check (numéro JPG, couche, corrections)
+  # - Mode batch preview : évalue l'impact des corrections sur une couche entière avant application
+  # - Suppression définitive de la détection des dominantes > 8 pts et liste "DDS à dominante colorée"
+# Corrections v2.3 :
+  # - Section ① "Identifier dominantes" : scan + correction colorimétrique
+  # - Section ② "Dégradé de jointure sources" : OFF / 24 / 48 / 64 / 128 px
+# Corrections v2.2 :
+  # - Sélection conservée visuellement (exportselection=0)
+# Corrections v2.1 :
+  # - Curseurs Saturation R/G/B corrigés
+  # - Build relance : supprime DDS du groupe sélectionné
+  # - Taille minimale de fenêtre bloquée (minsize)
+# """
 
 import os
 import json
@@ -324,6 +333,39 @@ def apply_corrections_to_array(arr, corr, sea_mask=None):
     return np.clip(result, 0, 255).astype(np.uint8)
 
 
+def _attach_tooltip(widget, text):
+    """Attache une info-bulle simple (survol) à un widget Tkinter."""
+    _tip = {"win": None}
+
+    def _show(_e=None):
+        if _tip["win"] is not None or not text:
+            return
+        try:
+            x = widget.winfo_rootx() + 20
+            y = widget.winfo_rooty() + widget.winfo_height() + 4
+            win = tk.Toplevel(widget)
+            win.wm_overrideredirect(True)
+            win.wm_geometry(f"+{x}+{y}")
+            tk.Label(win, text=text, justify="left",
+                     bg="#ffffe0", fg="#000000", relief="solid", borderwidth=1,
+                     font=("TkDefaultFont", 9), wraplength=340).pack(ipadx=4, ipady=3)
+            _tip["win"] = win
+        except Exception:
+            _tip["win"] = None
+
+    def _hide(_e=None):
+        if _tip["win"] is not None:
+            try:
+                _tip["win"].destroy()
+            except Exception:
+                pass
+            _tip["win"] = None
+
+    widget.bind("<Enter>", _show, add="+")
+    widget.bind("<Leave>", _hide, add="+")
+    widget.bind("<Destroy>", _hide, add="+")
+
+
 # ─────────────────────────────────────────────────────────────────
 # Fenêtre principale Color Check
 # ─────────────────────────────────────────────────────────────────
@@ -385,6 +427,8 @@ class ColorCheckWindow(tk.Toplevel):
         # Données internes pour les listes refondues
         self._left_items  = []   # [(display_str, info_or_None, is_header), ...]
         self._right_items = []   # [(display_str, info_or_None, is_header), ...]
+        self._chapters        = []   # [{"title","files","key","mean_drift"}, ...]
+        self._chapter_of_name = {}   # {fname: chapitre}
 
         self._disable_cnorm()
         self._build_ui()
@@ -746,20 +790,42 @@ class ColorCheckWindow(tk.Toplevel):
                  bg="#3b5b49", fg="light green",
                  font=("TkFixedFont", fs(9), "bold")).pack(pady=(6, 1))
 
+        _btn_refs = {}
         for text, cmd in [
             ("🔍 Scanner couches",        self._scan),
             ("📋 Exporter liste",          self._export_list),
-            ("🎨 Appliquer au groupe",     self._apply_group_correction),
+            ("🎨 Correction en série",     self._apply_group_correction),
             ("💾 Générer .comb",           self._save_comb_for_group),
             ("👁 Batch Preview couche",    self._batch_preview),
             ("🗑 Supprimer DDS sélect.",   self._delete_one),
             ("🗑 Supprimer TOUS DDS ZL",   self._delete_all),
         ]:
-            ttk.Button(left, text=tr(text), command=cmd).pack(fill=tk.X, padx=6, pady=2)
+            _b = ttk.Button(left, text=tr(text), command=cmd)
+            _b.pack(fill=tk.X, padx=6, pady=2)
+            _btn_refs[text] = _b
+
+        # Info-bulle : explique le flux « correction en série » → build unique
+        _attach_tooltip(_btn_refs["🎨 Correction en série"], tr(
+            "Enregistre la correction du groupe SANS lancer le build.\n"
+            "Corrigez un groupe → Correction en série → recommencez pour "
+            "d'autres groupes → puis « Lancer construction » UNE seule fois "
+            "pour tout construire (économise des builds)."))
 
         self.btn_build = ttk.Button(left, text=tr("🔨 Lancer Build (groupe)"),
                                     command=self._launch_build, state="disabled")
         self.btn_build.pack(fill=tk.X, padx=6, pady=2)
+        _attach_tooltip(self.btn_build, tr(
+            "Supprime les DDS du groupe, enregistre la correction, puis "
+            "lance la construction (utilise votre quota). Traite d'un coup "
+            "toutes les corrections enregistrées en série."))
+
+        self.btn_build_single = ttk.Button(left, text=tr("🔨 Construire cette image"),
+                                    command=self._launch_build_single)
+        self.btn_build_single.pack(fill=tk.X, padx=6, pady=2)
+        _attach_tooltip(self.btn_build_single, tr(
+            "Reconstruit UNIQUEMENT l'image sélectionnée (pas tout le "
+            "groupe) avec la correction des curseurs. Idéal pour peaufiner "
+            "une seule image à la main."))
 
         # Archive .ccorr
         tk.Frame(left, bg="#555555", height=1).pack(fill=tk.X, padx=6, pady=(10, 2))
@@ -894,19 +960,19 @@ class ColorCheckWindow(tk.Toplevel):
                                         # === Corrections sRGB par canal + Saturation ===
         cursors = [
             # Colonne 1 - ROUGE
-            ("R corr", self.var_r,    "#ff4444", -60, 60),
+            ("R corr", self.var_r,    "#ff4444", -70, 70),
             ("R Lum",  self.var_lr,   "#ff7777", -50, 50),
             ("R Cont", self.var_cr,   "#ff4444", -50, 50),
             ("Sat R",  self.var_sr,   "#ff5555", -50, 50),
 
             # Colonne 2 - VERT
-            ("G corr", self.var_g,    "#44ff44", -60, 60),
+            ("G corr", self.var_g,    "#44ff44", -70, 70),
             ("G Lum",  self.var_lg,   "#77ff77", -50, 50),
             ("G Cont", self.var_cg,   "#44ff44", -50, 50),
             ("Sat G",  self.var_sg,   "#55ff55", -50, 50),
 
             # Colonne 3 - BLEU
-            ("B corr", self.var_b,    "#4488ff", -60, 60),
+            ("B corr", self.var_b,    "#4488ff", -70, 70),
             ("B Lum",  self.var_lb,   "#77aaff", -50, 50),
             ("B Cont", self.var_cb,   "#4488ff", -50, 50),
             ("Sat B",  self.var_sb,   "#5599ff", -50, 50),
@@ -1013,6 +1079,8 @@ class ColorCheckWindow(tk.Toplevel):
         self.all_dds_list      = []
         self._left_items       = []
         self._right_items      = []
+        self._chapters         = []
+        self._chapter_of_name  = {}
         self.selected_group    = None
         self.selected_dds_info = None
 
@@ -1040,39 +1108,105 @@ class ColorCheckWindow(tk.Toplevel):
 
         self.after(0, lambda: self._scan_done(all_dds))
 
+    # Seuil de tolérance validé : |dérive| <= 5 → conforme (droite, intouché)
+    #                             |dérive|  > 5 → à corriger (gauche, regroupé)
+    DRIFT_TOL = 5
+
+    def _group_by_drift(self, files, tol=None):
+        """
+        Regroupe les DDS « à corriger » par dérive RGB proche.
+
+        Regroupement glouton : un DDS rejoint un groupe existant si sa dérive
+        (drift_r, drift_g, drift_b) est à <= tol de la dérive MOYENNE du groupe,
+        sur les trois canaux à la fois. Sinon il ouvre un nouveau groupe.
+
+        Retourne une liste de dicts {"title", "files", "key", "mean_drift"},
+        triés par dérive décroissante (les plus fortes en tête).
+        """
+        if tol is None:
+            tol = self.DRIFT_TOL
+        # Tri initial par dérive : les voisins se rencontrent en premier
+        items = sorted(
+            files,
+            key=lambda i: (round(i.get("drift_r", 0) or 0),
+                           round(i.get("drift_g", 0) or 0),
+                           round(i.get("drift_b", 0) or 0)))
+        groups = []   # chaque groupe = liste d'infos
+        for info in items:
+            dr = info.get("drift_r", 0) or 0
+            dg = info.get("drift_g", 0) or 0
+            db = info.get("drift_b", 0) or 0
+            placed = False
+            for g in groups:
+                n = len(g)
+                mdr = sum((x.get("drift_r", 0) or 0) for x in g) / n
+                mdg = sum((x.get("drift_g", 0) or 0) for x in g) / n
+                mdb = sum((x.get("drift_b", 0) or 0) for x in g) / n
+                if (abs(dr - mdr) <= tol and abs(dg - mdg) <= tol
+                        and abs(db - mdb) <= tol):
+                    g.append(info)
+                    placed = True
+                    break
+            if not placed:
+                groups.append([info])
+
+        result = []
+        for g in groups:
+            n = len(g)
+            mdr = sum((x.get("drift_r", 0) or 0) for x in g) / n
+            mdg = sum((x.get("drift_g", 0) or 0) for x in g) / n
+            mdb = sum((x.get("drift_b", 0) or 0) for x in g) / n
+            parts = [f"{lbl}{v:+.0f}" for lbl, v in
+                     (("R", mdr), ("G", mdg), ("B", mdb)) if abs(v) >= tol]
+            title = (tr("Dérive") + " " + " ".join(parts)) if parts else tr("Dérive faible")
+            result.append({
+                "title": title,
+                "files": g,
+                "key": title,
+                "mean_drift": (mdr, mdg, mdb),
+            })
+        result.sort(key=lambda c: -max(abs(v) for v in c["mean_drift"]))
+        return result
+
     def _scan_done(self, all_dds):
         self.all_dds_list = all_dds
 
-        # ── Organiser par couche ZL ──────────────────────────────
+        # ── Organiser par couche ZL (conservé : export, suppression ZL) ──
         layer_groups = {}
         for info in all_dds:
             zl = info.get("zl") or 0
             layer_groups.setdefault(zl, []).append(info)
+        self.layer_groups = layer_groups
 
-        # ── Organiser par extend (pour la liste droite / cible) ──
-        extend_groups = {}
-        for info in all_dds:
-            ext = info.get("extend", "inconnu")
-            extend_groups.setdefault(ext, []).append(info)
+        # ── Séparer conformes / à corriger (règle validée : seuil ±5) ────
+        # |dérive| <= 5 → DROITE (conforme ou toléré, on ne touche pas)
+        # |dérive|  > 5 → GAUCHE (à corriger, regroupé par dérive proche)
+        tol         = self.DRIFT_TOL
+        to_correct  = [i for i in all_dds if (i.get("drift_max", 0) or 0) >  tol]
+        conform     = [i for i in all_dds if (i.get("drift_max", 0) or 0) <= tol]
 
-        self.layer_groups  = layer_groups
-        self.extend_groups = extend_groups
+        # ── Chapitres de dérive pour la colonne de gauche ────────────────
+        chapters = self._group_by_drift(to_correct, tol=tol)
+        self._chapters          = chapters
+        self._chapter_of_name   = {}
+        for ch in chapters:
+            for info in ch["files"]:
+                self._chapter_of_name[info["name"]] = ch
 
-        # ── Remplir liste GAUCHE : couche ZL → fichiers ──────────
+        # ── Remplir liste GAUCHE : un chapitre = une famille de dérive ───
         self.listbox_layers.delete(0, END)
         self._left_items = []
         corrections = load_corrections(self.textures_dir)
 
-        for zl in sorted(layer_groups.keys()):
-            files_in_zl = layer_groups[zl]
-            zl_label    = f"ZL{zl}" if zl else "ZL?"
-            header_txt  = f"═══ {zl_label}  ({len(files_in_zl)} tuiles) ═══"
+        for ch in chapters:
+            files_in_ch = ch["files"]
+            header_txt  = f"═══ {ch['title']}  ({len(files_in_ch)} DDS) ═══"
             self.listbox_layers.insert(END, header_txt)
             hi = self.listbox_layers.size() - 1
-            self.listbox_layers.itemconfig(hi, fg="#aaffaa")
-            self._left_items.append((header_txt, {"zl": zl, "files": files_in_zl}, True))
+            self.listbox_layers.itemconfig(hi, fg="#ffcc66")
+            self._left_items.append((header_txt, ch, True))
 
-            for info in files_in_zl:
+            for info in files_in_ch:
                 fname     = info["name"]
                 mr        = info.get("mean_r", 0)
                 mg        = info.get("mean_g", 0)
@@ -1080,11 +1214,8 @@ class ColorCheckWindow(tk.Toplevel):
                 dom       = info.get("dominant")
                 delta     = info.get("delta", 0)
                 drift_max = info.get("drift_max", 0)
-                # Dominante avec valeur chiffrée : [R+12] au lieu de [R]
                 dom_s   = f"[{dom}{delta:+.0f}]" if dom else "      "
-                # Dérive vs cube de référence calibré (affichée si > 5 pts)
-                drift_s = f"Δ{drift_max:+.0f}" if drift_max > 5 else "   "
-                # Icône .comb avec nombre de zones si connu
+                drift_s = f"Δ{drift_max:+.0f}" if drift_max > tol else "   "
                 comb_info = info.get("comb_info")
                 if info.get("has_comb"):
                     if isinstance(comb_info, dict):
@@ -1097,11 +1228,9 @@ class ColorCheckWindow(tk.Toplevel):
                 else:
                     comb = "  "
                 corr  = "✏" if fname in corrections else " "
-                # Format : comb corr dom dérive R/G/B  nom
                 line  = f"  {comb}{corr} {dom_s} {drift_s} R{mr:3.0f} G{mg:3.0f} B{mb:3.0f}  {fname}"
                 self.listbox_layers.insert(END, line)
                 li = self.listbox_layers.size() - 1
-                # Couleur selon dominante
                 if dom == "R":
                     self.listbox_layers.itemconfig(li, fg="#ff9999")
                 elif dom == "G":
@@ -1112,10 +1241,17 @@ class ColorCheckWindow(tk.Toplevel):
                     self.listbox_layers.itemconfig(li, fg="#dddddd")
                 self._left_items.append((line, info, False))
 
-        # ── Remplir liste DROITE : extends regroupés → Couleur Cible ──
+        # ── Remplir liste DROITE : DDS conformes / tolérés (±5) ──────────
+        # Ce sont les DDS qu'on NE corrige PAS. Regroupés par extend
+        # (ils servent aussi de « Couleur Cible » pour Auto depuis Cible).
+        extend_groups = {}
+        for info in conform:
+            ext = info.get("extend", "inconnu")
+            extend_groups.setdefault(ext, []).append(info)
+        self.extend_groups = extend_groups
+
         self.listbox_target.delete(0, END)
         self._right_items = []
-        corrections = load_corrections(self.textures_dir)
 
         for ext in sorted(extend_groups.keys()):
             files_in_ext = extend_groups[ext]
@@ -1139,7 +1275,10 @@ class ColorCheckWindow(tk.Toplevel):
 
         total = len(all_dds)
         self.status.config(
-            text=f"{total} DDS scannés — {len(layer_groups)} couches ZL — {len(extend_groups)} extends")
+            text=tr("{total} DDS — {n_corr} à corriger ({n_grp} groupes) — "
+                    "{n_ok} conformes (±{tol})").format(
+                        total=total, n_corr=len(to_correct),
+                        n_grp=len(chapters), n_ok=len(conform), tol=tol))
 
         self.btn_build.config(state="normal" if all_dds else "disabled")
 
@@ -1170,7 +1309,7 @@ class ColorCheckWindow(tk.Toplevel):
                 self.listbox_layers.insert(END, txt)
                 i = self.listbox_layers.size() - 1
                 if is_header:
-                    self.listbox_layers.itemconfig(i, fg="#aaffaa")
+                    self.listbox_layers.itemconfig(i, fg="#ffcc66")
                 else:
                     dom = data.get("dominant") if isinstance(data, dict) and "mean_r" in data else None
                     if dom == "R":   self.listbox_layers.itemconfig(i, fg="#ff9999")
@@ -1198,9 +1337,10 @@ class ColorCheckWindow(tk.Toplevel):
 
     def _on_select_layer(self, event):
         """
-        Clic dans la liste gauche (couches ZL).
-        Header ZL → sélectionne le groupe ZL entier.
-        Fichier individuel → sélectionne ce DDS.
+        Clic dans la liste gauche (chapitres de dérive).
+        Header chapitre → sélectionne le chapitre entier (paquet de dérive ±5).
+        Fichier individuel → sélectionne ce DDS ET son chapitre comme groupe,
+        pour que « Correction en série » corrige tout le chapitre d'un coup.
         """
         sel = self.listbox_layers.curselection()
         if not sel:
@@ -1223,27 +1363,34 @@ class ColorCheckWindow(tk.Toplevel):
         txt, data, is_header = matched
 
         if is_header:
-            # Groupe ZL entier
-            zl    = data["zl"]
-            files = data["files"]
-            self.selected_group    = {"zl": zl, "files": files, "key": f"ZL{zl}"}
+            # Chapitre de dérive entier
+            files = data.get("files", [])
+            self.selected_group    = {
+                "key":   data.get("key", data.get("title", "?")),
+                "files": files,
+            }
             self.selected_dds_info = files[0] if files else None
             self._load_preview()
             n = len(files)
             self.status.config(
-                text=f"ZL{zl} — {n} tuile{'s' if n>1 else ''} — clic sur un fichier pour prévisualiser")
+                text=tr("{title} — {n} DDS — « Correction en série » "
+                        "corrige tout ce chapitre").format(
+                            title=data.get('title', '?'), n=n))
         else:
-            # Fichier individuel
+            # Fichier individuel → son chapitre devient le groupe actif
             info = data
             self.selected_dds_info = info
-            zl = info.get("zl", "?")
-            self.selected_group = {
-                "zl": zl,
-                "files": self.layer_groups.get(zl, [info]),
-                "key": f"ZL{zl}",
-            }
+            chapter = self._chapter_of_name.get(info["name"])
+            if chapter:
+                self.selected_group = {
+                    "key":   chapter.get("key", chapter.get("title", "?")),
+                    "files": chapter.get("files", [info]),
+                }
+            else:
+                self.selected_group = {"key": info["name"], "files": [info]}
             self._load_preview()
             fname = info["name"]
+            zl    = info.get("zl", "?")
             mr    = info.get("mean_r", 0)
             mg    = info.get("mean_g", 0)
             mb    = info.get("mean_b", 0)
@@ -1325,6 +1472,7 @@ class ColorCheckWindow(tk.Toplevel):
                             text=f"Cible : extend {data['extend']} — {len(files)} tuiles")
                 else:
                     info = data
+                    self.target_idx = 1  # marque une cible individuelle sélectionnée
                     img  = load_dds_preview(info["path"])
                     if img:
                         w = self.canvas_target.winfo_width()  or self._thumb
@@ -1410,14 +1558,66 @@ class ColorCheckWindow(tk.Toplevel):
         if not self.selected_dds_info:
             self.status.config(text=tr("⚠ Sélectionnez d'abord un DDS."))
             return
-        info   = self.selected_dds_info
-        d, pt  = info["dominant"], round(info["delta"])
+        info = self.selected_dds_info
         self._reset_sliders()
-        if   d == "R": self.var_r.set(-pt)
-        elif d == "G": self.var_g.set(-pt)
-        elif d == "B": self.var_b.set(-pt)
+
+        # Cube de référence calibré (identique à celui de la dérive)
+        _REF = (86.5, 96.5, 86.9)
+
+        # Statistiques sur l'image réelle (aperçu déjà chargé, sinon relecture)
+        src = self.preview_orig
+        if src is None:
+            src = load_dds_preview(info["path"])
+        arr = None
+        if src is not None:
+            arr = np.array(src.convert("RGB"), dtype=np.float32)
+            lum = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+            m = (lum > 10) & (lum < 248)          # exclut eau très sombre / nuage
+            valid = arr[m] if m.sum() > 50 else arr.reshape(-1, 3)
+        else:
+            valid = None
+
+        def _clamp(v, lo, hi):
+            return int(max(lo, min(hi, round(v))))
+
+        # ── 1) corr : ramène la moyenne de chaque canal sur la référence ──
+        if valid is not None:
+            means = [float(valid[:, c].mean()) for c in range(3)]
+        else:
+            means = [info.get("mean_r", _REF[0]),
+                     info.get("mean_g", _REF[1]),
+                     info.get("mean_b", _REF[2])]
+        corr = [_clamp(_REF[c] - means[c], -70, 70) for c in range(3)]
+        self.var_r.set(corr[0]); self.var_g.set(corr[1]); self.var_b.set(corr[2])
+
+        cont = [0, 0, 0]
+        sat  = [0, 0, 0]
+        if valid is not None and len(valid) > 50:
+            # ── 2) Cont : équilibre l'étalement (écart-type) entre canaux ──
+            stds = [float(valid[:, c].std()) for c in range(3)]
+            tgt_std = sum(stds) / 3.0
+            for c in range(3):
+                if stds[c] > 1e-3:
+                    cont[c] = _clamp((tgt_std / stds[c] - 1.0) * 100.0, -50, 50)
+            self.var_cr.set(cont[0]); self.var_cg.set(cont[1]); self.var_cb.set(cont[2])
+
+            # ── 3) Sat : équilibre la vivacité (écart au gris) entre canaux ──
+            gray = valid.mean(axis=1)
+            devs = [float(np.mean(np.abs(valid[:, c] - gray))) for c in range(3)]
+            tgt_dev = sum(devs) / 3.0
+            for c in range(3):
+                if devs[c] > 1e-3:
+                    sat[c] = _clamp((tgt_dev / devs[c] - 1.0) * 100.0, -50, 50)
+            self.var_sr.set(sat[0]); self.var_sg.set(sat[1]); self.var_sb.set(sat[2])
+
+        # Lum volontairement laissé à 0 : corr recale déjà la moyenne.
         self._update_preview()
-        self.status.config(text=f"Auto : [{d} {-pt:+d}pt]")
+        self.status.config(
+            text=tr("Auto-détecter : corr R{r:+d} G{g:+d} B{b:+d} | "
+                    "Cont {cr:+d}/{cg:+d}/{cb:+d} | Sat {sr:+d}/{sg:+d}/{sb:+d}").format(
+                        r=corr[0], g=corr[1], b=corr[2],
+                        cr=cont[0], cg=cont[1], cb=cont[2],
+                        sr=sat[0], sg=sat[1], sb=sat[2]))
 
     def _auto_from_target(self):
         if not self.selected_dds_info or self.target_idx is None:
@@ -1436,15 +1636,42 @@ class ColorCheckWindow(tk.Toplevel):
                     (arr_s.shape[1], arr_s.shape[0]), Image.LANCZOS),
                 dtype=np.float32)
 
-        corr_r = int(round(np.mean(arr_t[:, :, 0]) - np.mean(arr_s[:, :, 0])))
-        corr_g = int(round(np.mean(arr_t[:, :, 1]) - np.mean(arr_s[:, :, 1])))
-        corr_b = int(round(np.mean(arr_t[:, :, 2]) - np.mean(arr_s[:, :, 2])))
+        def _clamp(v, lo, hi):
+            return int(max(lo, min(hi, round(v))))
 
-        self.var_r.set(corr_r)
-        self.var_g.set(corr_g)
-        self.var_b.set(corr_b)
+        # ── 1) corr : décalage de moyenne source → cible (par canal) ──
+        corr = [_clamp(np.mean(arr_t[:, :, c]) - np.mean(arr_s[:, :, c]), -70, 70)
+                for c in range(3)]
+        self.var_r.set(corr[0]); self.var_g.set(corr[1]); self.var_b.set(corr[2])
+
+        # ── 2) Cont : rapproche l'étalement (écart-type) de la cible ──
+        cont = [0, 0, 0]
+        for c in range(3):
+            ss = float(arr_s[:, :, c].std())
+            st = float(arr_t[:, :, c].std())
+            if ss > 1e-3:
+                cont[c] = _clamp((st / ss - 1.0) * 100.0, -50, 50)
+        self.var_cr.set(cont[0]); self.var_cg.set(cont[1]); self.var_cb.set(cont[2])
+
+        # ── 3) Sat : rapproche la vivacité (écart au gris) de la cible ──
+        sat = [0, 0, 0]
+        gray_s = arr_s.mean(axis=2)
+        gray_t = arr_t.mean(axis=2)
+        for c in range(3):
+            ds = float(np.mean(np.abs(arr_s[:, :, c] - gray_s)))
+            dt = float(np.mean(np.abs(arr_t[:, :, c] - gray_t)))
+            if ds > 1e-3:
+                sat[c] = _clamp((dt / ds - 1.0) * 100.0, -50, 50)
+        self.var_sr.set(sat[0]); self.var_sg.set(sat[1]); self.var_sb.set(sat[2])
+
+        # Lum volontairement laissé à 0 : corr recale déjà la moyenne.
         self._update_preview()
-        self.status.config(text=f"Auto depuis cible : R{corr_r:+d} G{corr_g:+d} B{corr_b:+d}")
+        self.status.config(
+            text=tr("Auto depuis cible : corr R{r:+d} G{g:+d} B{b:+d} | "
+                    "Cont {cr:+d}/{cg:+d}/{cb:+d} | Sat {sr:+d}/{sg:+d}/{sb:+d}").format(
+                        r=corr[0], g=corr[1], b=corr[2],
+                        cr=cont[0], cg=cont[1], cb=cont[2],
+                        sr=sat[0], sg=sat[1], sb=sat[2]))
 
     def _reset_sliders(self):
         for v in (self.var_r, self.var_g, self.var_b,
@@ -1485,11 +1712,8 @@ class ColorCheckWindow(tk.Toplevel):
             files = [self.selected_dds_info]
 
         for info in files:
-            # Clé DDS (existant — pour apply_ccorr post-assemblage)
+            # Correction appliquée au DDS assemblé (apply_ccorr, post-assemblage).
             corrections[info["name"]] = entry.copy()
-            # Clé JPG (nouveau — pour apply_ccorr_jpg sur chaque JPG avant assemblage)
-            jpg_key = os.path.splitext(info["name"])[0] + ".jpg"
-            corrections[jpg_key] = entry.copy()
         save_corrections(self.textures_dir, corrections)
 
         parts = []
@@ -1503,7 +1727,9 @@ class ColorCheckWindow(tk.Toplevel):
         n   = len(files)
         key = self.selected_group.get("key", "?")
         self.status.config(
-            text=f"✅ {key} — {n} fichier{'s' if n>1 else ''} mis à jour : " + "  ".join(parts))
+            text=f"✅ {key} — {n} fichier{'s' if n>1 else ''} enregistré{'s' if n>1 else ''} : "
+                 + "  ".join(parts)
+                 + tr("  → recommencez pour d'autres groupes, puis « Lancer construction »"))
         self.btn_build.config(state="normal")
         # Rescan léger pour mettre à jour l'indicateur ✏ dans la liste
         self.after(100, self._scan)
@@ -1772,6 +1998,9 @@ class ColorCheckWindow(tk.Toplevel):
             "strength": 1.0,
         }
         for info in files:
+            # Correction appliquée au DDS assemblé (apply_ccorr, post-assemblage).
+            # On n'écrit PAS de clé JPG : les JPG sources ne sont pas corrigés
+            # ici (apply_ccorr_jpg n'est pas branché dans le build).
             corrections[info["name"]] = entry.copy()
         save_corrections(self.textures_dir, corrections)
 
@@ -1786,7 +2015,80 @@ class ColorCheckWindow(tk.Toplevel):
         msg = (f"✅ Build lancé — {group_key} : {len(deleted)} DDS supprimés"
                + (f" — ⚠ erreurs : {'; '.join(errors)}" if errors else ""))
         self.status.config(text=msg)
-        self._scan()
+        # Build asynchrone : on attend que les DDS du groupe soient régénérés
+        # sur le disque, puis rescan automatique (les corrigés passent à droite).
+        _pending = [info["path"] for info in files if info.get("path")]
+        if _pending:
+            self._wait_build_then_rescan(_pending)
+        else:
+            self._scan()
+
+    def _wait_build_then_rescan(self, pending_paths, tries=0):
+        """
+        Rescan automatique quand le build asynchrone a régénéré les DDS du
+        groupe. On sonde toutes les 2 s la réapparition des fichiers DDS
+        supprimés ; dès qu'ils sont tous revenus (ou après un délai de
+        sécurité), on relance le scan pour que les DDS corrigés passent à
+        droite sans clic manuel.
+        """
+        remaining = [p for p in pending_paths if not os.path.isfile(p)]
+        if not remaining or tries >= 150:   # ~5 min de sécurité (150 × 2 s)
+            self._scan()
+            return
+        done = len(pending_paths) - len(remaining)
+        self.status.config(
+            text=tr("🔨 Build en cours… {done}/{total} DDS régénérés "
+                    "— rescan automatique à la fin.").format(
+                        done=done, total=len(pending_paths)))
+        self.after(2000, lambda: self._wait_build_then_rescan(pending_paths, tries + 1))
+
+    def _launch_build_single(self):
+        """
+        Build UNIQUEMENT le DDS affiché (image sélectionnée), pas tout le
+        chapitre. Utile pour peaufiner une seule image aux curseurs.
+        Même pipeline que _launch_build, mais sur une seule entrée :
+        supprime ce DDS → enregistre la correction pour lui seul → build →
+        rescan auto. Le build ne régénère que le DDS manquant.
+        """
+        info = self.selected_dds_info
+        if not info or not info.get("path"):
+            self.status.config(
+                text=tr("⚠ Sélectionnez d'abord une image dans la liste."))
+            return
+
+        deleted = []
+        errors  = []
+        dds_path = info["path"]
+        try:
+            if os.path.isfile(dds_path):
+                os.remove(dds_path)
+                deleted.append(info["name"])
+        except Exception as e:
+            errors.append(f"{info['name']}: {e}")
+
+        corrections = load_corrections(self.textures_dir)
+        entry = {
+            "dr":     self.var_r.get(),  "dg":     self.var_g.get(),  "db":     self.var_b.get(),
+            "lum_r":  self.var_lr.get(), "lum_g":  self.var_lg.get(), "lum_b":  self.var_lb.get(),
+            "cont_r": self.var_cr.get(), "cont_g": self.var_cg.get(), "cont_b": self.var_cb.get(),
+            "sat_r":  self.var_sr.get(), "sat_g":  self.var_sg.get(), "sat_b":  self.var_sb.get(),
+            "sharp":  self.var_sharp.get(),
+            "strength": 1.0,
+        }
+        corrections[info["name"]] = entry.copy()
+        save_corrections(self.textures_dir, corrections)
+
+        try:
+            self.master.build_tile()
+        except Exception as e:
+            self.status.config(text=f"⚠ Erreur Build : {e}  ({info['name']})")
+            return
+
+        self.btn_build.config(state="disabled")
+        self.status.config(
+            text=tr("✅ Build lancé — image seule : {name}").format(name=info["name"])
+                 + (f" — ⚠ {'; '.join(errors)}" if errors else ""))
+        self._wait_build_then_rescan([dds_path])
 
 
 # ─────────────────────────────────────────────────────────────────
