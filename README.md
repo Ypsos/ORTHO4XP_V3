@@ -298,6 +298,8 @@ Nouveau menu « Avancé » : Centralise les outils avancés sans surcharger l'é
 Multilingue : Entièrement disponible en français et en anglais.
 Multiplateforme : Compatible Windows, macOS (puces Apple Silicon et processeurs Intel) et Linux.
 
+<img width="1005" height="1180" alt="Createur ficheir CombFR" src="https://github.com/user-attachments/assets/a5eb68e7-86f4-4c45-85cc-6140d17c4a8e" />
+
 -----
 
 ## 🛠 Utilisation rapide
@@ -649,6 +651,7 @@ New “Advanced” menu: Centralizes advanced tools without cluttering the home 
 Multilingual: Fully available in French and English.
 Cross-platform: Compatible with Windows, macOS (Apple Silicon chips and Intel processors), and Linux.
 
+<img width="782" height="743" alt="Créateur fichier CombEN" src="https://github.com/user-attachments/assets/95c49c62-d0e0-451a-8d74-e2a2758035e3" />
 
 ---
 ## 🛠 Quick start
