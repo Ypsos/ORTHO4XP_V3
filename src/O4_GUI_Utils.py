@@ -397,7 +397,7 @@ class Ortho4XP_GUI(tk.Tk):
             text="RAM: --",
             bg=_BG, fg=_FG2,
             font=("TkFixedFont", fs(10)))
-        self._ram_label.grid(row=0, column=5, padx=12, sticky=E)
+        self._ram_label.grid(row=1, column=5, padx=12, sticky=E)
         self._update_ram_label()
 
         # ══ RUBRIQUE 3 : Gestion des Couleurs automatisée ═════════════
@@ -532,7 +532,7 @@ class Ortho4XP_GUI(tk.Tk):
         for i in range(3): self.frame_advanced.columnconfigure(i, weight=1)
 
         ttk.Button(self.frame_advanced,
-            text=tr("🛠 Avancé (JOSM)"),
+            text=tr("🛠 Avancé"),
             command=self.open_avance_module,
             width=22).grid(row=0, column=0, padx=5, pady=2, sticky=N+S+E+W)
 
@@ -814,31 +814,34 @@ class Ortho4XP_GUI(tk.Tk):
         O4_lay_generator.run_lay_generator(parent=self)
 
     def open_avance_module(self):
-        """Point d'entrée du bouton « Avancé (JOSM) ».
+        """Point d'entrée du bouton « Avancé ».
 
-        Délègue au module autonome O4_Avance_Utils, qui regroupe les
-        couches JOSM : emprises de provider (Extents/), patches
-        d'altitude (Patches/) et données OSM téléchargées (OSM_data/).
-        Aucun fichier du pipeline n'est modifié par ce bouton.
+        Ouvre la fenêtre Menu Avancé (O4_Menu_Avance), porte d'entrée vers
+        tous les outils avancés (JOSM, générateur .comb, etc.). Le module
+        JOSM (O4_Avance_Utils) n'est plus appelé ici : il est appelé depuis
+        le Menu Avancé lui-même.
 
-        Si le module est absent ou lève une erreur, le GUI reste
-        parfaitement fonctionnel : on se contente d'informer.
+        Import LOCAL et protégé : si O4_Menu_Avance est absent ou lève une
+        erreur, le GUI reste parfaitement fonctionnel et on se contente
+        d'informer.
         """
         from tkinter import messagebox
-        if not (_avancemod_enabled and _AVANCEMOD is not None):
+        try:
+            import O4_Menu_Avance as _MENUAV
+        except Exception:
             messagebox.showinfo(
-                tr("Avancé (JOSM)"),
-                tr("Le module O4_Avance_Utils.py est introuvable "
+                tr("Avancé"),
+                tr("Le module O4_Menu_Avance.py est introuvable "
                    "dans le dossier src/."))
             return
         try:
-            _AVANCEMOD.open_avance_window(self)
+            _MENUAV.run_menu_avance(self)
         except Exception as _e:
             try:
                 UI.vprint(1, "[Avance] " + str(_e))
             except Exception:
                 pass
-            messagebox.showerror(tr("Avancé (JOSM)"), str(_e))
+            messagebox.showerror(tr("Avancé"), str(_e))
 
     def open_pbf_module(self):
         """Point d'entrée du bouton « Cache OSM local (.pbf) ».

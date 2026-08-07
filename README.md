@@ -278,6 +278,25 @@ Optimisez la qualité visuelle de vos scènes Ortho4XP V3 grâce à un système 
 
 <img width="958" height="462" alt="Annalyse Fournisseur" src="https://github.com/user-attachments/assets/a1ee2ec2-ab90-4a6f-879d-9c9d40c4eede" />
 
+-----
+
+🛠 La Nouveauté Phare : L'assistant de fichiers .comb graphique
+Jusqu'à présent, la création manuelle des fichiers .comb (gestion des fournisseurs d'imagerie, des zones et des priorités) nécessitait un éditeur de texte, ce qui pouvait rebuter les débutants. Ce processus est désormais entièrement automatisé et visuel grâce au nouveau bouton « 🛠 Avancé ».
+Fonctionnalités principales :
+Liste des fournisseurs : Affichage des sources installées classées par score de qualité.
+Mode Automatique : Configuration instantanée en un clic (imagerie locale prioritaire, fournisseurs mondiaux en filet de secours).
+Mode Manuel : Sélection des zones et des priorités (Haute / Moyenne / Basse) via des menus déroulants, éliminant la saisie au clavier.
+Aperçu et Génération : Visualisation du fichier avant enregistrement au format exact requis.
+Importation : Possibilité de charger et d'ajuster un fichier .comb préexistant.
+Accès direct au générateur .lay : Pratique en cas de source manquante.
+🛡 Sécurité et Sécurisation des données
+Protection : Aucune donnée n'est écrasée sans demande de confirmation préalable.
+Sauvegarde automatique : Une copie de sauvegarde est générée automatiquement avant chaque modification.
+Compatibilité : Respect total des standards de fichiers de la communauté.
+🚀 Structure et Disponibilité
+Nouveau menu « Avancé » : Centralise les outils avancés sans surcharger l'écran d'accueil (l'outil JOSM/Extents y est déjà intégré, et l'altimétrie ainsi que la correction d'imagerie y seront ajoutées prochainement).
+Multilingue : Entièrement disponible en français et en anglais.
+Multiplateforme : Compatible Windows, macOS (puces Apple Silicon et processeurs Intel) et Linux.
 
 -----
 
@@ -612,6 +631,23 @@ Optimize the visual quality of your Ortho4XP V3 scenes using an automated, multi
 <img width="946" height="488" alt="Provider Analysis01" src="https://github.com/user-attachments/assets/6c9113fe-ccae-4814-a0a9-5c3ec4cb3707" />
 
 ---
+🛠 The Flagship New Feature: The Graphical .comb File Wizard
+Until now, manually creating .comb files (managing image providers, regions, and priorities) required a text editor, which could be daunting for beginners. This process is now fully automated and visual thanks to the new “🛠 Advanced” button.
+Key Features:
+Provider List: Displays installed sources sorted by quality score.
+Automatic Mode: Instant one-click configuration (prioritizes local imagery, with global providers as a fallback).
+Manual Mode: Select zones and priorities (High / Medium / Low) via drop-down menus, eliminating the need for keyboard input.
+Preview and Generation: View the file before saving it in the exact required format.
+Import: Ability to load and adjust an existing .comb file.
+Direct access to the .lay generator: Handy in case a source is missing.
+🛡 Security and Data Protection
+Protection: No data is overwritten without a prior confirmation request.
+Automatic Backup: A backup copy is automatically generated before each modification.
+Compatibility: Full compliance with community file standards.
+🚀 Structure and Availability
+New “Advanced” menu: Centralizes advanced tools without cluttering the home screen (the JOSM/Extents tool is already integrated there, and elevation data and image correction will be added soon).
+Multilingual: Fully available in French and English.
+Cross-platform: Compatible with Windows, macOS (Apple Silicon chips and Intel processors), and Linux.
 
 
 ---

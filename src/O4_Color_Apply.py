@@ -2,6 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 O4_Color_Apply.py  —  ORTHO4XP V2  (Avril 2026)
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
+
+
 ================================================
 v1.1 — Correction apply_ccorr_jpg() (Roland/Ypsos, Avril 2026) :
   • apply_ccorr_jpg() cherchait le .ccorr dans jpg_dir (dossier source JPG)

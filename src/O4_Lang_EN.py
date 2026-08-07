@@ -1334,4 +1334,28 @@ T = {
         : 'custom_bathy_dem not written:',
     'custom_bathy_dem renseigné dans le cfg de la tuile.'
         : 'custom_bathy_dem set in the tile cfg.',
+
+    # ── .comb MODULE + ADVANCED MENU (project additions) ───────────
+    "Ortho4XP — Avancé"                     : "Ortho4XP — Advanced",
+    "Outils avancés"                        : "Advanced tools",
+    "Chaque outil s'ouvre dans sa propre fenêtre." : "Each tool opens in its own window.",
+    "Générer un fichier .comb"              : "Generate a .comb file",
+    "JOSM / Extents (masques, zones)"       : "JOSM / Extents (masks, zones)",
+    "Altimétrie"                            : "Elevation",
+    "Correction imagerie"                   : "Imagery correction",
+    "Fermer"                                : "Close",
+    "Générer un .comb global (style EUR.comb)" : "Generate a global .comb (EUR.comb style)",
+    "Coche les providers, choisis zone + priorité, puis Générer." : "Tick providers, set zone + priority, then Generate.",
+    "Provider"                              : "Provider",
+    "Score"                                 : "Score",
+    "Zone / extent"                         : "Zone / extent",
+    "Priorité"                              : "Priority",
+    "Automatique"                           : "Automatic",
+    "Importer un .comb"                     : "Import a .comb",
+    "Créer un provider (.lay)"              : "Create a provider (.lay)",
+    "Aperçu"                                : "Preview",
+    "Générer"                               : "Generate",
+    "Nom du fichier :"                      : "File name:",
+    "🛠 Avancé"                              : "🛠 Advanced",
+
 }

@@ -40,6 +40,7 @@ except Exception:
 # Seuil score en dessous duquel on log un avertissement failover
 # Calibré à 72 : une tuile 100% nuageuse score 70.0 → capturée correctement
 _SCORE_FAILOVER_THRESHOLD = 72.0
+scoring_during_build = True
 import time
 import os
 import sys
@@ -1710,7 +1711,7 @@ def download_jpeg_ortho(
         )
         return 0
     # ── PROVIDER SCORE : évaluation qualité image téléchargée ──────────
-    if _pscore_enabled:
+    if _pscore_enabled and scoring_during_build:
         try:
             _eval_img = Image.open(os.path.join(file_dir, file_name)).convert("RGB")
             tile_id   = f"{til_y_top}_{til_x_left}_ZL{zoomlevel}"
@@ -2560,7 +2561,7 @@ def convert_texture(
     # texture manquante ou entièrement transparente (voir pipeline mer, Cas 1).
     # Surveillance mémoire réservée aux boucles séquentielles uniquement.
     # ── PROVIDER SCORE : évaluation qualité ────────────────────────────
-    if _pscore_enabled:
+    if _pscore_enabled and scoring_during_build:
         try:
             _tile_id  = f"{til_y_top}_{til_x_left}_ZL{zoomlevel}"
             _eval_img = None
