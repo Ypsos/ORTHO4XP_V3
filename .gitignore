@@ -163,3 +163,6 @@ _score_exports/
 # Clé de signature du cache aéroport — unique par machine, ne JAMAIS publier
 .apt_cache_key
 _apt_cache_key
+
+# Tuiles perso rangees dans Providers (ne pas publier)
+Providers/+[0-9]*/

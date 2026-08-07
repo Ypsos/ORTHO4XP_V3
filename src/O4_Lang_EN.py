@@ -10,6 +10,8 @@ LANG = "EN"
 T = {
 
     # ── MAIN WINDOW ────────────────────────────────────────────────
+    "🖼 Add Image Provider"                 : "🛰 Add high-resolution imagery",
+
     "Latitude:"                         : "Latitude:",
     "Longitude:"                        : "Longitude:",
     "Imagery:"                          : "Imagery:",
@@ -73,6 +75,9 @@ T = {
 
     # ── TIMELINE / BENCHMARK (Phase 3) ────────────────────────────
     "⏱ Timeline"                        : "⏱ Timeline",
+    "🎯 Scoring build : ON" : "🎯 Scoring build: ON",
+    "🎯 Scoring build : OFF" : "🎯 Scoring build: OFF",
+    "scoring_build_tooltip" : "ON: provider scoring runs during the build (slower). OFF: faster build, no scoring.",
     "⏱ Timeline — Durées du build"      : "⏱ Timeline — Build durations",
     "Timeline non disponible."          : "Timeline not available.",
     "Fermer"                            : "Close",

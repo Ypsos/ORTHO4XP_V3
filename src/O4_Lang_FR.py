@@ -11,6 +11,8 @@ LANG = "FR"
 T = {
 
     # ── FENÊTRE PRINCIPALE ─────────────────────────────────────────
+    "🖼 Add Image Provider"                 : "🛰 Ajouter une imagerie haute résolution",
+
     "Latitude:"                         : "Latitude :",
     "Longitude:"                        : "Longitude :",
     "Imagery:"                          : "Imagerie :",
@@ -69,6 +71,9 @@ T = {
     # ── PANNEAU COLOR NORMALIZE ────────────────────────────────────
     # ── TIMELINE / BENCHMARK (Phase 3) ────────────────────────────
     "⏱ Timeline"                        : "⏱ Chronologie",
+    "🎯 Scoring build : ON" : "🎯 Scoring build : ON",
+    "🎯 Scoring build : OFF" : "🎯 Scoring build : OFF",
+    "scoring_build_tooltip" : "ON : le scoring est calcule pendant le build (plus long). OFF : build plus rapide, sans scoring.",
     "⏱ Timeline — Durées du build"      : "⏱ Chronologie — Durées du build",
     "Timeline non disponible."          : "Chronologie non disponible.",
     "Fermer"                            : "Fermer",
