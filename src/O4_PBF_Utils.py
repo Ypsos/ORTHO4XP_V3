@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
-# ==============================================================================
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
+
 #  O4_PBF_Utils.py  —  ORTHO4XP V3.2
 #
 #  Cache OSM local a partir d'un extrait .pbf (Geofabrik ou equivalent).

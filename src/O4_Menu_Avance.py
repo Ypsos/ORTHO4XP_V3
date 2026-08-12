@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-# ==============================================================================
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
 #  O4_Menu_Avance.py  —  ORTHO4XP V3
 #  « Avancé » : PORTE D'ENTRÉE unique vers les outils avancés.
 #  Auteur : Roland (Ypsos)
@@ -18,6 +24,7 @@
 # ==============================================================================
 
 import sys
+import os
 
 # Détection OS (même logique que O4_lay_generator / O4_Theme_Manager)
 if "dar" in sys.platform:
@@ -42,6 +49,32 @@ try:
 except Exception:
     def tr(key):
         return key
+
+# Langue active : import protégé. Sert UNIQUEMENT à choisir la version FR ou EN
+# d'un tuto PDF et à afficher les libellés de la fenêtre tutos. Si O4_Lang est
+# absent ou trop ancien, on retombe sur "EN" (comportement par défaut demandé).
+try:
+    from O4_Lang import current_lang as _current_lang
+except Exception:
+    def _current_lang():
+        return "EN"
+
+
+def _lang_code():
+    """Retourne 'FR' si la langue active est le français, sinon 'EN'.
+    Toutes les langues autres que FR retombent volontairement sur EN
+    (règle validée avec Roland)."""
+    try:
+        code = (_current_lang() or "EN").upper()
+    except Exception:
+        code = "EN"
+    return "FR" if code == "FR" else "EN"
+
+
+def _L(fr, en):
+    """Libellé bilingue résolu ICI (sans toucher aux fichiers O4_Lang_*).
+    FR si langue active = français, EN sinon."""
+    return fr if _lang_code() == "FR" else en
 
 
 def _c(key, fallback):
@@ -90,6 +123,147 @@ def _make_themed_button(tk, parent, text, command):
         w.bind("<Button-1>", on_click)
         w.bind("<ButtonRelease-1>", on_release)
     return frame
+
+
+# ── Tutos PDF : localisation, scan et ouverture ───────────────────────────────
+# Le dossier Docs/ est à la RACINE du projet (un niveau au-dessus de src/).
+# On le calcule à partir de l'emplacement de CE fichier → robuste quel que soit
+# le répertoire courant d'où Ortho4XP est lancé.
+
+def _docs_dir():
+    """Chemin absolu du dossier Docs/ à la racine du projet."""
+    here = os.path.dirname(os.path.abspath(__file__))          # …/src
+    root = os.path.dirname(here)                                # …/ (racine)
+    return os.path.join(root, "Docs")
+
+
+def _scan_tutos():
+    """Scanne Docs/ et regroupe les PDF par tuto.
+
+    Convention (validée) : « <Titre>_FR.pdf » et « <Titre>_EN.pdf ».
+    Retourne une liste triée de tuples (titre_affiche, {'FR': chemin, 'EN': chemin}).
+    Un tuto qui n'existe que dans une langue reste proposé (on ouvrira la
+    langue disponible). Les PDF sans suffixe _FR/_EN sont classés en EN par
+    défaut pour rester visibles."""
+    docs = _docs_dir()
+    tutos = {}
+    if not os.path.isdir(docs):
+        return []
+    try:
+        noms = os.listdir(docs)
+    except Exception:
+        return []
+    for nom in noms:
+        if not nom.lower().endswith(".pdf"):
+            continue
+        base = nom[:-4]  # retire « .pdf »
+        lang = "EN"
+        cle = base
+        if base[-3:].upper() == "_FR":
+            lang = "FR"; cle = base[:-3]
+        elif base[-3:].upper() == "_EN":
+            lang = "EN"; cle = base[:-3]
+        tutos.setdefault(cle, {})[lang] = os.path.join(docs, nom)
+    # Titre lisible : underscores → espaces (l'utilisateur nomme ses fichiers
+    # de façon parlante, ex. « 03_Importation_Sonny » → « 03 Importation Sonny »).
+    resultat = []
+    for cle in sorted(tutos.keys()):
+        titre = cle.replace("_", " ").strip()
+        resultat.append((titre, tutos[cle]))
+    return resultat
+
+
+def _ouvrir_pdf(chemin, status):
+    """Ouvre un PDF avec le lecteur par défaut du système. Multi-OS."""
+    try:
+        if _OS == "mac":
+            import subprocess
+            subprocess.Popen(["open", chemin])
+        elif _OS == "windows":
+            os.startfile(chemin)  # type: ignore[attr-defined]
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", chemin])
+        status(_L("Tuto ouvert : %s", "Guide opened: %s")
+               % os.path.basename(chemin))
+    except Exception as ex:
+        status(_L("Impossible d'ouvrir le PDF : %s",
+                  "Could not open the PDF: %s") % ex)
+
+
+def _ouvrir_un_tuto(paires, status):
+    """Ouvre la bonne langue d'un tuto : FR si langue active = FR et fichier FR
+    présent, sinon EN ; si une seule langue existe, ouvre celle-là."""
+    want = _lang_code()
+    other = "EN" if want == "FR" else "FR"
+    chemin = paires.get(want) or paires.get(other)
+    if not chemin:
+        status(_L("Aucun fichier PDF pour ce tuto.",
+                  "No PDF file for this guide."))
+        return
+    _ouvrir_pdf(chemin, status)
+
+
+def _ouvrir_tutos(parent, status):
+    """Ouvre une fenêtre listant les tutos PDF présents dans Docs/.
+    Import tkinter LOCAL (au clic), comme les autres actions."""
+    import tkinter as tk
+
+    tutos = _scan_tutos()
+
+    BG = _c("bg", "#3b5b49")
+    FG = _c("fg", "#e8f0ec")
+    FG2 = _c("fg_secondary", "#a6e3a1")
+
+    win = tk.Toplevel(parent) if parent is not None else tk.Toplevel()
+    win.title(_L("Pas à pas — utilisation des modules",
+                 "Step by step — using the modules"))
+    win.configure(bg=BG)
+    win.resizable(False, False)
+
+    tk.Label(win, text=_L("Tutoriels pas à pas", "Step-by-step tutorials"),
+             bg=BG, fg=FG,
+             font=("Helvetica", 15, "bold") if _OS == "mac"
+             else ("Segoe UI", 12, "bold"),
+             pady=8).pack(fill="x", padx=14, pady=(12, 2))
+    tk.Label(win,
+             text=_L("Le PDF s'ouvre en français ou en anglais selon la langue.",
+                     "The PDF opens in French or English depending on the language."),
+             bg=BG, fg=FG2,
+             font=("Helvetica", 11) if _OS == "mac" else ("Segoe UI", 9)
+             ).pack(fill="x", padx=14, pady=(0, 10))
+
+    status_var = tk.StringVar(value="")
+
+    def status_local(msg):
+        status_var.set(msg)
+
+    zone = tk.Frame(win, bg=BG)
+    zone.pack(fill="both", expand=True, padx=14, pady=4)
+
+    if not tutos:
+        tk.Label(zone,
+                 text=_L("Aucun tuto trouvé dans le dossier Docs/.",
+                         "No tutorial found in the Docs/ folder."),
+                 bg=BG, fg=FG2,
+                 font=("Helvetica", 11) if _OS == "mac" else ("Segoe UI", 9)
+                 ).pack(fill="x", pady=8)
+    else:
+        for titre, paires in tutos:
+            b = _make_themed_button(
+                tk, zone, "📄  " + titre,
+                (lambda p=paires: _ouvrir_un_tuto(p, status_local)))
+            b.pack(fill="x", pady=4)
+
+    tk.Label(win, textvariable=status_var, bg=BG, fg=FG2, anchor="w",
+             font=("Helvetica", 11) if _OS == "mac" else ("Segoe UI", 9)
+             ).pack(fill="x", padx=14, pady=(6, 4))
+
+    fermer = _make_themed_button(tk, win, _L("Fermer", "Close"), win.destroy)
+    fermer.pack(padx=14, pady=(2, 12))
+
+    status(_L("Fenêtre des tutos ouverte.", "Tutorials window opened."))
+    return win
 
 
 # ── Actions des boutons ───────────────────────────────────────────────────────
@@ -142,6 +316,23 @@ def _a_venir(nom, status):
     return action
 
 
+def _ouvrir_altimetrie(parent, status):
+    """Ouvre la fenêtre Altimétrie (module O4_Altimetrie_Utils).
+    Import local au clic : la fenêtre Avancé s'ouvre même si le module
+    est absent."""
+    try:
+        import O4_Altimetrie_Utils as ALTI
+    except Exception as ex:
+        status("Module Altimétrie introuvable : %s" % ex)
+        return
+    fn = getattr(ALTI, "open_altimetrie_window", None)
+    if callable(fn):
+        fn(parent)
+        status("Altimétrie ouverte.")
+    else:
+        status("Point d'entrée Altimétrie manquant.")
+
+
 # ── Fenêtre « Avancé » ────────────────────────────────────────────────────────
 def run_menu_avance(parent=None):
     """
@@ -181,8 +372,11 @@ def run_menu_avance(parent=None):
     boutons = [
         (tr("Générer un fichier .comb"), lambda: _ouvrir_comb(parent, status)),
         (tr("JOSM / Extents (masques, zones)"), lambda: _ouvrir_josm(parent, status)),
-        (tr("Altimétrie"), _a_venir(tr("Altimétrie"), status)),
+        (tr("Altimétrie"), lambda: _ouvrir_altimetrie(parent, status)),
         (tr("Correction imagerie"), _a_venir(tr("Correction imagerie"), status)),
+        (_L("📄  Pas à pas — utilisation des modules",
+            "📄  Step by step — using the modules"),
+         lambda: _ouvrir_tutos(parent, status)),
     ]
 
     zone = tk.Frame(win, bg=BG)
@@ -200,8 +394,3 @@ def run_menu_avance(parent=None):
     fermer.pack(padx=14, pady=(2, 12))
 
     return win
-
-
-if __name__ == "__main__":
-    # Ouverture réelle si lancé directement (utile pour vérifier à l'œil).
-    run_menu_avance().mainloop()

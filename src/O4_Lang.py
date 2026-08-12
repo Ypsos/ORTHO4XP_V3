@@ -419,19 +419,30 @@ def show_language_dialog(parent=None, on_change=None):
             _lbl2code[_l] = _c
         _sel = tk.StringVar(win)
         _sel.set(_prompt)
-        _om = tk.OptionMenu(win, _sel, *_labels,
-                            command=lambda s: _choose(_lbl2code[s]))
-        _om.configure(bg=C["btn_bg"], fg=C["btn_fg"],
-                      activebackground=C["accent"], activeforeground=C["btn_fg"],
-                      highlightthickness=0, relief="raised", bd=1,
-                      highlightbackground=C["btn_bg"],
-                      font=("Helvetica", 12, "bold"))
+        # Menu déroulant Mac-safe : ttk.Combobox stylé (même recette que
+        # O4_comb_generator.py). tk.OptionMenu restait blanc/gris sur macOS
+        # et masquait son texte d'invite ; le Combobox l'affiche correctement.
+        _style = ttk.Style(win)
         try:
-            _om["menu"].configure(bg=C["btn_bg"], fg=C["btn_fg"],
-                                  activebackground=C["accent"],
-                                  activeforeground=C["btn_fg"])
+            _style.theme_use("alt")
         except Exception:
             pass
+        _COMBO_BG = "#f0f4f2"   # fond clair (recette O4_comb_generator, lisible sur Mac)
+        _COMBO_FG = "#1e3028"   # texte vert foncé, lisible sur fond clair
+        _style.configure("O4Lang.TCombobox",
+                         fieldbackground=_COMBO_BG,
+                         background=_COMBO_BG,
+                         foreground=_COMBO_FG)
+        _om = ttk.Combobox(win, textvariable=_sel, values=_labels,
+                           state="readonly", style="O4Lang.TCombobox",
+                           font=("Helvetica", 12, "bold"))
+
+        def _on_lang_select(_evt=None):
+            _s = _sel.get()
+            if _s in _lbl2code:
+                _choose(_lbl2code[_s])
+
+        _om.bind("<<ComboboxSelected>>", _on_lang_select)
         _om.pack(pady=(12, 0), ipadx=8, ipady=3)
 
     # Indicateur langue courante + nom du fichier cfg

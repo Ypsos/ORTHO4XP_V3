@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-# ==============================================================================
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
 #  O4_comb_generator.py  —  ORTHO4XP V3
 #  Générateur de fichier .comb assisté (destiné aux utilisateurs sans expert).
 #  Auteur : Roland (Ypsos)
@@ -24,16 +30,6 @@ try:
 except Exception:
     def _tr(key):
         return key
-
-
-#  ============================================================
-#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
-#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
-#  ============================================================
-# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
-# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
-# ============================================================
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CHAPITRE 1 — AFFICHAGE DES PROVIDERS + SCORES
@@ -971,7 +967,7 @@ def _demo_chapitre5():
 #  v1 (cette étape) :
 #     - liste des providers réels + score (Chapitre 1), cases à cocher ;
 #     - colonne ZONE (extent) éditable + PRIORITÉ en menu déroulant 3 choix
-#       (Haute / Moyenne / Basse), JAMAIS de saisie clavier pour la priorité ;
+#       (haute / moyenne / basse), JAMAIS de saisie clavier pour la priorité ;
 #     - bouton « Remplir automatiquement » (suggère une sélection de départ) ;
 #     - bouton « Importer un .comb » (Chapitre 5) ;
 #     - « Aperçu » (Chapitre 4) et « Générer » (écrit dans Providers/, refuse
@@ -1010,10 +1006,10 @@ def _cc(key, fallback):
     return fallback
 
 
-# Correspondance affichage <-> valeur moteur pour la priorité.
-_PRIO_AFF = {"high": "Haute", "medium": "Moyenne", "low": "Basse"}
-_PRIO_VAL = {"Haute": "high", "Moyenne": "medium", "Basse": "low"}
-_PRIO_LISTE = ("Haute", "Moyenne", "Basse")
+# On utilise des clés techniques neutres en anglais, et _tr() fait le travail selon la langue active
+_PRIO_AFF = {"high": _tr("high"), "medium": _tr("medium"), "low": _tr("low")}
+_PRIO_VAL = {_tr("high"): "high", _tr("medium"): "medium", _tr("low"): "low"}
+_PRIO_LISTE = (_tr("high"), _tr("medium"), _tr("low"))
 
 
 def _make_themed_button_c(tk, parent, text, command):
@@ -1142,7 +1138,7 @@ def run_comb_generator(parent=None):
         tk.Entry(rowf, textvariable=var_zone, width=18,
                  bg=ENTRY_BG, fg=ENTRY_FG,
                  insertbackground=ENTRY_FG).grid(row=0, column=3, padx=2)
-        var_prio = tk.StringVar(value="Moyenne")
+        var_prio = tk.StringVar(value=_PRIO_AFF["medium"])
         ttk.Combobox(rowf, textvariable=var_prio, values=_PRIO_LISTE,
                      state="readonly", width=8,
                      style="O4Comb.TCombobox").grid(row=0, column=4, padx=2)
@@ -1184,11 +1180,11 @@ def run_comb_generator(parent=None):
                 continue
             lg["check"].set(1)
             if est_provider_mondial(lg["provider"]):
-                lg["prio"].set("Basse")
+                lg["prio"].set("basse")
             elif score >= 70:
-                lg["prio"].set("Haute")
+                lg["prio"].set("haute")
             else:
-                lg["prio"].set("Moyenne")
+                lg["prio"].set("moyenne")
             n += 1
         status(_tr("Automatique : %d provider(s) coché(s) et priorisé(s). "
                    "Ajuste les zones puis Aperçu/Générer.") % n)
@@ -1270,7 +1266,7 @@ def run_comb_generator(parent=None):
             if e:
                 lg["check"].set(1)
                 lg["zone"].set(e["zone"])
-                lg["prio"].set(_PRIO_AFF.get(e["priorite"], "Moyenne"))
+                lg["prio"].set(_PRIO_AFF.get(e["priorite"], "moyenne"))
             else:
                 lg["check"].set(0)
         preview.delete("1.0", "end")

@@ -1,3 +1,10 @@
+
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
 # ============================================================
 #  O4_Altimetrie_Utils.py  —  ORTHO4XP V3
 #  Module autonome « Altimétrie / DEM »
@@ -2067,6 +2074,290 @@ def open_altimetrie_window(gui):
                                   padx=(8, 0))
 
     frm_bot = tk.Frame(win, bg=BG)
+    def _importer_relief_sonny():
+        """Décompresse le ZIP Sonny téléchargé dans hgt/<Pays>/ et renseigne
+        custom_dem automatiquement avec le .hgt. Pas d'assemblage TIFF :
+        Ortho4XP lit le .hgt directement (comme un DEM pointé à la main)."""
+        try:
+            import O4_Relief_Sonny_Utils as _RS
+            import O4_Relief_Depot_Utils as _DEP
+            import O4_Pays_Utils as _PA
+        except Exception as _e:
+            _log(_tr("Import Sonny : modules absents (%s).") % _e)
+            return
+        # Emplacement défini + existant ? (protection anti-multiples)
+        _memo = _cfg_get("relief_sonny_dir")
+        _etatdep, _hgtdir = _DEP.emplacement_verrouille(_memo, log=_log)
+        if _etatdep != "ok" or not _hgtdir:
+            messagebox.showinfo(
+                _tr("Import du relief"),
+                _tr("Aucun emplacement de relief valide.\n\n"
+                    "Cliquez d'abord « Relief Sonny automatique » pour définir "
+                    "le disque de stockage."),
+                parent=win)
+            return
+        try:
+            _lat = int(gui.lat.get() or 0)
+            _lon = int(gui.lon.get() or 0)
+        except Exception:
+            _log(_tr("Import Sonny : tuile courante illisible."))
+            return
+
+        _nom = _RS.nom_hgt(_lat, _lon)                 # ex. N46W003
+        _pays = _PA.pays_pour_tuile(_lat, _lon)        # ex. France
+        _dossier_pays = os.path.join(_hgtdir, _pays)
+        try:
+            os.makedirs(_dossier_pays, exist_ok=True)
+        except Exception as _e:
+            _log(_tr("Impossible de créer le dossier pays (%s).") % _e)
+            return
+
+        # 1) Repérer le ZIP dans Téléchargements (le bon nom en priorité).
+        _zips = _DEP.trouver_zips_sonny()
+        _zip = None
+        for _z in _zips:
+            if _nom.lower() in os.path.basename(_z).lower():
+                _zip = _z
+                break
+        if not _zip and _zips:
+            _zip = _zips[0]
+        if not _zip:
+            _zip = filedialog.askopenfilename(
+                parent=win,
+                title=_tr("Sélectionnez le fichier ZIP Sonny (%s.zip)") % _nom,
+                filetypes=[("ZIP", "*.zip"), ("Tous", "*.*")])
+        if not _zip:
+            _log(_tr("Import annulé : aucun ZIP trouvé."))
+            return
+
+        # 2) Décompresser DIRECTEMENT dans hgt/<Pays>/.
+        _log(_tr("Décompression dans %s…") % _dossier_pays)
+        _extrait = _DEP.decompresser_zip(_zip, dossier_cible=_dossier_pays,
+                                         log=_log)
+        if not _extrait:
+            _log(_tr("Aucun .hgt valide dans ce ZIP."))
+            return
+
+        # 3) Chemin du .hgt final -> custom_dem.
+        _hgt_final = os.path.join(_dossier_pays, _nom + ".hgt")
+        if not os.path.isfile(_hgt_final):
+            _hgts = [f for f in os.listdir(_dossier_pays)
+                     if f.lower().endswith(".hgt")]
+            if _hgts:
+                _hgt_final = os.path.join(_dossier_pays, sorted(_hgts)[0])
+            else:
+                _log(_tr("Aucun .hgt en place après décompression."))
+                return
+
+        # 4) Renseigner custom_dem dans le cfg de la tuile (mécanisme identique
+        #    à Assembler : même calcul de tile_cfg avec repli Ortho4XP.cfg).
+        _cle = tile_key(_lat, _lon)
+        try:
+            _bdir = FNAMES.build_dir(_lat, _lon, _custom_build_dir())
+            _tile_cfg = os.path.join(
+                _bdir, "Ortho4XP_%s.cfg" % FNAMES.short_latlon(_lat, _lon))
+            if not os.path.isfile(_tile_cfg) and \
+                    os.path.isfile(os.path.join(_bdir, "Ortho4XP.cfg")):
+                _tile_cfg = os.path.join(_bdir, "Ortho4XP.cfg")
+        except Exception:
+            try:
+                _tile_cfg = os.path.join(FNAMES.Tile_dir, _cle,
+                                         "Ortho4XP_%s.cfg" % _cle)
+            except Exception:
+                _tile_cfg = ""
+
+        if _tile_cfg:
+            try:
+                os.makedirs(os.path.dirname(_tile_cfg), exist_ok=True)
+                ecrire_custom_dem(_tile_cfg, _hgt_final)
+                _log(_tr("custom_dem renseigné dans le cfg de la tuile."))
+                _log(_tile_cfg)
+            except Exception as _e:
+                _log(_tr("custom_dem non écrit : ") + str(_e))
+                
+        # 4bis) Écrire AUSSI custom_dem dans le cfg APP (Ortho4XP.cfg), pour
+        #       que « Recharger CFG app » ne restaure pas un ancien relief.
+        try:
+            _app_cfg_path = os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
+            if os.path.isfile(_app_cfg_path):
+                ecrire_custom_dem(_app_cfg_path, _hgt_final)
+                _log(_tr("custom_dem renseigné aussi dans le cfg application."))
+        except Exception as _e:
+            _log(_tr("cfg application non mis à jour : ") + str(_e))
+
+        # 5) Met à jour le champ « custom_dem » du GUI s'il est ouvert
+        #    (même mécanisme que Assembler : gui._config_win).
+        try:
+            _cw = getattr(gui, "_config_win", None)
+            if _cw is not None and _cw.winfo_exists():
+                _cw.v_["custom_dem"].set(_hgt_final)
+        except Exception:
+            pass
+
+        messagebox.showinfo(
+            _tr("Relief installé"),
+            _tr("Relief rangé dans :\n%s\n\n"
+                "custom_dem a été renseigné dans les fichiers de "
+                "configuration.\n\n"
+                "⚠️  IMPORTANT — Pour voir le chemin du relief dans le champ "
+                "« custom_dem » :\n"
+                "cliquez sur « Charger CFG tuile » (ou « Recharger CFG app »).\n\n"
+                "Sans cette action, le champ affichera encore l'ancien relief.\n\n"
+                "Vous pourrez ensuite lancer la construction de la tuile.")
+            % _dossier_pays,
+            parent=win)
+        _etat(_tr("Relief Sonny prêt."), FG)
+    def _relief_sonny_auto():
+        """Mode débutant : relief HD Sonny automatique pour la tuile courante.
+        - dalles présentes -> assemblage + custom_dem (silence) ;
+        - absentes -> propose l'installation (Oui = guide, Non = relief standard).
+        Ne casse jamais : au moindre souci, relief standard."""
+        try:
+            import O4_Relief_Sonny_Utils as _RS
+            import O4_Relief_Orchestrateur_Utils as _ORCH
+        except Exception as _e:
+            _log(_tr("Relief Sonny : modules absents (%s).") % _e)
+            return
+        try:
+            _lat = int(gui.lat.get() or 0)
+            _lon = int(gui.lon.get() or 0)
+        except Exception:
+            _log(_tr("Relief Sonny : tuile courante illisible."))
+            return
+
+        # PROBLÈME 2 — Si le .hgt de cette tuile est DÉJÀ installé, on ne
+        # relance pas toute la procédure : on renseigne custom_dem et on sort.
+        try:
+            import O4_Relief_Depot_Utils as _DEP0
+            import O4_Pays_Utils as _PA0
+            _memo0 = _cfg_get("relief_sonny_dir")
+            _et0, _hgt0 = _DEP0.emplacement_verrouille(_memo0)
+            if _et0 == "ok" and _hgt0:
+                _nom0 = _RS.nom_hgt(_lat, _lon)
+                _pays0 = _PA0.pays_pour_tuile(_lat, _lon)
+                _deja = os.path.join(_hgt0, _pays0, _nom0 + ".hgt")
+                if os.path.isfile(_deja):
+                    _log(_tr("Relief Sonny déjà installé pour cette tuile : %s")
+                         % _deja)
+                    _importer_relief_sonny()
+                    return
+        except Exception:
+            pass
+        
+        # cfg de la tuile (même calcul que le reste du module).
+        try:
+            _bdir = FNAMES.build_dir(_lat, _lon, _custom_build_dir())
+            _cfg = os.path.join(
+                _bdir, "Ortho4XP_%s.cfg" % FNAMES.short_latlon(_lat, _lon))
+        except Exception:
+            _cfg = None
+
+        _dossier = _RS.emplacement_gere(getattr(FNAMES, "Ortho4XP_dir", "."))
+        _tuiledir = _sortie[0] or _dossier
+
+        _res = _ORCH.generer_relief_tuile(
+            _lat, _lon, _tuiledir, _cfg, _dossier,
+            debord=_debord(),
+            assembler=assembler_tuile,
+            ecrire_cfg=ecrire_custom_dem,
+            log=_log)
+
+        _statut = _res.get("statut")
+        if _statut == _ORCH.FAIT:
+            _log(_tr("Relief Sonny intégré : %d dalle(s).") % _res.get("dalles", 0))
+            _etat(_tr("Relief HD intégré."), FG)
+        elif _statut == _ORCH.A_INSTALLER:
+            try:
+                import O4_Relief_Sonny_Utils as _RS2
+                _zipnom = _RS2.nom_hgt(_lat, _lon) + ".zip"
+            except Exception:
+                _zipnom = "(le fichier de votre zone)"
+            _rep = messagebox.askyesno(
+                _tr("Relief haute définition"),
+                _tr("Un relief haute définition (Sonny) est disponible pour "
+                    "cette zone.\n\nSouhaitez-vous l'installer maintenant ?\n\n"
+                    "Oui : définir où stocker, puis télécharger le fichier.\n"
+                    "Non : continuer avec le relief standard."),
+                parent=win)
+            if not _rep:
+                _log(_tr("Relief standard conservé."))
+            else:
+                try:
+                    import O4_Relief_Depot_Utils as _DEP
+                except Exception as _e:
+                    _log(_tr("Dépôt Sonny indisponible (%s).") % _e)
+                    return
+                # PROTECTION : emplacement déjà défini ? On ne recrée pas.
+                _memo = _cfg_get("relief_sonny_dir")
+                _etatdep, _hgtok = _DEP.emplacement_verrouille(_memo, log=_log)
+                if _etatdep == "ok":
+                    _hgtdir = _hgtok
+                    _log(_tr("Emplacement relief déjà défini : %s") % _hgtdir)
+                elif _etatdep == "introuvable":
+                    if not messagebox.askyesno(
+                            _tr("Emplacement introuvable"),
+                            _tr("L'emplacement du relief défini précédemment est "
+                                "introuvable (disque débranché ou déplacé ?).\n\n"
+                                "Voulez-vous en définir un nouveau ?"),
+                            parent=win):
+                        _log(_tr("Installation annulée."))
+                        return
+                    _hgtdir = None
+                else:
+                    _hgtdir = None
+                # Première définition (ou redéfinition acceptée).
+                if not _hgtdir:
+                    messagebox.showinfo(
+                        _tr("Étape 1 sur 2 — Emplacement de stockage"),
+                        _tr("Vous n'avez encore RIEN à télécharger.\n\n"
+                            "Indiquez le disque où Ortho4XP rangera vos reliefs "
+                            "(prévoyez plusieurs Go d'espace libre).\n\n"
+                            "Ortho créera tout seul un dossier dédié et ses "
+                            "sous-dossiers par pays. Vous n'y toucherez plus.\n\n"
+                            "Cliquez OK, puis choisissez le disque."),
+                        parent=win)
+                    _disque = filedialog.askdirectory(
+                        parent=win,
+                        title=_tr("Disque où STOCKER le relief (rien à chercher "
+                                  "ici)"),
+                        initialdir=os.path.expanduser("~"))
+                    if not _disque:
+                        _log(_tr("Installation annulée."))
+                        return
+                    _ok, _libre = _DEP.assez_d_espace(_disque)
+                    if not _ok:
+                        if not messagebox.askyesno(
+                                _tr("Espace disque limité"),
+                                _tr("Ce disque ne dispose que de %.1f Go "
+                                    "libres.\nContinuer quand même ?") % _libre,
+                                parent=win):
+                            _log(_tr("Installation annulée (espace)."))
+                            return
+                    _hgtdir = _DEP.creer_structure(_disque, log=_log)
+                    if not _hgtdir:
+                        _log(_tr("Impossible de créer la structure."))
+                        return
+                    _cfg_set("relief_sonny_dir", _hgtdir)
+                # Étape 2 : quel fichier prendre (nom exact).
+                messagebox.showinfo(
+                    _tr("Étape 2 sur 2 — Téléchargement"),
+                    _tr("Le site Sonny va s'ouvrir.\n\n"
+                        "Sélectionnez votre pays, puis téléchargez le fichier :\n\n"
+                        "        %s\n\n"
+                        "Une fois téléchargé, cliquez « Importer le relief "
+                        "téléchargé ».") % _zipnom,
+                    parent=win)
+                try:
+                    import webbrowser
+                    webbrowser.open("https://sonny.4lima.de")
+                except Exception:
+                    pass
+                _log(_tr("Téléchargez %s puis « Importer le relief téléchargé ».")
+                     % _zipnom)
+        elif _statut == _ORCH.HORS_ZONE:
+            _log(_tr("Hors zone Sonny : relief standard."))
+        else:
+            _log(_tr("Relief Sonny indisponible : relief standard."))
     frm_bot.pack(pady=(6, 12))
     # Ordre des boutons = ordre réel du travail :
     #   structure  →  préparation des données  →  assemblage de la tuile
@@ -2089,7 +2380,11 @@ def open_altimetrie_window(gui):
          lambda: (_ajouter_pays(), _rafraichir()), 2, 1),
         (_tr("Emplacement TIFF / assemble"),
          lambda: (_choisir_dans_structure(), _rafraichir()), 2, 2),
-        (_tr("Fermer"), win.destroy, 2, 3),
+         (_tr("Relief Sonny automatique"),
+         lambda: _relief_sonny_auto(), 3, 0),
+        (_tr("Installer le ZIP téléchargé"),
+         lambda: _importer_relief_sonny(), 3, 1),
+         (_tr("Fermer"), win.destroy, 2, 3),
     ]
     for _txt, _cmd, _r, _c in _defs:
         _b = ttk.Button(frm_bot, text=_txt, command=_cmd)

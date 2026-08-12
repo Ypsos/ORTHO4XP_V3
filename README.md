@@ -301,7 +301,19 @@ Multiplateforme : Compatible Windows, macOS (puces Apple Silicon et processeurs 
 <img width="1005" height="1180" alt="Createur ficheir CombFR" src="https://github.com/user-attachments/assets/a5eb68e7-86f4-4c45-85cc-6140d17c4a8e" />
 
 -----
+### Ajout — Tutoriels PDF intégrés (menu Avancé)
 
+Nouveau bouton **« 📄 Pas à pas — utilisation des modules »** dans le menu Avancé.
+
+- Scanne le dossier `Docs/` et liste automatiquement les tutoriels disponibles.
+- Ouvre chaque tuto en **FR** ou **EN** selon la langue active (EN par défaut pour les autres langues).
+- Ajout d'un PDF = liste mise à jour automatiquement, sans modification de code.
+- Compatible macOS / Windows / Linux.
+
+**Convention de nommage des PDF :** `<Titre>_FR.pdf` et `<Titre>_EN.pdf`, à placer dans `Docs/`.
+
+Fichier modifié : `src/O4_Menu_Avance.py` (aucun fichier de langue impacté).
+-----
 ## 🛠 Utilisation rapide
 
 ### 🍎 Mac
@@ -357,6 +369,8 @@ Distribué sous **GNU GPL v3** dans le respect de la licence du projet original.
 Voir `AVERTISSEMENT_LICENCE_LEGAL.md` pour les détails complets.
 
 JOSM, QGIS et GIMP sont des logiciels tiers indépendants, distribués sous leurs propres licences.
+
+Données altimétriques (relief) : Modèles numériques de terrain LiDAR de Sonny — Sonny's LiDAR Digital Terrain Models of Europe — disponibles sur sonny.4lima.de. Licenciés sous Creative Commons Attribution 4.0 (CC BY 4.0).
 
 [![ORTHO4XP V3 Banner](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/BanniereGithub.png)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/BanniereGithub.png)
 >
@@ -654,6 +668,27 @@ Cross-platform: Compatible with Windows, macOS (Apple Silicon chips and Intel pr
 <img width="782" height="743" alt="Créateur fichier CombEN" src="https://github.com/user-attachments/assets/95c49c62-d0e0-451a-8d74-e2a2758035e3" />
 
 ---
+## 🛠 Fast use ### 🍎 Mac > **⚠️ Mandatory step first** — Download the pre-cleaned launcher first (without blocking Gatekeeper): **[⬇️ Download the pre-installed Mac launcher](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)** 1. Download the main archive **ORTHO4XP_V3** (green button "Code" → "Download ZIP") 2. Unzip the archive - rename the folder to `ORTHO4XP_V3` 3. Download the ZIP of the Release above and extract `Lanceur_Installation_Prerequisi.app` directly from the folder `ORTHO4XP_V3` 4. Place the folder `ORTHO4XP_V3` in your folder **`Applications`** (`/Users/your_name/Applications/`) 5. Double-click on `Lanceur_Installation_Prerequisi.app` 
+---
+🛰 Imagery Provider Generator (.lay) New graphical tool to create .lay files (image providers) without manual editing. Window features accessible via the "Add high-resolution imagery" button Simple form (WMS / TMS / WMTS) with live preview of the .lay Automatic recording in Providers/<active tile>/ Load and Delete Buttons Bilingual interface FR / EN Integrated presets: IGN Ortho France (France + DOM-TOM) and PCRS_IGN Files O4_lay_generator.py (new autonomous module) O4_Lang_FR.py / O4_Lang_EN.py (translations added) Credits Preset IGN Ortho France: contribution from domisilasol (Dominique), X-Plane.fr
+---
+🛰 Générateur de fournisseurs d'imagerie (.lay)
+Nouvel outil graphique pour créer des fichiers .lay (fournisseurs d'imagerie) sans édition manuelle.
+Fonctionnalités
+Fenêtre accessible via le bouton « Ajouter une imagerie haute résolution »
+Formulaire simple (WMS / TMS / WMTS) avec aperçu en direct du .lay
+Enregistrement automatique dans Providers/<tuile active>/
+Boutons Charger et Effacer
+Interface bilingue FR / EN
+Presets intégrés : IGN Ortho France (France + DOM-TOM) et PCRS_IGN
+Fichiers
+O4_lay_generator.py (nouveau module autonome)
+O4_Lang_FR.py / O4_Lang_EN.py (traductions ajoutées)
+Crédits
+Preset IGN Ortho France : contribution de domisilasol (Dominique), X-Plane.fr
+
+
+---
 ## 🛠 Quick start
 
 ### 🍎 Mac
@@ -709,3 +744,5 @@ Distributed under **GNU GPL v3** in accordance with the license of the original 
 See `AVERTISSEMENT_LICENCE_LEGAL.md` for full details.
 
 JOSM, QGIS and GIMP are independent third-party applications, distributed under their own licenses.
+
+Altimetric data (relief): Sonny's LiDAR Digital Terrain Models of Europe — available on sonny.4lima.de. Licensed under Creative Commons Attribution 4.0 (CC BY 4.0).

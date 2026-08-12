@@ -9,6 +9,10 @@
 # This authorship notice MUST NEVER BE REMOVED,
 # regardless of any subsequent evolution of the file.
 #============================================================
+# CONTRIBUTEURS / CONTRIBUTORS :
+#   - Preset IGN Ortho France (WMTS, France + DOM-TOM) :
+#     domisilasol (Dominique) — X-Plane.fr, août 2026.
+#============================================================
 # -*- coding: utf-8 -*-
 """
 O4_lay_generator.py
@@ -29,6 +33,16 @@ elif "win" in sys.platform:
     _OS = "windows"
 else:
     _OS = "linux"
+
+# --- traduction (réutilise le tr() d'Ortho ; fallback = texte tel quel) ---
+try:
+    from O4_Lang import tr as _tr
+    def tr(k, default=""):
+        v = _tr(k)
+        return v if v != k else (default or k)
+except Exception:
+    def tr(k, default=""):
+        return default or k
 
 # --- thème (réutilise O4_Theme_Manager comme le GUI principal) -------------
 try:
@@ -173,7 +187,7 @@ def run_lay_generator(parent=None):
         cur_lat, cur_lon = 48, -6
 
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
-    win.title("Générateur de provider (.lay)")
+    win.title(tr("lay_win_title", "Générateur de provider (.lay)"))
     win.configure(bg=BG)
     win.resizable(False, False)
 
@@ -205,15 +219,15 @@ def run_lay_generator(parent=None):
                      row=r, column=1, sticky="ew", padx=(4, 8), pady=3)
         return var
 
-    tk.Label(win, text="Tuile active : {}".format(_tile_name(cur_lat, cur_lon)),
+    tk.Label(win, text=tr("lay_active_tile", "Tuile active :") + " " + _tile_name(cur_lat, cur_lon),
              bg=FG2, fg="#14241c", font=("", 13, "bold")).grid(
              row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=(10, 8))
 
-    lbl(1, "Nom du provider");   v_name = entry(1)
-    lbl(2, "Type de requête");   v_type = combo(2, ["wms", "tms", "wmts"], "wms")
-    lbl(3, "url_prefix (WMS)");  v_prefix = entry(3)
-    lbl(4, "url_template (TMS)");v_template = entry(4)
-    lbl(5, "layers (WMS)");      v_layers = entry(5)
+    lbl(1, tr("lay_provider_name", "Nom du provider"));   v_name = entry(1)
+    lbl(2, tr("lay_request_type", "Type de requête"));   v_type = combo(2, ["wms", "tms", "wmts"], "wms")
+    lbl(3, tr("lay_url_prefix", "url_prefix (WMS)"));  v_prefix = entry(3)
+    lbl(4, tr("lay_url_template", "url_template (TMS)"));v_template = entry(4)
+    lbl(5, tr("lay_layers", "layers (WMS)"));      v_layers = entry(5)
     lbl(6, "epsg_code");         v_epsg = entry(6, "3857")
     lbl(7, "wms_size");          v_size = entry(7, "512")
     lbl(8, "wms_version");       v_ver = entry(8, "1.3.0")
@@ -221,7 +235,7 @@ def run_lay_generator(parent=None):
     lbl(10, "imagery_dir");      v_dir = combo(10, ["grouped", "code"], "grouped")
 
     v_gui = tk.BooleanVar(value=True)
-    tk.Checkbutton(win, text="Afficher dans le menu (in_GUI)", variable=v_gui,
+    tk.Checkbutton(win, text=tr("lay_in_gui", "Afficher dans le menu (in_GUI)"), variable=v_gui,
                    bg=BG, fg=FG, selectcolor=BG, activebackground=BG,
                    activeforeground=FG, highlightthickness=0).grid(
                    row=11, column=0, columnspan=2, sticky="w", padx=8, pady=(4, 2))
@@ -263,6 +277,22 @@ def run_lay_generator(parent=None):
         v_epsg.set("3857"); v_size.set("512"); v_ver.set("1.3.0")
         v_img.set("png"); v_dir.set("code"); v_gui.set(True)
         status.config(text="Preset PCRS_IGN chargé (PCRS nécessite O4_Custom_URL.py).")
+
+    def do_preset_ign_ortho():
+        # Ortho IGN France entière + DOM-TOM (WMTS tuilé, TMS webmercator).
+        # Source directe : aucun O4_Custom_URL.py nécessaire.
+        # Contributeur : domisilasol (Dominique) — X-Plane.fr, 08/2026.
+        v_name.set("IGN_Ortho_France"); v_type.set("tms")
+        v_template.set(
+            "https://data.geopf.fr/wmts?&SERVICE=WMTS&VERSION=1.0.0"
+            "&REQUEST=GetTile&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal"
+            "&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={zoom}"
+            "&TILEROW={y}&TILECOL={x}")
+        v_prefix.set(""); v_layers.set("")
+        v_epsg.set("3857"); v_size.set("512"); v_ver.set("1.3.0")
+        v_img.set("jpeg"); v_dir.set("grouped"); v_gui.set(True)
+        status.config(text="Preset IGN Ortho France chargé (France + DOM-TOM) "
+                            "— contributeur : domisilasol.")
 
     def do_clear():
         for v in (v_name, v_prefix, v_template, v_layers):
@@ -306,7 +336,8 @@ def run_lay_generator(parent=None):
     def do_create():
         name = v_name.get().strip()
         if not name:
-            messagebox.showerror("Provider (.lay)", "Le nom du provider est obligatoire.")
+            messagebox.showerror("Provider (.lay)",
+                    tr("lay_msg_name_req", "Le nom du provider est obligatoire."))
             return
         fields = collect()
         problems = validate_fields(fields)
@@ -321,17 +352,23 @@ def run_lay_generator(parent=None):
             else:
                 return
         if ok:
-            messagebox.showinfo("Provider (.lay)", "Fichier créé :\n{}".format(path))
-            status.config(text="Créé : {}".format(path))
+            messagebox.showinfo(
+                "Provider (.lay)",
+                tr("lay_msg_created", "Fichier créé :") + "\n" + path + "\n\n"
+                + "⚠️ " + tr("lay_msg_restart",
+                    "Fermez puis relancez Ortho4XP pour que la nouvelle "
+                    "imagerie apparaisse dans le menu Imagery."))
+            status.config(text=tr("lay_msg_created", "Fichier créé :") + " " + path)
 
     bar = tk.Frame(win, bg=BG)
     bar.grid(row=13, column=0, columnspan=2, pady=12)
-    _make_themed_button(tk, bar, "🛰 Preset PCRS_IGN", do_preset_pcrs).pack(side="left", padx=5)
-    _make_themed_button(tk, bar, "📂 Charger un .lay", do_load).pack(side="left", padx=5)
-    _make_themed_button(tk, bar, "🧹 Effacer", do_clear).pack(side="left", padx=5)
-    _make_themed_button(tk, bar, "💾 Créer le .lay", do_create).pack(side="left", padx=5)
+    _make_themed_button(tk, bar, tr("lay_btn_pcrs", "🛰 Preset PCRS_IGN"), do_preset_pcrs).pack(side="left", padx=5)
+    _make_themed_button(tk, bar, tr("lay_btn_ign", "🇫🇷 Preset IGN Ortho"), do_preset_ign_ortho).pack(side="left", padx=5)
+    _make_themed_button(tk, bar, tr("lay_btn_load", "📂 Charger un .lay"), do_load).pack(side="left", padx=5)
+    _make_themed_button(tk, bar, tr("lay_btn_clear", "🧹 Effacer"), do_clear).pack(side="left", padx=5)
+    _make_themed_button(tk, bar, tr("lay_btn_create", "💾 Créer le .lay"), do_create).pack(side="left", padx=5)
 
-    tk.Label(win, text="Aperçu du fichier .lay qui sera généré",
+    tk.Label(win, text=tr("lay_preview_label", "Aperçu du fichier .lay qui sera généré"),
              bg=BG, fg=FG2, anchor="w").grid(row=14, column=0, columnspan=2,
              sticky="ew", padx=8, pady=(6, 0))
     preview = tk.Text(win, height=10, width=54, bg=CON_BG, fg=CON_FG,

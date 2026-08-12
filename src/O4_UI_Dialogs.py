@@ -3,16 +3,11 @@
 
 #  ============================================================
 #  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
-#  Ce module a été conçu et automatiséepar Roland (Ypsos) pour Ortho4XP V3. 
-#  Sur la base d'une demande de LenOy d'un scan de performance manuel des meilleurs fournisseurs d'image par tuile.
-#  Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
 #  ============================================================
-#  ============================================================
-#  CREDIT — AUTHOR: Roland (Ypsos) - March 2026
-#  This module was designed and automated by Roland (Ypsos) for Ortho4XP V3.
-#  Based on a request from LenOy for a manual performance scan of the best imagery providers per tile.
-#  This attribution notice MUST NEVER BE REMOVED, regardless of any subsequent changes to the file.
-#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
 
 import sys
 import tkinter as tk
