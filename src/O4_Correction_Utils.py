@@ -123,8 +123,32 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     frm_main = tk.Frame(corr, bg=BG)
     frm_main.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
-    frm_list = tk.Frame(frm_main, bg=BG)
-    frm_list.pack(side=tk.LEFT, fill=tk.BOTH)
+    # Colonne de gauche = champ de recherche (au-dessus) + liste (en dessous).
+    # Le champ filtre l'affichage de la liste « JPG à corriger » à la volée :
+    # on tape quelques lettres (provider, ZL, coordonnées, région…) et seules
+    # les lignes contenant ce texte restent visibles. Champ vide = tout est
+    # affiché, exactement comme avant (aucune régression). Le filtre est
+    # purement VISUEL : il ne supprime rien, ne coche/décoche rien, et les
+    # coches déjà faites sur des lignes momentanément masquées sont conservées
+    # (elles réapparaissent en vidant le champ). Cas légitimes FRANCE /
+    # EXCEPTION_FRANCE jamais cachés à tort : l'utilisateur maîtrise le texte.
+    frm_left_col = tk.Frame(frm_main, bg=BG)
+    frm_left_col.pack(side=tk.LEFT, fill=tk.BOTH)
+
+    frm_search = tk.Frame(frm_left_col, bg=BG)
+    frm_search.pack(fill=tk.X, pady=(0, 4))
+    tk.Label(frm_search, text=_tr("🔍 Filtrer :"), font=FONT,
+             bg=BG, fg=FG).pack(side=tk.LEFT)
+    _filtre_var = tk.StringVar(value="")
+    _entry_filtre = tk.Entry(frm_search, textvariable=_filtre_var,
+                             font=("TkFixedFont", 10), width=22,
+                             bg=PREV_BG, fg=FG, insertbackground=FG,
+                             highlightthickness=1,
+                             highlightbackground="#1a4a1a")
+    _entry_filtre.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 0))
+
+    frm_list = tk.Frame(frm_left_col, bg=BG)
+    frm_list.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
     scrollbar = tk.Scrollbar(frm_list, bg=BG, troughcolor=BG)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -173,7 +197,18 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
         # Rubrique « à fabriquer » retirée : la détection des défauts se fait
         # désormais visuellement dans le preview de la tuile. Tous les patches
         # sont présentés dans une liste unique.
-        _norm = _all
+        # Filtre texte (insensible à la casse) : si le champ est vide, tout est
+        # affiché comme avant. Sinon, seules les lignes contenant le texte
+        # restent visibles. Le filtre ne touche NI check_vars NI les fichiers :
+        # il ne fait que choisir quelles lignes dessiner.
+        try:
+            _q = _filtre_var.get().strip().lower()
+        except Exception:
+            _q = ""
+        if _q:
+            _norm = [f for f in _all if _q in f.lower()]
+        else:
+            _norm = _all
 
         def _ajout_ligne(fname, couleur):
             var = check_vars[fname]
@@ -197,7 +232,11 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                      bg=BG, fg=FG, anchor="w").pack(fill=tk.X, pady=(6, 2))
 
         _ordre_affiche = []  # ordre visuel pour la navigation clavier
-        _ajout_titre(_tr("── JPG à corriger ──") + f" ({len(_norm)})")
+        if _q and len(_norm) != len(_all):
+            _titre_compte = f" ({len(_norm)}/{len(_all)})"
+        else:
+            _titre_compte = f" ({len(_norm)})"
+        _ajout_titre(_tr("── JPG à corriger ──") + _titre_compte)
         for fname in _norm:
             _ajout_ligne(fname, FG2)
             _ordre_affiche.append(fname)
@@ -208,6 +247,17 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     for fname in sorted_files:
         check_vars[fname] = tk.BooleanVar(value=False)
     _rebuild_list()
+
+    # Rafraîchir la liste à chaque frappe dans le champ de filtre. On passe par
+    # trace_add sur la variable : robuste, et ne casse pas si la fonction n'est
+    # pas encore prête. La liste défilante revient en haut après filtrage.
+    def _on_filtre_change(*_a):
+        try:
+            _rebuild_list()
+            canvas_list.yview_moveto(0.0)
+        except Exception:
+            pass
+    _filtre_var.trace_add("write", _on_filtre_change)
 
     frm_preview = tk.Frame(frm_main, bg=PREV_BG)
     frm_preview.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(12, 0))

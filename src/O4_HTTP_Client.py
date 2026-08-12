@@ -32,6 +32,36 @@ except ImportError:
     httpx = None
 
 
+def _parse_retry_after(value: Optional[str]) -> Optional[float]:
+    """
+    Interprète l'en-tête HTTP 'Retry-After'.
+    Deux formats possibles selon la norme HTTP :
+      - un nombre de secondes (ex. "120")
+      - une date HTTP absolue (ex. "Wed, 21 Oct 2026 07:28:00 GMT")
+    Retourne un délai en secondes (float) ou None si non interprétable.
+    """
+    if not value:
+        return None
+    value = value.strip()
+    # Cas 1 : délai en secondes
+    try:
+        return max(0.0, float(value))
+    except (ValueError, TypeError):
+        pass
+    # Cas 2 : date HTTP absolue
+    try:
+        from email.utils import parsedate_to_datetime
+        import datetime
+        dt = parsedate_to_datetime(value)
+        if dt is None:
+            return None
+        now = datetime.datetime.now(dt.tzinfo)
+        delay = (dt - now).total_seconds()
+        return max(0.0, delay)
+    except Exception:
+        return None
+
+
 class HTTPClient:
     """
     Client HTTP asynchrone basé sur httpx.
@@ -79,6 +109,23 @@ class HTTPClient:
         for attempt in range(1, self.retries + 1):
             try:
                 resp = await client.get(url, headers=headers)
+                # Gestion spécifique HTTP 429 (Too Many Requests) :
+                # on lit l'en-tête Retry-After et on respecte le délai demandé
+                # par le serveur. Si absent, on retombe sur le backoff habituel.
+                if getattr(resp, "status_code", None) == 429:
+                    if attempt < self.retries:
+                        retry_after = _parse_retry_after(
+                            resp.headers.get("Retry-After")
+                        )
+                        if retry_after is not None:
+                            wait = retry_after
+                        else:
+                            wait = 1.0 * attempt
+                        last_error = RuntimeError("HTTP 429 Too Many Requests")
+                        await asyncio.sleep(wait)
+                        continue
+                    else:
+                        resp.raise_for_status()
                 resp.raise_for_status()
                 return resp.content
             except Exception as e:

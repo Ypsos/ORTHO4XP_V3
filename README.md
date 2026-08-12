@@ -344,6 +344,7 @@ Merci également à tous ceux qui remontent leurs retours sur les forums.
 | **Adaptation 1.40** | Shred86 |
 | **Référence technique** | Jojo |
 | **Tests Windows / Linux** | Cricri |
+| **Autres contributeurs** | domisilasol(Dominique), Jasum,  Len0y|
 
 ---
 
@@ -703,6 +704,7 @@ Thanks as well to everyone posting feedback on the forums.
 | **1.40 adaptation** | Shred86 |
 | **Technical reference** | Jojo |
 | **Windows / Linux testing** | Cricri |
+| **Other contributorss** | domisilasol(Dominique), Jasum,  Len0y|
 
 ---
 

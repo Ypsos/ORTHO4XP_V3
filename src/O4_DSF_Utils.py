@@ -745,8 +745,6 @@ def build_dsf(tile, download_queue):
                         # maybe target_tex was a DXT5, it should ne a DXT1
                         if (os.path.getsize(target_tex) > 20000000):
                             rebuild = True
-                        else:
-                            print(os.path.getsize(target_tex))
                     
                     if (rebuild or not tile.imprint_masks_to_dds):
                         mask_im.save(os.path.join(

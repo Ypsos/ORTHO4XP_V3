@@ -795,7 +795,7 @@ class ColorCheckWindow(tk.Toplevel):
             ("🔍 Scanner couches",        self._scan),
             ("📋 Exporter liste",          self._export_list),
             ("🎨 Correction en série",     self._apply_group_correction),
-            ("💾 Générer .comb",           self._save_comb_for_group),
+            ("🛡 Création Zones à protéger", self._save_comb_for_group),
             ("👁 Batch Preview couche",    self._batch_preview),
             ("🗑 Supprimer DDS sélect.",   self._delete_one),
             ("🗑 Supprimer TOUS DDS ZL",   self._delete_all),
