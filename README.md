@@ -359,9 +359,6 @@ Données altimétriques (relief) : Modèles numériques de terrain LiDAR de Sonn
 
 ---
 
-[![ORTHO4XP V3 Banner](https://github.com/Ypsos/ORTHO4XP_V3/raw/ORTHO4XP_V3/BanniereGithub.png)](https://github.com/Ypsos/ORTHO4XP_V3/blob/ORTHO4XP_V3/BanniereGithub.png)
-
----
 ---
 
 # ORTHO4XP V3 — Official Version
