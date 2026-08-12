@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ============================================================
+# Copyright (c) 2024-2026 Roland (Ypsos)
+#
+# CRÉDIT — AUTEUR : Roland (Ypsos) — Mars 2026
+# Module conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3.
+# Cette notice d'auteur et de copyright doit être conservée
+# conformément à la GPLv3.
+# ============================================================
+# Copyright (c) 2024-2026 Roland (Ypsos)
+#
+# CREDIT — AUTHOR: Roland (Ypsos) — March 2026
+# Module designed and specified by Roland (Ypsos) for Ortho4XP V3.
+# This authorship and copyright notice must be retained
+# in accordance with GPLv3.
+# ============================================================
 """
 create_launcher.py — Ortho4XP V3.0
 Génère le lanceur natif par plateforme :

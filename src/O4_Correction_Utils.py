@@ -1,9 +1,17 @@
-#  ============================================================
-#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
-#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
-#  ============================================================
-# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
-# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
+# ============================================================
+# Copyright (c) 2024-2026 Roland (Ypsos)
+#
+# CRÉDIT — AUTEUR : Roland (Ypsos) — Mars 2026
+# Module conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3.
+# Cette notice d'auteur et de copyright doit être conservée
+# conformément à la GPLv3.
+# ============================================================
+# Copyright (c) 2024-2026 Roland (Ypsos)
+#
+# CREDIT — AUTHOR: Roland (Ypsos) — March 2026
+# Module designed and specified by Roland (Ypsos) for Ortho4XP V3.
+# This authorship and copyright notice must be retained
+# in accordance with GPLv3.
 # ============================================================
 #  O4_Correction_Utils.py  —  ORTHO4XP V3
 #  Module autonome « Correction imagerie et traitement de zone »
