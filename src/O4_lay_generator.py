@@ -1,18 +1,14 @@
-# ============================================================
-# Copyright (c) 2024-2026 Roland (Ypsos)
-#
-# CRÉDIT — AUTEUR : Roland (Ypsos) — Mars 2026
-# Module conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3.
-# Cette notice d'auteur et de copyright doit être conservée
-# conformément à la GPLv3.
-# ============================================================
-# Copyright (c) 2024-2026 Roland (Ypsos)
-#
-# CREDIT — AUTHOR: Roland (Ypsos) — March 2026
-# Module designed and specified by Roland (Ypsos) for Ortho4XP V3.
-# This authorship and copyright notice must be retained
-# in accordance with GPLv3.
-# ============================================================
+#============================================================
+# CRÉDIT — AUTEUR : Roland (Ypsos). — 2026
+# Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3.
+# Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE,
+# quelle que soit l'évolution ultérieure du fichier.
+#============================================================
+# CREDIT — AUTHOR: Roland (Ypsos). — 2026
+# This module was designed and specified by Roland (Ypsos) for Ortho4XP V3.
+# This authorship notice MUST NEVER BE REMOVED,
+# regardless of any subsequent evolution of the file.
+#============================================================
 # CONTRIBUTEURS / CONTRIBUTORS :
 #   - Preset IGN Ortho France (WMTS, France + DOM-TOM) :
 #     domisilasol (Dominique) — X-Plane.fr, août 2026.
@@ -134,6 +130,25 @@ def parse_lay_text(text: str) -> dict:
             k, v = line.split("=", 1)
             data[k.strip()] = v.strip()
     return data
+
+def scan_existing_lays():
+    """Scanne Providers/ et retourne la liste des .lay trouvés.
+    Retourne une liste de tuples (dossier, nom_fichier, chemin_complet),
+    triée par dossier puis par nom. Lue en direct du disque = toujours à jour."""
+    base = _providers_dir()
+    found = []
+    if not os.path.isdir(base):
+        return found
+    for root, dirs, files in os.walk(base):
+        for fn in files:
+            if fn.lower().endswith(".lay"):
+                full = os.path.join(root, fn)
+                # dossier relatif à Providers/ (ex. "Suisse", "France Pays de la Loire")
+                rel = os.path.relpath(root, base)
+                folder = "" if rel == "." else rel
+                found.append((folder, fn[:-4], full))
+    found.sort(key=lambda t: (t[0].lower(), t[1].lower()))
+    return found
 
 # ===========================================================================
 # BOUTON THÉMATISÉ (fiable macOS : tk.Button ignore souvent bg/fg en Aqua)
@@ -275,28 +290,112 @@ def run_lay_generator(parent=None):
         except Exception:
             pass
 
-    def do_preset_pcrs():
-        v_name.set("PCRS_IGN"); v_type.set("wms")
-        v_prefix.set("custom"); v_layers.set("PCRS.LAMB93")
-        v_epsg.set("3857"); v_size.set("512"); v_ver.set("1.3.0")
-        v_img.set("png"); v_dir.set("code"); v_gui.set(True)
-        status.config(text="Preset PCRS_IGN chargé (PCRS nécessite O4_Custom_URL.py).")
+    def _fill_from_data(data, name=""):
+        """Remplit le formulaire à partir d'un dict de champs .lay."""
+        v_type.set(data.get("request_type", "wms"))
+        v_prefix.set(data.get("url_prefix", ""))
+        v_template.set(data.get("url_template", ""))
+        v_layers.set(data.get("layers", ""))
+        v_epsg.set(data.get("epsg_code", "3857"))
+        v_size.set(data.get("wms_size", data.get("tile_size", "512")))
+        v_ver.set(data.get("wms_version", data.get("wmts_version", "1.3.0")))
+        v_img.set(data.get("image_type", "jpeg"))
+        v_dir.set(data.get("imagery_dir", "grouped"))
+        v_gui.set(str(data.get("in_GUI", "True")).lower() in ("true", "1", "yes"))
+        if name:
+            v_name.set(name)
 
-    def do_preset_ign_ortho():
-        # Ortho IGN France entière + DOM-TOM (WMTS tuilé, TMS webmercator).
-        # Source directe : aucun O4_Custom_URL.py nécessaire.
-        # Contributeur : domisilasol (Dominique) — X-Plane.fr, 08/2026.
-        v_name.set("IGN_Ortho_France"); v_type.set("tms")
-        v_template.set(
-            "https://data.geopf.fr/wmts?&SERVICE=WMTS&VERSION=1.0.0"
-            "&REQUEST=GetTile&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal"
-            "&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={zoom}"
-            "&TILEROW={y}&TILECOL={x}")
-        v_prefix.set(""); v_layers.set("")
-        v_epsg.set("3857"); v_size.set("512"); v_ver.set("1.3.0")
-        v_img.set("jpeg"); v_dir.set("grouped"); v_gui.set(True)
-        status.config(text="Preset IGN Ortho France chargé (France + DOM-TOM) "
-                            "— contributeur : domisilasol.")
+    def do_browse_providers():
+        """Ouvre une fenêtre listant TOUS les .lay présents dans Providers/,
+        lus en direct du disque (toujours à jour). Filtre + double-clic pour
+        charger dans le formulaire. AUCUN preset codé en dur."""
+        lays = scan_existing_lays()
+        win2 = tk.Toplevel(win)
+        win2.title(tr("lay_browse_title", "Providers existants"))
+        win2.configure(bg=BG)
+
+        tk.Label(win2, text=tr("lay_browse_filter", "🔍 Filtrer :"),
+                 bg=BG, fg=FG).grid(row=0, column=0, sticky="w", padx=8, pady=6)
+        v_filter = tk.StringVar()
+        tk.Entry(win2, textvariable=v_filter, width=40,
+                 bg=ENTRY_BG, fg=ENTRY_FG).grid(row=0, column=1, sticky="ew", padx=8, pady=6)
+
+        lst = tk.Listbox(win2, width=70, height=20, bg=CON_BG, fg=CON_FG,
+                         selectbackground=FG2, selectforeground="#14241c",
+                         highlightbackground=BG, highlightcolor=FG2,
+                         relief="flat", bd=6, activestyle="none")
+        lst.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=8, pady=(0, 6))
+        sb = tk.Scrollbar(win2, command=lst.yview, bg=BG,
+                          troughcolor=CON_BG, activebackground=FG2)
+        sb.grid(row=1, column=2, sticky="ns", pady=(0, 6))
+        lst.config(yscrollcommand=sb.set)
+
+        info = tk.Label(win2, text="", bg=BG, fg=FG2, anchor="w")
+        info.grid(row=2, column=0, columnspan=3, sticky="ew", padx=8, pady=(0, 6))
+
+        # index courant : liste des tuples affichés (folder, name, path)
+        shown = []
+
+        def refresh_list(*_):
+            flt = v_filter.get().strip().lower()
+            lst.delete(0, "end")
+            shown.clear()
+            for folder, name, path in lays:
+                label = ("[{}] {}".format(folder, name) if folder else name)
+                if flt and flt not in label.lower():
+                    continue
+                shown.append((folder, name, path))
+                lst.insert("end", label)
+            info.config(text=tr("lay_browse_count", "Providers trouvés :")
+                        + " {}".format(len(shown)))
+
+        def load_selected(*_):
+            sel = lst.curselection()
+            if not sel:
+                return
+            folder, name, path = shown[sel[0]]
+            try:
+                data = parse_lay_text(open(path, encoding="utf-8").read())
+            except Exception as e:
+                messagebox.showerror("Provider (.lay)",
+                        tr("lay_msg_read_err", "Lecture impossible :") + "\n{}".format(e))
+                return
+            _fill_from_data(data, name)
+            status.config(text=tr("lay_browse_loaded", "Chargé depuis Providers :")
+                          + " {}".format(name))
+            win2.destroy()
+
+        v_filter.trace_add("write", refresh_list)
+        lst.bind("<Double-Button-1>", load_selected)
+
+        btnrow = tk.Frame(win2, bg=BG)
+        btnrow.grid(row=3, column=0, columnspan=3, pady=8)
+        _make_themed_button(tk, btnrow, tr("lay_browse_load", "📥 Charger"),
+                            load_selected).pack(side="left", padx=5)
+        _make_themed_button(tk, btnrow, tr("lay_browse_close", "Fermer"),
+                            win2.destroy).pack(side="left", padx=5)
+
+        win2.grid_columnconfigure(1, weight=1)
+        win2.grid_rowconfigure(1, weight=1)
+        refresh_list()
+        if not lays:
+            info.config(text=tr("lay_browse_empty",
+                    "Aucun .lay dans Providers/ pour l'instant. "
+                    "Créez-en un avec ce générateur."))
+
+        # Thème : utiliser la fonction officielle d'Ortho (récursive sur la
+        # fenêtre), PUIS forcer la Listbox car apply_to_root ne la gère pas.
+        if _HAS_THEME:
+            try:
+                _TM.apply_to_root(win2)
+            except Exception:
+                pass
+            try:
+                lst.configure(bg=CON_BG, fg=CON_FG, selectbackground=FG2,
+                              selectforeground="#14241c")
+                info.configure(bg=BG, fg=FG2)
+            except Exception:
+                pass
 
     def do_clear():
         for v in (v_name, v_prefix, v_template, v_layers):
@@ -366,11 +465,14 @@ def run_lay_generator(parent=None):
 
     bar = tk.Frame(win, bg=BG)
     bar.grid(row=13, column=0, columnspan=2, pady=12)
-    _make_themed_button(tk, bar, tr("lay_btn_pcrs", "🛰 Preset PCRS_IGN"), do_preset_pcrs).pack(side="left", padx=5)
-    _make_themed_button(tk, bar, tr("lay_btn_ign", "🇫🇷 Preset IGN Ortho"), do_preset_ign_ortho).pack(side="left", padx=5)
-    _make_themed_button(tk, bar, tr("lay_btn_load", "📂 Charger un .lay"), do_load).pack(side="left", padx=5)
-    _make_themed_button(tk, bar, tr("lay_btn_clear", "🧹 Effacer"), do_clear).pack(side="left", padx=5)
-    _make_themed_button(tk, bar, tr("lay_btn_create", "💾 Créer le .lay"), do_create).pack(side="left", padx=5)
+    row_presets = tk.Frame(bar, bg=BG)
+    row_presets.pack(side="top", pady=(0, 4))
+    row_actions = tk.Frame(bar, bg=BG)
+    row_actions.pack(side="top")
+    _make_themed_button(tk, row_presets, tr("lay_btn_browse", "📋 Providers existants"), do_browse_providers).pack(side="left", padx=5)
+    _make_themed_button(tk, row_actions, tr("lay_btn_load", "📂 Charger un .lay"), do_load).pack(side="left", padx=5)
+    _make_themed_button(tk, row_actions, tr("lay_btn_clear", "🧹 Effacer"), do_clear).pack(side="left", padx=5)
+    _make_themed_button(tk, row_actions, tr("lay_btn_create", "💾 Créer le .lay"), do_create).pack(side="left", padx=5)
 
     tk.Label(win, text=tr("lay_preview_label", "Aperçu du fichier .lay qui sera généré"),
              bg=BG, fg=FG2, anchor="w").grid(row=14, column=0, columnspan=2,

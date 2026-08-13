@@ -341,6 +341,29 @@ def _ouvrir_altimetrie(parent, status):
         status("Point d'entrée Altimétrie manquant.")
 
 
+def _ouvrir_extent_generator(parent, status):
+    """Ouvre le Générateur d'Extents (module O4_Extent_Generator).
+    Import local au clic : la fenêtre Avancé s'ouvre même si le module
+    est absent. Point d'entrée attendu : run_extent_generator(parent)."""
+    try:
+        import O4_Extent_Generator as EXT
+    except Exception as ex:
+        status(_L("Générateur d'Extents introuvable : %s",
+                  "Extent Generator not found: %s") % ex)
+        return
+    fn = getattr(EXT, "run_extent_generator", None)
+    if not callable(fn):
+        status(_L("O4_Extent_Generator présent mais run_extent_generator() absent.",
+                  "O4_Extent_Generator present but run_extent_generator() missing."))
+        return
+    try:
+        fn(parent)
+        status(_L("Générateur d'Extents ouvert.", "Extent Generator opened."))
+    except Exception as ex:
+        status(_L("Erreur à l'ouverture du Générateur d'Extents : %s",
+                  "Error opening the Extent Generator: %s") % ex)
+
+
 # ── Fenêtre « Avancé » ────────────────────────────────────────────────────────
 def run_menu_avance(parent=None):
     """
@@ -380,6 +403,9 @@ def run_menu_avance(parent=None):
     boutons = [
         (tr("Générer un fichier .comb"), lambda: _ouvrir_comb(parent, status)),
         (tr("JOSM / Extents (masques, zones)"), lambda: _ouvrir_josm(parent, status)),
+        (_L("🗺  Générer un Extent (pays / région)",
+            "🗺  Generate an Extent (country / region)"),
+         lambda: _ouvrir_extent_generator(parent, status)),
         (tr("Altimétrie"), lambda: _ouvrir_altimetrie(parent, status)),
         (tr("Correction imagerie"), _a_venir(tr("Correction imagerie"), status)),
         (_L("📄  Pas à pas — utilisation des modules",
