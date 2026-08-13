@@ -1,20 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# ============================================================
-# Copyright (c) 2024-2026 Roland (Ypsos)
-#
-# CRÉDIT — AUTEUR : Roland (Ypsos) — Mars 2026
-# Module conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3.
-# Cette notice d'auteur et de copyright doit être conservée
-# conformément à la GPLv3.
-# ============================================================
-# Copyright (c) 2024-2026 Roland (Ypsos)
-#
-# CREDIT — AUTHOR: Roland (Ypsos) — March 2026
-# Module designed and specified by Roland (Ypsos) for Ortho4XP V3.
-# This authorship and copyright notice must be retained
-# in accordance with GPLv3.
+#  ============================================================
+#  CRÉDIT — AUTEUR : Roland(Ypsos). -Mars 2026
+#  Ce module a été conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3. Cette mention de paternité NE DOIT JAMAIS ÊTRE SUPPRIMÉE, quelle que soit l'évolution ultérieure du fichier.
+#  ============================================================
+# CREDIT — AUTHOR: Roland(Ypsos). -March 2026
+# This module was designed and specified by Roland (Ypsos) for # Ortho4XP V3. This statement of paternity MUST NEVER BE DELETED, # regardless of the subsequent evolution of the file.
 # ============================================================
 
 # """
@@ -2871,6 +2863,13 @@ class FusionPreviewWindow(tk.Toplevel):
 
     CANVAS_W = 880
     CANVAS_H = 620
+    # Marge autour de la mosaïque à l'affichage : elle occupe 95 % du canvas,
+    # centrée, avec juste un léger fond noir de respiration autour.
+    FIT_MARGIN = 0.95
+    # Plafond de zoom = 3× le zoom d'ajustement : au maximum, ~une image remplit
+    # le cadre (niveau utile pour inspecter une jointure). Au-delà, l'aperçu
+    # réduit à 1024 px ne montrerait que du flou → inutile et désorientant.
+    ZOOM_MAX_FIT = 3.0
 
     def __init__(self, parent, dds_path):
         super().__init__(parent)
@@ -2898,6 +2897,11 @@ class FusionPreviewWindow(tk.Toplevel):
         self._drag_start = None
         self._pending    = None
         self._fit_done   = False  # True après le premier fit-to-canvas réel
+
+        # Mosaïque : image centrale (DDS combiné) + 4 DDS voisins lus sur disque.
+        # _center_box = (x0, y0, largeur, hauteur) du bloc central dans la mosaïque.
+        self._mosaic_arr = None
+        self._center_box = None
 
         self._current_radius = tk.IntVar(value=48)
 
@@ -3145,10 +3149,92 @@ class FusionPreviewWindow(tk.Toplevel):
         except Exception:
             pass
 
+        # Assemblage de la mosaïque (centre + 4 voisins sur disque) dans ce
+        # thread de fond : la lecture des DDS voisins ne gèle pas l'interface.
+        self._assemble_mosaic()
+
         self.after(0, lambda: self._lbl_status.config(
-            text=f"{n} px de jointure — glissez / zoomez l'image",
+            text=f"{n} px de jointure — molette : zoom  |  glisser : déplacer",
             fg="#aaffaa"))
         self.after(0, self._render)
+
+    # ── Mosaïque des voisins (lecture disque seule, aucun téléchargement) ──
+
+    def _assemble_mosaic(self):
+        """Assemble une mosaïque 3×3 : image centrale au centre, 4 DDS voisins
+        (haut/bas/gauche/droite) autour, coins noirs. Les voisins sont lus sur
+        DISQUE dans le même dossier, même provider et même ZL — on ne remplace
+        que le préfixe X_Y du nom, le suffixe (provider+ZL) est conservé tel quel.
+        Aucun téléchargement réseau. Voisine absente → bloc noir. En cas de
+        moindre souci, on retombe proprement sur l'affichage centre seul."""
+        try:
+            if self._arr_full is None:
+                return
+            cH, cW = self._arr_full.shape[:2]           # dims du bloc central réduit
+            textures_dir = os.path.dirname(self._dds_path)
+            fname = os.path.basename(self._dds_path)
+            parts = os.path.splitext(fname)[0].split("_")
+            if len(parts) < 3:
+                return                                   # format inattendu → centre seul
+            try:
+                X0 = int(parts[0]); Y0 = int(parts[1])
+            except ValueError:
+                return
+            # Suffixe = tout ce qui suit "X_Y" (provider collé au ZL), conservé mot pour mot
+            prefix_len = len(parts[0]) + 1 + len(parts[1]) + 1
+            suffix = fname[prefix_len:]                  # ex : "IGN_Ortho_France17.dds"
+
+            # Recense les DDS de même suffixe présents et leurs coordonnées X,Y
+            same = {}
+            try:
+                listing = os.listdir(textures_dir)
+            except Exception:
+                listing = []
+            for f in listing:
+                if f.endswith(suffix) and f != fname:
+                    p = os.path.splitext(f)[0].split("_")
+                    if len(p) >= 2:
+                        try:
+                            same[(int(p[0]), int(p[1]))] = f
+                        except ValueError:
+                            pass
+
+            # Voisine la plus proche sur chaque axe : on ne suppose PAS le pas
+            # de la grille, on prend la plus proche réellement présente sur disque.
+            def nearest(cond, dist):
+                cand = [(k, v) for k, v in same.items() if cond(k)]
+                if not cand:
+                    return None
+                return min(cand, key=lambda kv: dist(kv[0]))[1]
+
+            left  = nearest(lambda k: k[1] == Y0 and k[0] < X0, lambda k: X0 - k[0])
+            right = nearest(lambda k: k[1] == Y0 and k[0] > X0, lambda k: k[0] - X0)
+            # Dans les noms Ortho4XP, Y croît vers le bas → "haut" = Y plus petit
+            up    = nearest(lambda k: k[0] == X0 and k[1] < Y0, lambda k: Y0 - k[1])
+            down  = nearest(lambda k: k[0] == X0 and k[1] > Y0, lambda k: k[1] - Y0)
+
+            black = np.zeros((cH, cW, 3), dtype=np.float32)
+
+            def load_block(fn):
+                if fn is None:
+                    return black
+                try:
+                    im = Image.open(os.path.join(textures_dir, fn)).convert("RGB")
+                    im = im.resize((cW, cH), Image.BOX)
+                    return np.asarray(im, dtype=np.float32)
+                except Exception:
+                    return black
+
+            top_row = np.concatenate([black,            load_block(up),   black],             axis=1)
+            mid_row = np.concatenate([load_block(left), self._arr_full,   load_block(right)],  axis=1)
+            bot_row = np.concatenate([black,            load_block(down), black],             axis=1)
+            mosaic  = np.concatenate([top_row, mid_row, bot_row], axis=0)
+
+            self._mosaic_arr = mosaic
+            self._center_box = (cW, cH, cW, cH)          # bloc central : offset (cW,cH), taille (cW,cH)
+        except Exception:
+            self._mosaic_arr = None
+            self._center_box = None
 
     # ── Rendu PIL (pas de canvas natif pour le zoom) ─────────────────
 
@@ -3157,7 +3243,8 @@ class FusionPreviewWindow(tk.Toplevel):
         if self._arr_full is None:
             return
 
-        arr  = self._arr_full
+        # Affiche la mosaïque (centre + voisins) si elle est prête, sinon le centre seul
+        arr  = self._mosaic_arr if self._mosaic_arr is not None else self._arr_full
         H, W = arr.shape[:2]
         radius = int(self._current_radius.get())
 
@@ -3169,7 +3256,7 @@ class FusionPreviewWindow(tk.Toplevel):
         # Sans ce test, winfo_width() retourne 1 ou CANVAS_W fictif → zoom trop petit.
         if not self._fit_done:
             if cw > 100 and ch > 100:
-                self._zoom     = max(0.05, min(cw / max(W, 1), ch / max(H, 1)))
+                self._zoom     = max(0.05, min(cw / max(W, 1), ch / max(H, 1)) * self.FIT_MARGIN)
                 self._pan_x    = 0.0
                 self._pan_y    = 0.0
                 self._fit_done = True
@@ -3184,52 +3271,71 @@ class FusionPreviewWindow(tk.Toplevel):
         if ch < 2:
             ch = self.CANVAS_H
 
-        z   = self._zoom
-        # Pan libre : pas de blocage aux bords — fond noir si hors image
-        cx0 = int(self._pan_x + W / 2.0 - cw / (2.0 * z))
-        cy0 = int(self._pan_y + H / 2.0 - ch / (2.0 * z))
-        # Taille de la fenêtre en pixels-image (clampée pour éviter buffers immenses)
-        sw  = max(1, min(int(cw / z) + 1, W + 2))
-        sh  = max(1, min(int(ch / z) + 1, H + 2))
+        z = self._zoom
+        # Coin haut-gauche du viewport, en coordonnées image (float)
+        vx0 = self._pan_x + W / 2.0 - cw / (2.0 * z)
+        vy0 = self._pan_y + H / 2.0 - ch / (2.0 * z)
 
-        # Région source dans l'image (clampée aux bords)
-        sx0 = max(0, cx0);          sy0 = max(0, cy0)
-        sx1 = min(W, cx0 + sw);     sy1 = min(H, cy0 + sh)
-        # Offset de destination dans le canvas (où coller le crop)
-        dx  = max(0, -cx0);         dy  = max(0, -cy0)
+        # Région image réellement visible (intersection viewport / image)
+        ix0 = max(0, int(np.floor(vx0)))
+        iy0 = max(0, int(np.floor(vy0)))
+        ix1 = min(W, int(np.ceil(vx0 + cw / z)))
+        iy1 = min(H, int(np.ceil(vy0 + ch / z)))
 
-        # Canvas de sortie fond noir
-        out_arr = np.zeros((sh, sw, 3), dtype=np.uint8)
-        if sx1 > sx0 and sy1 > sy0:
-            patch = arr[sy0:sy1, sx0:sx1].clip(0, 255).astype(np.uint8)
-            out_arr[dy:dy + (sy1 - sy0), dx:dx + (sx1 - sx0)] = patch
+        # Sortie fond noir, TOUJOURS à la taille du canvas → mémoire bornée
+        # (on ne construit jamais un buffer géant, conforme à la règle perf).
+        out_canvas = np.zeros((ch, cw, 3), dtype=np.uint8)
+        if ix1 > ix0 and iy1 > iy0:
+            sub = arr[iy0:iy1, ix0:ix1].clip(0, 255).astype(np.uint8)
+            dw  = max(1, int(round((ix1 - ix0) * z)))
+            dh  = max(1, int(round((iy1 - iy0) * z)))
+            interp  = Image.NEAREST if (fast or z > 4) else Image.BILINEAR
+            pil_sub = Image.fromarray(sub, mode="RGB").resize((dw, dh), interp)
+            sub_arr = np.asarray(pil_sub, dtype=np.uint8)
+            # Collage centré/pané dans le canvas, avec découpe si débordement
+            px = int(round((ix0 - vx0) * z))
+            py = int(round((iy0 - vy0) * z))
+            sx  = max(0, -px);  sy  = max(0, -py)
+            ddx = max(0, px);   ddy = max(0, py)
+            cwv = min(dw - sx, cw - ddx)
+            chv = min(dh - sy, ch - ddy)
+            if cwv > 0 and chv > 0:
+                out_canvas[ddy:ddy + chv, ddx:ddx + cwv] = sub_arr[sy:sy + chv, sx:sx + cwv]
 
-        # Pour l'overlay orange on garde les vraies coordonnées image
-        x0, y0, x1, y1 = sx0, sy0, sx1, sy1
-        crop = out_arr
-
-        # Zone orange : uniquement en rendu complet (pas pendant drag)
-        if not fast and radius > 0 and self._seam_cx is not None:
-            # Coordonnées jointure dans l'espace canvas (out_arr sw x sh)
-            seam_cx_local = self._seam_cx - cx0
-            seam_cy_local = self._seam_cy - cy0
-            if self._seam_horiz:
-                dist = np.abs(np.arange(sh, dtype=np.float32) - seam_cy_local)
-                dist2d = dist[:, np.newaxis] * np.ones((1, sw), dtype=np.float32)
+        # ── Trait orange sur les 4 bords du BLOC CENTRAL ─────────────────────
+        # Centre du trait pile sur la ligne de contact centre/voisin, atténuation
+        # de part et d'autre. Calcul en coordonnées canvas (léger : ch × cw).
+        if not fast and radius > 0:
+            if self._center_box is not None:
+                bx, by, bw, bh = self._center_box
             else:
-                dist = np.abs(np.arange(sw, dtype=np.float32) - seam_cx_local)
-                dist2d = np.ones((sh, 1), dtype=np.float32) * dist[np.newaxis, :]
-            alpha = np.clip(1.0 - dist2d / max(radius, 1), 0.0, 1.0)
-            blend = alpha[:, :, np.newaxis] * 0.50
-            ov = np.zeros_like(crop, dtype=np.float32)
+                bx, by, bw, bh = 0, 0, W, H
+            # Bords du bloc central projetés en coordonnées canvas
+            Lx = (bx      - vx0) * z
+            Rx = (bx + bw - vx0) * z
+            Ty = (by      - vy0) * z
+            By = (by + bh - vy0) * z
+            r_disp = max(1.0, radius * z)   # rayon (px image) → px écran
+
+            cols = np.arange(cw, dtype=np.float32)
+            rows = np.arange(ch, dtype=np.float32)
+            dist_v = np.minimum(np.abs(cols - Lx), np.abs(cols - Rx))
+            dist_h = np.minimum(np.abs(rows - Ty), np.abs(rows - By))
+            alpha_v = np.clip(1.0 - dist_v / r_disp, 0.0, 1.0)   # (cw,)
+            alpha_h = np.clip(1.0 - dist_h / r_disp, 0.0, 1.0)   # (ch,)
+            alpha2d = np.maximum(
+                alpha_v[np.newaxis, :] * np.ones((ch, 1), dtype=np.float32),
+                alpha_h[:, np.newaxis] * np.ones((1, cw), dtype=np.float32),
+            )
+            blend = alpha2d[:, :, np.newaxis] * 0.50
+            ov = np.zeros_like(out_canvas, dtype=np.float32)
             ov[:, :, 0] = 255
             ov[:, :, 1] = 130
-            crop = np.clip(crop.astype(np.float32) * (1 - blend) + ov * blend, 0, 255).astype(np.uint8)
+            out_canvas = np.clip(
+                out_canvas.astype(np.float32) * (1.0 - blend) + ov * blend,
+                0, 255).astype(np.uint8)
 
-        # Resize : NEAREST pendant drag (rapide), BILINEAR sinon
-        pil_crop = Image.fromarray(crop.astype(np.uint8), mode="RGB")
-        interp   = Image.NEAREST if (fast or z > 4) else Image.BILINEAR
-        out      = pil_crop.resize((cw, ch), interp)
+        out = Image.fromarray(out_canvas, mode="RGB")
 
         photo = ImageTk.PhotoImage(out)
         self._photos.append(photo)
@@ -3255,16 +3361,19 @@ class FusionPreviewWindow(tk.Toplevel):
 
     def _wheel_cb(self, event):
         f = 1.15 if (event.num == 4 or event.delta > 0) else 1.0 / 1.15
-        # Zoom minimum = fit-to-canvas (calculé dynamiquement) pour toujours
-        # pouvoir revenir à la vue tuile entière par dézoom molette
-        if self._arr_full is not None:
-            H, W = self._arr_full.shape[:2]
+        # Zoom mini = fit-to-canvas (dézoom molette ramène toujours à la vue
+        # d'ensemble) ; zoom maxi = ZOOM_MAX_FIT × fit (une image remplit le cadre).
+        # On calcule le fit sur la MOSAÏQUE affichée (mêmes dimensions que le rendu).
+        disp = self._mosaic_arr if self._mosaic_arr is not None else self._arr_full
+        if disp is not None:
+            H, W = disp.shape[:2]
             cw = self._canvas.winfo_width() or self.CANVAS_W
             ch = self._canvas.winfo_height() or self.CANVAS_H
-            z_fit = max(0.01, min(cw / max(W, 1), ch / max(H, 1)))
+            z_fit = max(0.01, min(cw / max(W, 1), ch / max(H, 1)) * self.FIT_MARGIN)
         else:
             z_fit = 0.05
-        self._zoom = max(z_fit, min(self._zoom * f, 20.0))
+        z_max = z_fit * self.ZOOM_MAX_FIT
+        self._zoom = max(z_fit, min(self._zoom * f, z_max))
         self._schedule()
 
     def _drag_start_cb(self, event):
