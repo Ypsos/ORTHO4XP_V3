@@ -968,6 +968,174 @@ def _demo_chapitre5():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  CHAPITRE 7 — BRANCHEMENT AUTOMATIQUE DEPUIS LES EXTENTS
+#  Rôle : reproduire AUTOMATIQUEMENT ce que Roland fait à la main dans son
+#  ZonePhoto.comb, mais dans un fichier propre et diffusable
+#  (Provider_Extents.comb), rangé dans Providers/ pour qu'Ortho le charge et
+#  affiche l'entrée « Provider_Extents » dans la liste imagery.
+#
+#  Chaîne complète (chantier bouclé) :
+#     1. l'utilisateur choisit un provider dans imagery      → default_website
+#     2. l'utilisateur crée ses extents (module Extents)      → Extents/<pays>/
+#     3. CE CHAPITRE lit les extents + le provider actif      → SelectionComb
+#     4. le Chapitre 4 (ecrire_comb) écrit Provider_Extents.comb
+#     5. Ortho scanne Providers/, charge le .comb             → imagery
+#
+#  Réutilise les Chapitres 2 (SelectionComb) et 4 (ecrire_comb) — ne les modifie
+#  pas. Ne touche JAMAIS ZonePhoto.comb (nom de sortie fixe et distinct).
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Nom FIXE du fichier de sortie (jamais « zonephoto » → garde-fou du Chapitre 4
+# satisfait, et ZonePhoto.comb personnel de Roland jamais menacé).
+COMB_OUTPUT_NAME = "Provider_Extents.comb"
+
+
+def _find_names_module():
+    """Récupère O4_File_Names s'il est déjà chargé (Ortho tourne), sinon None."""
+    import sys
+    return sys.modules.get("O4_File_Names")
+
+
+def _extents_dir_auto(base_dir=None):
+    """Dossier Extents/. Priorité : O4_File_Names.Extent_dir (source Ortho) ;
+    repli : <base_dir>/Extents ; dernier repli : ./Extents."""
+    FN = _find_names_module()
+    if FN is not None and getattr(FN, "Extent_dir", None):
+        return FN.Extent_dir
+    if base_dir:
+        return os.path.join(base_dir, "Extents")
+    return os.path.join(os.getcwd(), "Extents")
+
+
+def _providers_dir_auto(base_dir=None):
+    """Dossier Providers/. Même logique que _extents_dir_auto."""
+    FN = _find_names_module()
+    if FN is not None and getattr(FN, "Provider_dir", None):
+        return FN.Provider_dir
+    if base_dir:
+        return os.path.join(base_dir, "Providers")
+    return os.path.join(os.getcwd(), "Providers")
+
+
+def scanner_extents(base_dir=None):
+    """Parcourt Extents/ et renvoie la liste triée, sans doublon, des codes
+    d'extent (nom de fichier .ext sans extension). Voit AUTOMATIQUEMENT tout
+    extent présent : les anciens comme ceux tout juste créés. Jamais
+    d'exception : en cas de souci disque, renvoie ce qui a pu être lu."""
+    edir = _extents_dir_auto(base_dir)
+    trouves = []
+    seen = set()
+    try:
+        sous_dossiers = os.listdir(edir)
+    except Exception:
+        return []
+    for dossier in sorted(sous_dossiers):
+        chemin = os.path.join(edir, dossier)
+        if not os.path.isdir(chemin):
+            continue
+        try:
+            fichiers = os.listdir(chemin)
+        except Exception:
+            continue
+        for f in fichiers:
+            if "." not in f or f.rsplit(".", 1)[-1].lower() != "ext":
+                continue
+            code = f.rsplit(".", 1)[0]
+            if code and code not in seen:
+                seen.add(code)
+                trouves.append(code)
+    trouves.sort(key=lambda s: s.lower())
+    return trouves
+
+
+def construire_selection_depuis_extents(provider_actif, extents,
+                                        priorite="medium", filtre="none"):
+    """Construit une SelectionComb (Chapitre 2) : une ligne par extent, reliant
+    le PROVIDER ACTIF (choisi dans imagery) à cet extent. Réutilise la classe
+    SelectionComb existante et sa méthode .ajouter (aucune modification du
+    Chapitre 2). Renvoie (selection, nb_ajouts)."""
+    provider_actif = (provider_actif or "").strip()
+    if not provider_actif:
+        return (None, 0)
+    sel = SelectionComb()
+    n = 0
+    for code in extents:
+        code = (code or "").strip()
+        if not code:
+            continue
+        if sel.ajouter(provider_actif, zone=code, filtre=filtre,
+                       priorite=priorite):
+            n += 1
+    return (sel, n)
+
+
+def generer_comb_depuis_extents(provider_actif, base_dir=None,
+                                priorite="medium", forcer=True, log=None):
+    """Génère Providers/Provider_Extents.comb à partir de TOUS les extents
+    présents dans Extents/, reliés au provider_actif.
+
+    - provider_actif : nom du provider choisi dans imagery (default_website).
+    - forcer=True : régénère si le fichier existe (le Chapitre 4 fait une .bak).
+    - log : fonction d'affichage optionnelle.
+    Renvoie (ok: bool, message: str). Ne lève jamais d'exception. Réutilise
+    ecrire_comb (Chapitre 4) pour l'écriture sécurisée."""
+    def _say(m):
+        if callable(log):
+            try:
+                log(m)
+            except Exception:
+                pass
+
+    extents = scanner_extents(base_dir)
+    if not extents:
+        return (False, "Aucun extent trouvé dans Extents/ — rien à brancher.")
+
+    provider_actif = (provider_actif or "").strip()
+    if not provider_actif:
+        return (False, "Aucun provider actif fourni (imagery non sélectionnée).")
+
+    sel, n = construire_selection_depuis_extents(provider_actif, extents,
+                                                 priorite=priorite)
+    if sel is None or n == 0:
+        return (False, "Impossible de construire la sélection.")
+
+    _say("Provider actif : %s" % provider_actif)
+    _say("%d extent(s) à brancher." % n)
+
+    pdir = _providers_dir_auto(base_dir)
+    try:
+        os.makedirs(pdir, exist_ok=True)
+    except Exception as ex:
+        return (False, "Dossier Providers/ inaccessible : %s" % ex)
+
+    chemin = os.path.join(pdir, COMB_OUTPUT_NAME)
+    entete = [
+        "Provider_Extents.comb — genere automatiquement par Ortho4XP V3.",
+        "Relie le provider actif aux extents crees. Editable a la main.",
+        "Provider : %s" % provider_actif,
+    ]
+    return ecrire_comb(sel, chemin, entete_lignes=entete, forcer=forcer)
+
+
+def recharger_comb_a_chaud():
+    """Après écriture, demande à Ortho de re-scanner Providers/ pour que la
+    nouvelle entrée « Provider_Extents » apparaisse dans imagery sans relancer.
+    Protégé : True si réussi, False sinon (repli : relancer Ortho)."""
+    try:
+        import sys
+        IMG = sys.modules.get("O4_Imagery_Utils")
+        if IMG is None:
+            return False
+        fn = getattr(IMG, "initialize_combined_providers_dict", None)
+        if not callable(fn):
+            return False
+        fn()
+        return True
+    except Exception:
+        return False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  CHAPITRE 6 — INTERFACE GRAPHIQUE (fenêtre « Générer un .comb »)  — v1
 #  Rôle : poser un VISAGE sur le moteur (chapitres 1-5). Produit UN .comb
 #  GLOBAL (style EUR.comb : multi-provider / multi-tuile), écrit dans Providers/.
@@ -1077,8 +1245,16 @@ def run_comb_generator(parent=None):
     prov_dir = _providers_dir(base_dir)
 
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
-    win.title(_tr("Générer un fichier .comb"))
+    win.title(_tr("Générer un .comb — mode expert"))
     win.configure(bg=BG)
+    # Fenêtre dimensionnée et redimensionnable (cohérence avec l'assembleur ;
+    # évite les libellés/boutons coupés selon la plateforme).
+    try:
+        win.geometry("1180x680")
+        win.minsize(1180, 680)
+        win.resizable(True, True)
+    except Exception:
+        pass
 
     # Style combobox (couleurs thème + fix macOS), comme le .lay.
     style = ttk.Style(win)
@@ -1099,7 +1275,7 @@ def run_comb_generator(parent=None):
              bg=BG, fg=FG,
              font=("Helvetica", 14, "bold") if _OS_UI == "mac"
              else ("Segoe UI", 12, "bold")).pack(fill="x", padx=12, pady=(10, 2))
-    tk.Label(win, text=_tr("Coche les providers, choisis zone + priorité, puis Générer."),
+    tk.Label(win, text=_tr("Coche les providers, choisis zone, filtre et priorité, puis Générer."),
              bg=BG, fg=FG2,
              font=("Helvetica", 11) if _OS_UI == "mac" else ("Segoe UI", 9)
              ).pack(fill="x", padx=12, pady=(0, 8))
@@ -1117,42 +1293,56 @@ def run_comb_generator(parent=None):
     canvas.pack(side="left", fill="both", expand=True)
     scroll.pack(side="right", fill="y")
 
-    # En-tête de colonnes
-    entete = tk.Frame(inner, bg=BG)
-    entete.grid(row=0, column=0, sticky="ew", pady=(0, 4))
-    for c, (txt, w) in enumerate((("", 3), (_tr("Provider"), 28),
-                                  (_tr("Score"), 7), (_tr("Zone / extent"), 18),
-                                  (_tr("Priorité"), 10))):
-        tk.Label(entete, text=txt, bg=BG, fg=FG2, width=w, anchor="w",
+    # En-tête + rangées dans UNE SEULE grille partagée (inner) : chaque colonne
+    # tombe donc exactement sous son titre. Largeurs de colonnes fixées une fois.
+    _COLW = {0: 40, 1: 220, 2: 70, 3: 200, 4: 150, 5: 110}
+    for _c, _w in _COLW.items():
+        inner.grid_columnconfigure(_c, minsize=_w)
+
+    # En-tête (ligne 0)
+    for c, txt in ((1, _tr("Provider")), (2, _tr("Score")),
+                   (3, _tr("Zone / extent")), (4, _tr("Filtre")),
+                   (5, _tr("Priorité"))):
+        tk.Label(inner, text=txt, bg=BG, fg=FG2, anchor="w",
                  font=("Helvetica", 11, "bold") if _OS_UI == "mac"
-                 else ("Segoe UI", 9, "bold")).grid(row=0, column=c, padx=2)
+                 else ("Segoe UI", 9, "bold")).grid(
+                     row=0, column=c, sticky="w", padx=6, pady=(0, 6))
 
     for i, item in enumerate(vue, start=1):
-        rowf = tk.Frame(inner, bg=BG)
-        rowf.grid(row=i, column=0, sticky="ew")
         var_check = tk.IntVar(value=0)
-        tk.Checkbutton(rowf, variable=var_check, bg=BG,
+        tk.Checkbutton(inner, variable=var_check, bg=BG,
                        activebackground=BG, selectcolor=CON_BG).grid(
-                       row=0, column=0, padx=2)
-        tk.Label(rowf, text=item["provider"], bg=BG, fg=FG, width=28,
-                 anchor="w",
+                       row=i, column=0, padx=2, pady=1)
+        tk.Label(inner, text=item["provider"], bg=BG, fg=FG, anchor="w",
                  font=("Helvetica", 11) if _OS_UI == "mac"
-                 else ("Segoe UI", 9)).grid(row=0, column=1, padx=2)
+                 else ("Segoe UI", 9)).grid(row=i, column=1, sticky="w",
+                                            padx=6, pady=1)
         sc = "  —  " if item["score"] is None else ("%.1f" % item["score"])
-        tk.Label(rowf, text=sc, bg=BG, fg=FG2, width=7, anchor="w",
+        tk.Label(inner, text=sc, bg=BG, fg=FG2, anchor="w",
                  font=("Helvetica", 11) if _OS_UI == "mac"
-                 else ("Segoe UI", 9)).grid(row=0, column=2, padx=2)
+                 else ("Segoe UI", 9)).grid(row=i, column=2, sticky="w",
+                                            padx=6, pady=1)
         var_zone = tk.StringVar(value="")
-        tk.Entry(rowf, textvariable=var_zone, width=18,
-                 bg=ENTRY_BG, fg=ENTRY_FG,
-                 insertbackground=ENTRY_FG).grid(row=0, column=3, padx=2)
+        tk.Entry(inner, textvariable=var_zone, width=18,
+                 bg=ENTRY_BG, fg=ENTRY_FG, relief="solid", bd=1,
+                 highlightthickness=0,
+                 insertbackground=ENTRY_FG).grid(row=i, column=3, sticky="w",
+                                                 padx=6, pady=1)
+        var_filtre = tk.StringVar(value="none")
+        tk.Entry(inner, textvariable=var_filtre, width=12,
+                 bg=ENTRY_BG, fg=ENTRY_FG, relief="solid", bd=1,
+                 highlightthickness=0,
+                 insertbackground=ENTRY_FG).grid(row=i, column=4, sticky="w",
+                                                 padx=6, pady=1)
         var_prio = tk.StringVar(value=_PRIO_AFF["medium"])
-        ttk.Combobox(rowf, textvariable=var_prio, values=_PRIO_LISTE,
+        ttk.Combobox(inner, textvariable=var_prio, values=_PRIO_LISTE,
                      state="readonly", width=8,
-                     style="O4Comb.TCombobox").grid(row=0, column=4, padx=2)
+                     style="O4Comb.TCombobox").grid(row=i, column=5, sticky="w",
+                                                    padx=6, pady=1)
         lignes.append({
             "provider": item["provider"], "score": item["score"],
-            "check": var_check, "zone": var_zone, "prio": var_prio,
+            "check": var_check, "zone": var_zone, "filtre": var_filtre,
+            "prio": var_prio,
         })
 
     # ── Barre d'état ─────────────────────────────────────────────────────────
@@ -1167,35 +1357,10 @@ def run_comb_generator(parent=None):
         for lg in lignes:
             if lg["check"].get():
                 prio = _PRIO_VAL.get(lg["prio"].get(), "medium")
+                filtre = (lg["filtre"].get().strip() or "none")
                 sel.ajouter(lg["provider"], zone=lg["zone"].get().strip(),
-                            filtre="none", priorite=prio)
+                            filtre=filtre, priorite=prio)
         return sel
-
-    # ── Mode AUTOMATIQUE : coche + priorise tout seul (le reste = manuel) ─────
-    def _remplir_auto():
-        """Aide « clé en main » pour l'utilisateur : coche les providers
-        évalués corrects et pose une priorité par défaut sensée.
-        - provider MONDIAL (Esri/BI/Maxar…) → priorité Basse (filet de secours,
-          ne recouvre jamais un local) ;
-        - provider local bien noté (score ≥ 70) → Haute ;
-        - autre provider évalué → Moyenne.
-        L'utilisateur peut tout ajuster ensuite à la main (mode manuel)."""
-        n = 0
-        for lg in lignes:
-            score = lg["score"]
-            if score is None:          # non évalué → on ne coche pas d'office
-                lg["check"].set(0)
-                continue
-            lg["check"].set(1)
-            if est_provider_mondial(lg["provider"]):
-                lg["prio"].set("basse")
-            elif score >= 70:
-                lg["prio"].set("haute")
-            else:
-                lg["prio"].set("moyenne")
-            n += 1
-        status(_tr("Automatique : %d provider(s) coché(s) et priorisé(s). "
-                   "Ajuste les zones puis Aperçu/Générer.") % n)
 
     # ── Aperçu (Chapitre 4, sans écrire) ─────────────────────────────────────
     def _apercu():
@@ -1274,7 +1439,8 @@ def run_comb_generator(parent=None):
             if e:
                 lg["check"].set(1)
                 lg["zone"].set(e["zone"])
-                lg["prio"].set(_PRIO_AFF.get(e["priorite"], "moyenne"))
+                lg["filtre"].set(e.get("filtre", "none") or "none")
+                lg["prio"].set(_PRIO_AFF.get(e["priorite"], "medium"))
             else:
                 lg["check"].set(0)
         preview.delete("1.0", "end")
@@ -1315,15 +1481,14 @@ def run_comb_generator(parent=None):
     # ── Rangée de boutons ────────────────────────────────────────────────────
     btns = tk.Frame(win, bg=BG)
     btns.pack(fill="x", padx=12, pady=4)
-    for txt, cmd in ((_tr("Automatique"), _remplir_auto),
-                     (_tr("Importer un .comb"), _importer),
+    for txt, cmd in ((_tr("Importer un .comb"), _importer),
                      (_tr("Créer un provider (.lay)"), _creer_lay),
                      (_tr("Aperçu"), _apercu),
                      (_tr("Générer"), _generer)):
         _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
 
     # ── Aperçu texte ─────────────────────────────────────────────────────────
-    preview = tk.Text(win, height=8, width=64, bg=CON_BG, fg=CON_FG,
+    preview = tk.Text(win, height=5, width=64, bg=CON_BG, fg=CON_FG,
                       insertbackground=CON_FG)
     preview.pack(fill="both", expand=False, padx=12, pady=(4, 4))
 
@@ -1334,3 +1499,477 @@ def run_comb_generator(parent=None):
     _make_themed_button_c(tk, win, _tr("Fermer"), win.destroy).pack(pady=(2, 10))
 
     return win
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CHAPITRE 8 — ÉCRAN D'ASSEMBLAGE .comb (extents ↔ providers)
+#  Rôle : remplacer le travail manuel du préparateur. Un TABLEAU éditable, une
+#  ligne = une ligne du .comb :
+#        Extent  |  Provider  |  Filtre  |  Priorité
+#  L'utilisateur relie CHAQUE extent (dossier Extents/) au provider (.lay) de
+#  son choix. Le module PROPOSE les providers dont le nom correspond, mais
+#  l'association reste un CHOIX HUMAIN (provider ≠ nom d'extent, non déductible).
+#
+#  Modèle .comb reproduit (logique du préparateur) :
+#     - BASE   = provider large, priorité « medium » → le fond ;
+#     - PATCH  = sous-zone précise, priorité « high » (+ filtre) → passe dessus.
+#     L'ORDRE des lignes et la PRIORITÉ décident des recouvrements : d'où les
+#     flèches ▲▼ (réordonnancement) et la colonne Priorité.
+#
+#  Sortie : Providers/Provider_Extents.comb (LE fichier diffusable — jamais
+#  ZonePhoto.comb, protégé de toute façon par le Chapitre 4).
+#
+#  RÉUTILISE sans les modifier : SelectionComb (Ch.2), valider_selection /
+#  construire_texte_comb / ecrire_comb (Ch.4), scan_providers (Ch.1),
+#  scanner_extents (Ch.7), recharger_comb_a_chaud (Ch.7), est_provider_mondial /
+#  _jeton_provider (Ch.3), et les helpers GUI du Chapitre 6.
+#  Aucune logique métier nouvelle : que de l'assemblage d'API déjà validées.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def proposer_providers(extent, providers):
+    """Trie une liste de providers pour un extent donné, du plus PROBABLE au
+    moins probable (pure logique de NOM, aucun accès disque) :
+      1) providers dont le nom correspond à l'extent (sous-chaîne ou même 1er
+         jeton, ex. « FR » ↔ « IGN_FR », « Bayern » ↔ « DE_Bayern ») ;
+      2) providers MONDIAUX (Esri/BI/Maxar…) — filet de secours ;
+      3) le reste, ordre alphabétique.
+    Sert à PRÉ-remplir la liste déroulante : l'utilisateur choisit au final."""
+    ext_l = (extent or "").strip().lower()
+    matches, globaux, autres = [], [], []
+    for p in providers:
+        pl = (p or "").lower()
+        if ext_l and (ext_l in pl or pl in ext_l
+                      or _jeton_provider(p) == _jeton_provider(extent)):
+            matches.append(p)
+        elif est_provider_mondial(p):
+            globaux.append(p)
+        else:
+            autres.append(p)
+    return sorted(matches) + sorted(globaux) + sorted(autres)
+
+
+def couverture_nom(extent, provider):
+    """Garde-fou de NOMMAGE (pas une preuve géométrique — ne lit ni .ext ni
+    .lay). Indique si le provider PARAÎT couvrir l'extent d'après son nom :
+      « ok »        → provider mondial, OU nom correspondant à l'extent ;
+      « attention » → provider local dont le nom ne correspond pas à l'extent
+                      (l'utilisateur doit vérifier la couverture réelle) ;
+      « neutre »    → extent ou provider non renseigné.
+    Une vraie vérification géographique (bbox des .ext) pourra être ajoutée
+    ultérieurement à partir d'un fichier .ext d'exemple fourni par Roland."""
+    extent = (extent or "").strip()
+    provider = (provider or "").strip()
+    if not extent or not provider:
+        return "neutre"
+    if est_provider_mondial(provider):
+        return "ok"
+    pl = provider.lower()
+    el = extent.lower()
+    if el in pl or pl in el or _jeton_provider(provider) == _jeton_provider(extent):
+        return "ok"
+    return "attention"
+
+
+def run_comb_assembler(parent=None):
+    """
+    Ouvre l'écran d'assemblage « Assembler un .comb (extents ↔ providers) ».
+    Chargé seulement au clic (import tkinter local). parent = fenêtre Ortho4XP
+    (ou None en test isolé). Retourne la fenêtre (utile aux tests headless).
+    """
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+
+    BG = _cc("bg", "#3b5b49")
+    FG = _cc("fg", "#e8f0ec")
+    FG2 = _cc("fg_secondary", "#a6e3a1")
+    CON_BG = _cc("console_bg", "#0f0f1a")
+    CON_FG = _cc("console_fg", "#50fa7b")
+    ENTRY_BG = "#f0f4f2"
+    ENTRY_FG = "#1e3028"
+    OK_C = _cc("fg_secondary", "#a6e3a1")
+    WARN_C = _cc("warn", "#f0c040")
+    BTN_BG = _cc("btn_bg", "#4a6b59")
+    BTN_FG = _cc("btn_fg", "#ffffff")
+    BTN_HOVER = _cc("accent", "#5a7b69")
+
+    FONT_N = ("Helvetica", 11) if _OS_UI == "mac" else ("Segoe UI", 9)
+    FONT_B = ("Helvetica", 11, "bold") if _OS_UI == "mac" else ("Segoe UI", 9, "bold")
+
+    # Racine Ortho4XP → Providers/ et Extents/.
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    prov_dir = _providers_dir(base_dir)
+
+    providers_all = scan_providers(base_dir)      # Chapitre 1
+    extents = scanner_extents(base_dir)           # Chapitre 7
+
+    win = tk.Toplevel(parent) if parent is not None else tk.Tk()
+    win.title(_tr("Relier mes extents aux providers (.comb)"))
+    win.configure(bg=BG)
+    # Fenêtre large dès l'ouverture pour ne PAS couper la colonne Priorité ni le
+    # dernier bouton du bas (largeurs colonnes Extent+Provider+Filtre+Priorité +
+    # scrollbar). Redimensionnable : Roland peut l'agrandir/réduire librement.
+    try:
+        win.geometry("1180x680")
+        win.minsize(1180, 680)
+        win.resizable(True, True)
+    except Exception:
+        pass
+
+    style = ttk.Style(win)
+    try:
+        style.theme_use("alt")
+    except Exception:
+        pass
+    style.configure("O4Comb.TCombobox", fieldbackground=ENTRY_BG,
+                    background=ENTRY_BG, foreground=ENTRY_FG)
+
+    # ── Petit bouton Mac-safe (Label cliquable) pour ▲ ▼ ✕ ────────────────────
+    def _mini_bouton(parent_w, texte, cmd):
+        lbl = tk.Label(parent_w, text=texte, bg=BTN_BG, fg=BTN_FG,
+                       padx=6, pady=2, cursor="hand2", font=FONT_N)
+
+        def _enter(e=None):
+            lbl.configure(bg=BTN_HOVER)
+
+        def _leave(e=None):
+            lbl.configure(bg=BTN_BG)
+
+        def _clic(e=None):
+            if callable(cmd):
+                cmd()
+
+        lbl.bind("<Enter>", _enter)
+        lbl.bind("<Leave>", _leave)
+        lbl.bind("<Button-1>", _clic)
+        return lbl
+
+    # ── État : liste ordonnée de lignes (StringVars persistantes) ─────────────
+    rows = []
+
+    def _new_row(ext="", prov="", filtre="none", prio_aff=None):
+        return {
+            "ext": tk.StringVar(value=ext),
+            "prov": tk.StringVar(value=prov),
+            "filtre": tk.StringVar(value=filtre or "none"),
+            "prio": tk.StringVar(value=prio_aff or _PRIO_AFF["medium"]),
+        }
+
+    def _providers_pour(ext):
+        return proposer_providers(ext, providers_all)
+
+    # ── Titre + aide ─────────────────────────────────────────────────────────
+    tk.Label(win, text=_tr("Assembler un .comb : relie chaque extent à un provider"),
+             bg=BG, fg=FG,
+             font=("Helvetica", 14, "bold") if _OS_UI == "mac"
+             else ("Segoe UI", 12, "bold")).pack(fill="x", padx=12, pady=(10, 2))
+    tk.Label(win, text=_tr("BASE = provider large + priorité moyenne (le fond). "
+                           "PATCH = sous-zone + priorité haute (passe dessus). "
+                           "L'ordre (▲▼) et la priorité décident des recouvrements."),
+             bg=BG, fg=FG2, justify="left", wraplength=680,
+             font=FONT_N).pack(fill="x", padx=12, pady=(0, 8))
+
+    # ── Zone scrollable du tableau ───────────────────────────────────────────
+    cadre = tk.Frame(win, bg=BG)
+    cadre.pack(fill="both", expand=True, padx=12, pady=4)
+    canvas = tk.Canvas(cadre, bg=BG, highlightthickness=0, height=300)
+    scroll = ttk.Scrollbar(cadre, orient="vertical", command=canvas.yview)
+    inner = tk.Frame(canvas, bg=BG)
+    inner.bind("<Configure>",
+               lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=inner, anchor="nw")
+    canvas.configure(yscrollcommand=scroll.set)
+    canvas.pack(side="left", fill="both", expand=True)
+    scroll.pack(side="right", fill="y")
+
+    status_var = tk.StringVar(value="")
+
+    def status(msg):
+        status_var.set(msg)
+
+    # ── Indicateur de couverture (nom) d'une ligne ───────────────────────────
+    def _maj_indic(r):
+        lbl = r.get("_indic")
+        if lbl is None:
+            return
+        etat = couverture_nom(r["ext"].get(), r["prov"].get())
+        if etat == "ok":
+            lbl.configure(text="✓", fg=OK_C)
+        elif etat == "attention":
+            lbl.configure(text="⚠", fg=WARN_C)
+        else:
+            lbl.configure(text="", fg=FG2)
+
+    def _on_ext(r):
+        """Extent choisi → reproposer la liste providers (matches d'abord) et,
+        si le provider est encore vide, préremplir le meilleur candidat."""
+        props = _providers_pour(r["ext"].get())
+        cb = r.get("_prov_cb")
+        if cb is not None:
+            cb.configure(values=props)
+        if not r["prov"].get().strip() and props:
+            r["prov"].set(props[0])
+        _maj_indic(r)
+
+    # ── (Re)dessin du tableau depuis 'rows' ──────────────────────────────────
+    def _rebuild():
+        for w in inner.winfo_children():
+            w.destroy()
+
+        hdr = tk.Frame(inner, bg=BG)
+        hdr.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        colonnes = ((_tr("Ordre"), 6), (_tr("Extent"), 18),
+                    (_tr("Provider"), 24), (_tr("Filtre"), 10),
+                    (_tr("Priorité"), 10), (_tr("Couv."), 5), ("", 4))
+        for c, (txt, w) in enumerate(colonnes):
+            tk.Label(hdr, text=txt, bg=BG, fg=FG2, width=w, anchor="w",
+                     font=FONT_B).grid(row=0, column=c, padx=2)
+
+        for i, r in enumerate(rows):
+            rowf = tk.Frame(inner, bg=BG)
+            rowf.grid(row=i + 1, column=0, sticky="ew", pady=1)
+
+            nav = tk.Frame(rowf, bg=BG)
+            nav.grid(row=0, column=0, padx=2)
+            _mini_bouton(nav, "▲", lambda i=i: _monter(i)).pack(side="left", padx=1)
+            _mini_bouton(nav, "▼", lambda i=i: _descendre(i)).pack(side="left", padx=1)
+
+            ext_cb = ttk.Combobox(rowf, textvariable=r["ext"], values=extents,
+                                  state="readonly", width=16,
+                                  style="O4Comb.TCombobox")
+            ext_cb.grid(row=0, column=1, padx=2)
+
+            prov_cb = ttk.Combobox(rowf, textvariable=r["prov"],
+                                   values=_providers_pour(r["ext"].get()),
+                                   state="readonly", width=22,
+                                   style="O4Comb.TCombobox")
+            prov_cb.grid(row=0, column=2, padx=2)
+            r["_prov_cb"] = prov_cb
+
+            tk.Entry(rowf, textvariable=r["filtre"], width=10, bg=ENTRY_BG,
+                     fg=ENTRY_FG, insertbackground=ENTRY_FG).grid(
+                     row=0, column=3, padx=2)
+
+            ttk.Combobox(rowf, textvariable=r["prio"], values=_PRIO_LISTE,
+                         state="readonly", width=8,
+                         style="O4Comb.TCombobox").grid(row=0, column=4, padx=2)
+
+            indic = tk.Label(rowf, text="", bg=BG, fg=FG2, width=5, anchor="w",
+                             font=FONT_N)
+            indic.grid(row=0, column=5, padx=2)
+            r["_indic"] = indic
+
+            _mini_bouton(rowf, "✕", lambda i=i: _supprimer(i)).grid(
+                row=0, column=6, padx=2)
+
+            ext_cb.bind("<<ComboboxSelected>>",
+                        lambda e=None, r=r: _on_ext(r))
+            prov_cb.bind("<<ComboboxSelected>>",
+                         lambda e=None, r=r: _maj_indic(r))
+            _maj_indic(r)
+
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    # ── Actions sur les lignes ───────────────────────────────────────────────
+    def _ajouter_ligne():
+        rows.append(_new_row())
+        _rebuild()
+        status(_tr("Ligne ajoutée."))
+
+    def _supprimer(i):
+        if 0 <= i < len(rows):
+            del rows[i]
+            _rebuild()
+            status(_tr("Ligne supprimée."))
+
+    def _monter(i):
+        if 0 < i < len(rows):
+            rows[i - 1], rows[i] = rows[i], rows[i - 1]
+            _rebuild()
+
+    def _descendre(i):
+        if 0 <= i < len(rows) - 1:
+            rows[i + 1], rows[i] = rows[i], rows[i + 1]
+            _rebuild()
+
+    def _proposer_depuis_extents():
+        """Point de départ : une ligne par extent présent dans Extents/, chacune
+        reliée au meilleur provider candidat (par nom), priorité BASE (moyenne).
+        L'utilisateur ajuste ensuite provider / priorité / ordre. (Remplace, en
+        correct, l'ancien bouton faux qui reliait tout à default_website.)"""
+        rows.clear()
+        if not extents:
+            _rebuild()
+            status(_tr("Aucun extent dans Extents/ — créez d'abord vos extents."))
+            return
+        for e in extents:
+            props = _providers_pour(e)
+            rows.append(_new_row(ext=e, prov=(props[0] if props else ""),
+                                 prio_aff=_PRIO_AFF["medium"]))
+        _rebuild()
+        status(_tr("%d extent(s) proposé(s). Vérifiez les providers et priorités.")
+               % len(extents))
+
+    # ── Construire une SelectionComb depuis le tableau ───────────────────────
+    def _selection_depuis_table():
+        sel = SelectionComb()
+        incompletes = 0
+        for r in rows:
+            ext = r["ext"].get().strip()
+            prov = r["prov"].get().strip()
+            if not ext or not prov:
+                incompletes += 1
+                continue
+            prio = _PRIO_VAL.get(r["prio"].get(), "medium")
+            filtre = r["filtre"].get().strip() or "none"
+            sel.ajouter(prov, zone=ext, filtre=filtre, priorite=prio)
+        return sel, incompletes
+
+    def _alertes_couverture():
+        """Liste des lignes complètes dont le provider ne PARAÎT pas couvrir
+        l'extent (garde-fou de nom). Retourne une liste de messages."""
+        msgs = []
+        for r in rows:
+            ext = r["ext"].get().strip()
+            prov = r["prov"].get().strip()
+            if ext and prov and couverture_nom(ext, prov) == "attention":
+                msgs.append("• %s ← %s" % (ext, prov))
+        return msgs
+
+    # ── Aperçu (Chapitre 4, sans écrire) ─────────────────────────────────────
+    def _apercu():
+        sel, incompletes = _selection_depuis_table()
+        ok, problemes = valider_selection(sel)
+        preview.delete("1.0", "end")
+        if not ok:
+            preview.insert("1.0", _tr("Sélection non valide :") + "\n  - "
+                           + "\n  - ".join(problemes))
+            status(_tr("Aperçu : sélection incomplète."))
+            return
+        preview.insert("1.0", construire_texte_comb(sel, _entete()))
+        note = ""
+        if incompletes:
+            note = _tr("  (%d ligne(s) incomplète(s) ignorée(s))") % incompletes
+        status(_tr("Aperçu généré (%d ligne(s)).") % sel.taille() + note)
+
+    def _entete():
+        return [
+            "Provider_Extents.comb — assemble par l'ecran d'assemblage (Ch.8).",
+            "BASE = provider large, priorite medium. PATCH = sous-zone, high.",
+            "L'ordre des lignes et la priorite decident des recouvrements.",
+        ]
+
+    # ── Générer → Providers/Provider_Extents.comb ────────────────────────────
+    def _generer():
+        sel, _inc = _selection_depuis_table()
+        ok, problemes = valider_selection(sel)
+        if not ok:
+            messagebox.showwarning(_tr("Assembler .comb"),
+                                   _tr("Sélection incomplète :") + "\n- "
+                                   + "\n- ".join(problemes))
+            return
+
+        alertes = _alertes_couverture()
+        if alertes:
+            if not messagebox.askyesno(
+                    _tr("Couverture à vérifier"),
+                    _tr("Ces providers ne semblent pas correspondre à leur "
+                        "extent (vérification par le nom) :") + "\n\n"
+                    + "\n".join(alertes)
+                    + "\n\n" + _tr("Générer quand même ?")):
+                status(_tr("Génération annulée (couverture à vérifier)."))
+                return
+
+        chemin = os.path.join(prov_dir, COMB_OUTPUT_NAME)
+        ok1, msg1 = ecrire_comb(sel, chemin, entete_lignes=_entete(),
+                                forcer=False)
+        if not ok1 and "existe déjà" in msg1:
+            if messagebox.askyesno(
+                    _tr("Assembler .comb"),
+                    "%s %s" % (COMB_OUTPUT_NAME,
+                               _tr("existe déjà.\nLe remplacer ? "
+                                   "(sauvegarde .bak automatique)"))):
+                ok1, msg1 = ecrire_comb(sel, chemin, entete_lignes=_entete(),
+                                        forcer=True)
+        status(msg1)
+        if ok1:
+            recharge = recharger_comb_a_chaud()   # Chapitre 7
+            suffixe = ("\n\n" + _tr("Liste imagery rafraîchie.")) if recharge \
+                else ("\n\n" + _tr("Relancez Ortho4XP pour voir l'entrée dans "
+                                   "imagery."))
+            messagebox.showinfo(_tr("Assembler .comb"), msg1 + suffixe)
+        else:
+            messagebox.showerror(_tr("Assembler .comb"), msg1)
+
+    # ── Ouvrir le générateur .lay (si un provider manque) ────────────────────
+    def _creer_lay():
+        try:
+            import O4_lay_generator as LG
+        except Exception as ex:
+            status(_tr("Générateur .lay introuvable : %s") % ex)
+            return
+        fn = getattr(LG, "run_lay_generator", None)
+        if not callable(fn):
+            status(_tr("O4_lay_generator présent mais run_lay_generator() absent."))
+            return
+        try:
+            fn(parent)
+            status(_tr("Générateur de provider (.lay) ouvert."))
+        except Exception as ex:
+            status(_tr("Erreur à l'ouverture du générateur .lay : %s") % ex)
+
+    # ── Rangée de boutons ────────────────────────────────────────────────────
+    btns = tk.Frame(win, bg=BG)
+    btns.pack(fill="x", padx=12, pady=(8, 2))
+    for txt, cmd in ((_tr("Proposer depuis les extents"), _proposer_depuis_extents),
+                     (_tr("Ajouter une ligne"), _ajouter_ligne),
+                     (_tr("Créer un provider (.lay)"), _creer_lay),
+                     (_tr("Aperçu"), _apercu),
+                     (_tr("Générer"), _generer)):
+        _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
+
+    # ── Rappel du fichier de sortie (fixe, non éditable = anti-ZonePhoto) ─────
+    tk.Label(win, text=_tr("Fichier généré : Providers/%s") % COMB_OUTPUT_NAME,
+             bg=BG, fg=FG2, anchor="w",
+             font=FONT_N).pack(fill="x", padx=12, pady=(4, 0))
+
+    # ── Aperçu texte ─────────────────────────────────────────────────────────
+    preview = tk.Text(win, height=8, width=68, bg=CON_BG, fg=CON_FG,
+                      insertbackground=CON_FG)
+    preview.pack(fill="both", expand=False, padx=12, pady=(4, 4))
+
+    tk.Label(win, textvariable=status_var, bg=BG, fg=FG2, anchor="w",
+             font=FONT_N).pack(fill="x", padx=12, pady=(2, 2))
+
+    _make_themed_button_c(tk, win, _tr("Fermer"), win.destroy).pack(pady=(2, 10))
+
+    # Démarrage : proposer d'emblée une ligne par extent (garde-fou anti-blanc).
+    _proposer_depuis_extents()
+    if not rows:
+        _ajouter_ligne()
+
+    return win
+
+
+def _demo_chapitre8():
+    """Démonstration headless du Chapitre 8 (aucune interface, aucun disque).
+    Vérifie la proposition de providers, le garde-fou de couverture par nom, et
+    l'assemblage base+patch en un texte .comb. N'est jamais appelée seule."""
+    providers = ["IGN_FR", "DE_Bayern", "Esri_07-2022", "BI", "PCRS_Alsace"]
+
+    print("### Proposition providers pour « FR »")
+    print("   ", proposer_providers("FR", providers))
+    print("### Proposition providers pour « Bayern »")
+    print("   ", proposer_providers("Bayern", providers))
+
+    print("\n### Garde-fou couverture (par nom)")
+    for ext, prov in (("FR", "IGN_FR"), ("CH", "IGN_FR"),
+                      ("CH", "Esri_07-2022"), ("Alsace", "PCRS_Alsace")):
+        print("    %-8s ← %-14s : %s"
+              % (ext, prov, couverture_nom(ext, prov)))
+
+    print("\n### Assemblage base (medium) + patch (high)")
+    sel = SelectionComb()
+    sel.ajouter("Esri_07-2022", zone="EUR", filtre="none", priorite="medium")
+    sel.ajouter("IGN_FR", zone="FR", filtre="none", priorite="high")
+    sel.ajouter("DE_Bayern", zone="Bayern", filtre="none", priorite="high")
+    apercu_comb(sel)

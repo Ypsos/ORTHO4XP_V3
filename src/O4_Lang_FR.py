@@ -147,6 +147,7 @@ T = {
     "📋 Exporter liste"                 : "📋 Exporter liste",
     "🎨 Appliquer au groupe"            : "🎨 Appliquer au groupe",
     "💾 Générer .comb"                  : "💾 Générer .comb",
+    "🛡 Création Zones à protéger"      : "🛡 Création Zones à protéger",
     "👁 Batch Preview couche"           : "👁 Aperçu lot couche",
     "🗑 Supprimer DDS sélect."          : "🗑 Supprimer DDS sélect.",
     "🎯 Auto-détecter"                  : "🎯 Auto-détecter",

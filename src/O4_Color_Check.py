@@ -433,15 +433,8 @@ class ColorCheckWindow(tk.Toplevel):
         self._disable_cnorm()
         self._build_ui()
 
-        self.update_idletasks()
-        min_w = self.winfo_reqwidth()
-        min_h = self.winfo_reqheight()
-        self.minsize(min_w, min_h)
-
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(200, self._scan)
-
-
 
         # ── Thème couleurs ────────────────────────────────────────────
         try:
@@ -449,6 +442,22 @@ class ColorCheckWindow(tk.Toplevel):
             _TM.apply_to_root(self)
         except Exception:
             pass
+
+        # Taille mini : empêche de masquer boutons / panneaux en réduisant la fenêtre
+        self._lock_minsize()
+        # Re-verrouille après affichage réel (layout Mac/DPI parfois incomplet au 1er calcul)
+        self.after(150, self._lock_minsize)
+
+    def _lock_minsize(self):
+        """Bloque la réduction de la fenêtre sous la taille nécessaire aux boutons."""
+        try:
+            self.update_idletasks()
+            mw = max(int(self.winfo_reqwidth()), 900)
+            mh = max(int(self.winfo_reqheight()), 620)
+            self.minsize(mw, mh)
+        except Exception:
+            pass
+
     # ─────────────────────────────────────────────────────────────
     # Résolution dossier textures
     # ─────────────────────────────────────────────────────────────
@@ -2204,6 +2213,11 @@ class CombZoneEditor(tk.Toplevel):
         except Exception:
             pass
 
+        # Taille mini : boutons bas + liste zones restent visibles
+        self.update_idletasks()
+        self.minsize(max(self.winfo_reqwidth(), 720),
+                     max(self.winfo_reqheight(), 520))
+
     # ── Chargement image ────────────────────────────────────────────
 
     def _load_image(self):
@@ -2456,6 +2470,11 @@ class BatchPreviewWindow(tk.Toplevel):
         except Exception:
             pass
 
+        # Taille mini : bouton Fermer + grille de vignettes restent accessibles
+        self.update_idletasks()
+        self.minsize(max(self.winfo_reqwidth(), 640),
+                     max(self.winfo_reqheight(), 480))
+
     def _load_all(self):
         T    = self.THUMB_SIZE
         cols = self.COLS
@@ -2676,6 +2695,11 @@ class BatchZoomWindow(tk.Toplevel):
             _TM.apply_to_root(self)
         except Exception:
             pass
+
+        # Taille mini : boutons Reset zoom / Fermer restent visibles
+        self.update_idletasks()
+        self.minsize(max(self.winfo_reqwidth(), 520),
+                     max(self.winfo_reqheight(), 400))
 
     def _reset_zoom(self):
         self._zoom  = 1.0
@@ -2991,6 +3015,12 @@ class FusionPreviewWindow(tk.Toplevel):
             _TM.apply_to_root(self)
         except Exception:
             pass
+
+        # Taille mini : curseur + 4 boutons bas restent toujours visibles
+        # (canvas 880×620 + barres titre/statut/curseur/boutons)
+        self.update_idletasks()
+        self.minsize(max(self.winfo_reqwidth(), 920),
+                     max(self.winfo_reqheight(), 1000))
 
     # ── Calcul (thread) ──────────────────────────────────────────────
 

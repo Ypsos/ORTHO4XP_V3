@@ -146,6 +146,7 @@ T = {
     "📋 Exporter liste"                 : "📋 Export list",
     "🎨 Appliquer au groupe"            : "🎨 Apply to group",
     "💾 Générer .comb"                  : "💾 Generate .comb",
+    "🛡 Création Zones à protéger"      : "🛡 Create protected zones",
     "👁 Batch Preview couche"           : "👁 Batch Preview layer",
     "🗑 Supprimer DDS sélect."          : "🗑 Delete selected DDS",
     "🎯 Auto-détecter"                  : "🎯 Auto-detect",

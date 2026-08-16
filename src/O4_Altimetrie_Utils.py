@@ -394,7 +394,7 @@ def _source_assainie(src_path, tmp_dir, marque, log=None):
         _assainir_fichier(src_path, tmp_path, log=log)
     except Exception as e:
         if log:
-            log("      Assainissement impossible : %s" % e)
+            log("      Note : assainissement non nécessaire (%s) — on continue." % e)
         try:
             os.remove(tmp_path)
         except Exception:

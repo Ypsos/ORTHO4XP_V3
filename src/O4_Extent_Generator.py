@@ -133,6 +133,20 @@ _DEFAULT_PIXEL = "10"
 _DEFAULT_BUFFER = "0"
 _DEFAULT_BLUR = "500"
 
+# Résolution (pixel_size) recommandée SELON LE NIVEAU. Valeurs conseillées par
+# un utilisateur expérimenté sur le forum : 10 pour un département est bien,
+# mais trop lourd pour une région, et ingérable pour un pays (masque énorme).
+#   - Département (6) : 10    (fin, zone petite)
+#   - Région (4)     : 30    (« 20 ou 30 » selon l'expert → on prend 30)
+#   - Pays (2)       : 1000  (« très basse, ex. 1000 si le pays est grand »)
+# L'utilisateur garde la main : ces valeurs ne sont que des DÉFAUTS, modifiables
+# dans les Réglages avancés (l'expert affine selon son cas).
+_PIXEL_PAR_NIVEAU = {
+    "6": "10",     # Département / Province
+    "4": "30",     # Région / Land / Canton
+    "2": "1000",   # Pays entier
+}
+
 
 # ── Bouton Mac-safe : Frame + Label (JAMAIS tk.Button) ────────────────────────
 # Patron identique à _make_themed_button d'O4_lay_generator / O4_Menu_Avance.
@@ -544,6 +558,86 @@ def _run_creation(country_name, extent_code, admin_level,
         return False
 
 
+def _run_creation_from_osm(country_name, extent_code, osm_bz2_path,
+                           pixel_size, buffer_size, blur_size, log):
+    """Crée un extent à partir d'un fichier .osm.bz2 DÉJÀ CONSTRUIT (typiquement
+    tracé à la main dans JOSM). Reproduit ce que l'expert fait en console :
+      1. copie le .osm.bz2 fourni dans Extents/<pays>/<code>.osm.bz2 ;
+      2. lance O4_Mask_Utils.py avec 5 arguments (SANS requête OSM) ;
+         → Mask détecte le fichier présent et le RECYCLE (pas de téléchargement).
+    Renvoie True si le trio complet est créé, False sinon."""
+    import subprocess
+    import shutil
+
+    mask = _mask_utils_path()
+    if not os.path.isfile(mask):
+        log(_L("Introuvable : O4_Mask_Utils.py (dans src/).",
+               "Not found: O4_Mask_Utils.py (in src/)."))
+        return False
+
+    if not osm_bz2_path or not os.path.isfile(osm_bz2_path):
+        log(_L("Fichier .osm.bz2 introuvable : %s",
+               "The .osm.bz2 file was not found: %s") % osm_bz2_path)
+        return False
+
+    # Dossier de destination (créé si besoin).
+    country_dir = os.path.join(_extents_dir(), country_name)
+    try:
+        os.makedirs(country_dir, exist_ok=True)
+    except Exception as ex:
+        log(_L("Impossible de créer le dossier : %s",
+               "Could not create the folder: %s") % ex)
+        return False
+
+    # Mask attend le fichier nommé <code>.osm.bz2 dans le répertoire courant.
+    cible = os.path.join(country_dir, extent_code + ".osm.bz2")
+    try:
+        # Ne pas se copier sur soi-même si la source est déjà la cible.
+        if os.path.abspath(osm_bz2_path) != os.path.abspath(cible):
+            shutil.copy2(osm_bz2_path, cible)
+    except Exception as ex:
+        log(_L("Copie du .osm.bz2 impossible : %s",
+               "Could not copy the .osm.bz2: %s") % ex)
+        return False
+
+    # Commande à 5 arguments (SANS requête) → Mask recycle le .osm.bz2 présent.
+    cmd = [
+        sys.executable or "python3", mask, extent_code,
+        str(pixel_size), str(buffer_size), str(blur_size),
+    ]
+    log(_L("Construction de l'extent depuis le .osm.bz2 fourni…",
+           "Building the extent from the provided .osm.bz2…"))
+    log("→ " + extent_code + "  (.osm.bz2 recyclé)")
+
+    try:
+        proc = subprocess.run(
+            cmd, cwd=country_dir,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            universal_newlines=True,
+        )
+    except Exception as ex:
+        log(_L("Erreur au lancement : %s", "Launch error: %s") % ex)
+        return False
+
+    complet, manquants = _trio_status(country_dir, extent_code)
+    if complet:
+        log(_L("✅ Extent créé depuis le .osm.bz2 : 3 fichiers présents dans %s/",
+               "✅ Extent created from the .osm.bz2: 3 files present in %s/")
+            % country_name)
+        if _reload_extents_hot():
+            log(_L("↻ Extent rechargé — disponible sans relancer Ortho.",
+                   "↻ Extent reloaded — available without restarting Ortho."))
+        else:
+            log(_L("Pensez à relancer Ortho pour qu'il soit pris en compte.",
+                   "Remember to restart Ortho so it is taken into account."))
+        return True
+    else:
+        log(_L("⚠️ Extent incomplet (manque : %s). Le .osm.bz2 est-il valide ?",
+               "⚠️ Incomplete extent (missing: %s). Is the .osm.bz2 valid?")
+            % ", ".join(manquants))
+        return False
+
+
 # ── Fenêtre principale (deux modes : Par tuile / Par nom) ─────────────────────
 def run_extent_generator(parent=None):
     """Ouvre la fenêtre « Générateur d'Extents ».
@@ -772,6 +866,49 @@ def run_extent_generator(parent=None):
     name_var.trace_add("write", _sync_code)
     code_entry.bind("<Key>", lambda e: code_edited.__setitem__("by_user", True))
 
+    # ── Option EXPERT : utiliser un .osm.bz2 déjà construit (JOSM) ──
+    osm_use_var = tk.BooleanVar(value=False)
+    osm_path_var = tk.StringVar(value="")
+    osm_row = tk.Frame(nom_frame, bg=BG)
+    osm_row.pack(fill="x", pady=(6, 2))
+    tk.Checkbutton(
+        osm_row,
+        text=_L("J'ai déjà un fichier .osm.bz2 (tracé JOSM)",
+                "I already have a .osm.bz2 file (JOSM-drawn)"),
+        variable=osm_use_var, bg=BG, fg=FG, selectcolor=ENTRY_BG,
+        activebackground=BG, activeforeground=FG, highlightthickness=0,
+        font=_font(10 if _OS == "mac" else 9)
+    ).pack(side="left")
+
+    osm_pick_row = tk.Frame(nom_frame, bg=BG)  # affiché seulement si coché
+
+    def _choisir_osm():
+        try:
+            from tkinter import filedialog
+            chemin = filedialog.askopenfilename(
+                title=_L("Choisir un fichier .osm.bz2",
+                         "Choose a .osm.bz2 file"),
+                filetypes=[("OSM bz2", "*.osm.bz2"), ("Tous", "*.*")])
+            if chemin:
+                osm_path_var.set(chemin)
+        except Exception:
+            pass
+
+    _make_themed_button(
+        tk, osm_pick_row,
+        _L("📂 Choisir le .osm.bz2", "📂 Choose the .osm.bz2"),
+        _choisir_osm).pack(side="left", padx=(0, 6))
+    tk.Label(osm_pick_row, textvariable=osm_path_var, bg=BG,
+             fg=FG2, font=_font(9 if _OS == "mac" else 8),
+             anchor="w").pack(side="left", fill="x", expand=True)
+
+    def _on_osm_toggle(*_a):
+        if osm_use_var.get():
+            osm_pick_row.pack(fill="x", pady=(0, 2), after=osm_row)
+        else:
+            osm_pick_row.pack_forget()
+    osm_use_var.trace_add("write", _on_osm_toggle)
+
     # ── Bascule d'affichage selon le mode ──
     def _on_mode_change(*_a):
         if mode_var.get() == "tuile":
@@ -784,9 +921,22 @@ def run_extent_generator(parent=None):
     mode_var.trace_add("write", _on_mode_change)
 
     # ── Réglages avancés (repliés) ──
-    px_var = tk.StringVar(value=_DEFAULT_PIXEL)
+    px_var = tk.StringVar(value=_PIXEL_PAR_NIVEAU.get(level_var.get(),
+                                                      _DEFAULT_PIXEL))
     bf_var = tk.StringVar(value=_DEFAULT_BUFFER)
     bl_var = tk.StringVar(value=_DEFAULT_BLUR)
+
+    # La finesse par défaut suit le niveau (département=10, région=30, pays=200)
+    # tant que l'utilisateur n'a pas saisi sa propre valeur. Dès qu'il modifie
+    # le champ à la main, on respecte son choix et on ne l'écrase plus.
+    _px_touche_par_user = {"on": False}
+
+    def _on_level_change_px(*_a):
+        if _px_touche_par_user["on"]:
+            return  # l'utilisateur a fixé sa valeur : on n'y touche pas
+        px_var.set(_PIXEL_PAR_NIVEAU.get(level_var.get(), _DEFAULT_PIXEL))
+    level_var.trace_add("write", _on_level_change_px)
+
     adv_frame = tk.Frame(win, bg=BG)
     for i, (lab_fr, lab_en, var) in enumerate([
         ("Finesse (pixel_size)", "Fineness (pixel_size)", px_var),
@@ -796,10 +946,24 @@ def run_extent_generator(parent=None):
         tk.Label(adv_frame, text=_L(lab_fr, lab_en), bg=BG, fg=FG2,
                  font=_font(10 if _OS == "mac" else 9)
                  ).grid(row=i, column=0, sticky="w", padx=(4, 6), pady=1)
-        tk.Entry(adv_frame, textvariable=var, bg=ENTRY_BG, fg=FG,
-                 insertbackground=FG, width=10,
-                 font=_font(10 if _OS == "mac" else 9)
-                 ).grid(row=i, column=1, sticky="w", pady=1)
+        ent = tk.Entry(adv_frame, textvariable=var, bg=ENTRY_BG, fg=FG,
+                       insertbackground=FG, width=10,
+                       font=_font(10 if _OS == "mac" else 9))
+        ent.grid(row=i, column=1, sticky="w", pady=1)
+        if var is px_var:
+            # Marquer que l'utilisateur a pris la main dès qu'il tape dans px.
+            ent.bind("<Key>",
+                     lambda e: _px_touche_par_user.__setitem__("on", True))
+    # Guide de résolution (conseil issu du retour testeur).
+    tk.Label(adv_frame,
+             text=_L("Finesse conseillée : 10 département · 30 région · "
+                     "1000 pays (masque plus léger).",
+                     "Suggested fineness: 10 department · 30 region · "
+                     "1000 country (lighter mask)."),
+             bg=BG, fg=FG2, font=_font(9 if _OS == "mac" else 8),
+             wraplength=440, justify="left"
+             ).grid(row=3, column=0, columnspan=2, sticky="w", padx=(4, 6),
+                    pady=(4, 1))
     adv_shown = {"on": False}
 
     def _toggle_adv():
@@ -864,6 +1028,24 @@ def run_extent_generator(parent=None):
             log(_L("Terminé : %d extent(s) créé(s).",
                    "Done: %d extent(s) created.") % n_ok)
         else:
+            # Mode « Par nom » (expert).
+            # Cas A : l'utilisateur fournit un .osm.bz2 déjà construit (JOSM).
+            if osm_use_var.get():
+                osm_path = osm_path_var.get().strip()
+                if not osm_path:
+                    log(_L("Cochez la case puis choisissez votre fichier .osm.bz2.",
+                           "Tick the box then choose your .osm.bz2 file."))
+                    return
+                code = code_var.get().strip()
+                if not code:
+                    base = os.path.basename(osm_path)
+                    code = base.replace(".osm.bz2", "").replace(" ", "_")
+                _run_creation_from_osm(
+                    country_name=dest, extent_code=code,
+                    osm_bz2_path=osm_path,
+                    pixel_size=px, buffer_size=bf, blur_size=bl, log=log)
+                return
+            # Cas B : création classique par nom OSM (téléchargement).
             name_value = name_var.get().strip()
             if not name_value:
                 log(_L("Indiquez le nom de la zone.",

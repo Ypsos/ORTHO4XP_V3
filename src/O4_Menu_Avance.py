@@ -296,6 +296,28 @@ def _ouvrir_comb(parent, status):
         status(tr("Moteur .comb prêt (chapitres 1-5) — interface à assembler."))
 
 
+def _ouvrir_comb_assembler(parent, status):
+    """Ouvre l'ASSEMBLEUR de .comb (mode guidé) : tableau qui relie chaque
+    extent présent dans Extents/ à un provider, avec alertes de couverture.
+    Sortie dans Providers/Provider_Extents.comb. Même module que le générateur
+    (O4_comb_generator), point d'entrée run_comb_assembler(parent). Import LOCAL
+    et protégé : la fenêtre Avancé reste ouvrable même si le module est absent."""
+    try:
+        import O4_comb_generator as CG
+    except Exception as ex:
+        status(tr("Assembleur .comb introuvable : %s") % ex)
+        return
+    fn = getattr(CG, "run_comb_assembler", None)
+    if callable(fn):
+        try:
+            fn(parent)
+            status(tr("Assembleur .comb ouvert."))
+        except Exception as ex:
+            status(tr("Erreur à l'ouverture de l'assembleur .comb : %s") % ex)
+    else:
+        status(tr("Module .comb présent mais run_comb_assembler() absent."))
+
+
 def _ouvrir_josm(parent, status):
     """Ouvre la fenêtre « Avancé (couches JOSM) » existante, sans la réécrire.
     On délègue au module autonome O4_Avance_Utils (point d'entrée
@@ -401,14 +423,18 @@ def run_menu_avance(parent=None):
     # Les boutons de la porte d'entrée. Un seul est actif aujourd'hui (.comb) ;
     # les autres sont posés « à venir » pour montrer la structure sans mentir.
     boutons = [
-        (tr("Générer un fichier .comb"), lambda: _ouvrir_comb(parent, status)),
+        (_L("🔗  Relier mes extents aux providers (.comb)",
+            "🔗  Link my extents to providers (.comb)"),
+         lambda: _ouvrir_comb_assembler(parent, status)),
+        (_L("🧩  Générer un .comb — mode expert",
+            "🧩  Generate a .comb — expert mode"),
+         lambda: _ouvrir_comb(parent, status)),
         (tr("JOSM / Extents (masques, zones)"), lambda: _ouvrir_josm(parent, status)),
         (_L("🗺  Générer un Extent (pays / région)",
             "🗺  Generate an Extent (country / region)"),
          lambda: _ouvrir_extent_generator(parent, status)),
-        (tr("Altimétrie"), lambda: _ouvrir_altimetrie(parent, status)),
-        (tr("Correction imagerie"), _a_venir(tr("Correction imagerie"), status)),
-        (_L("📄  Pas à pas — utilisation des modules",
+        (tr("QGIS / Altimétrie"), lambda: _ouvrir_altimetrie(parent, status)),
+             (_L("📄  Pas à pas — utilisation des modules",
             "📄  Step by step — using the modules"),
          lambda: _ouvrir_tutos(parent, status)),
     ]
