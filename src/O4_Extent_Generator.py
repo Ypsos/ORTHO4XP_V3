@@ -131,7 +131,7 @@ _NAME_KEYS = ["name", "name:fr", "name:en", "name:de", "name:it",
 # Réglages fins par défaut (valeurs standard, prouvées sur de vrais extents).
 _DEFAULT_PIXEL = "10"
 _DEFAULT_BUFFER = "0"
-_DEFAULT_BLUR = "500"
+_DEFAULT_BLUR = "0"
 
 # Résolution (pixel_size) recommandée SELON LE NIVEAU. Valeurs conseillées par
 # un utilisateur expérimenté sur le forum : 10 pour un département est bien,
@@ -955,11 +955,17 @@ def run_extent_generator(parent=None):
             ent.bind("<Key>",
                      lambda e: _px_touche_par_user.__setitem__("on", True))
     # Guide de résolution (conseil issu du retour testeur).
+        # Guide de résolution (conseils Oscar Pilote / tests extents)
+        # Guide de résolution (conseils Oscar Pilote / tests extents)
     tk.Label(adv_frame,
-             text=_L("Finesse conseillée : 10 département · 30 région · "
-                     "1000 pays (masque plus léger).",
-                     "Suggested fineness: 10 department · 30 region · "
-                     "1000 country (lighter mask)."),
+             text=_L(
+                 "Finesse = précision du masque.\n"
+                 "Marge = 0 de préférence (négatif = rentrer la frontière).\n"
+                 "Dégradé = 0 de préférence (n’augmenter que si le provider d’en face déborde).",
+                 "Fineness = mask precision.\n"
+                 "Buffer = 0 preferred (negative = pull border inward).\n"
+                 "Blur = 0 preferred (increase only if the opposite provider overlaps)."
+             ),
              bg=BG, fg=FG2, font=_font(9 if _OS == "mac" else 8),
              wraplength=440, justify="left"
              ).grid(row=3, column=0, columnspan=2, sticky="w", padx=(4, 6),

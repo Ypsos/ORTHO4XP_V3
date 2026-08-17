@@ -135,6 +135,7 @@ class Launcher(tk.Tk):
         super().__init__()
         self.title(f"Ortho4XP {APP_VERSION} Launcher - Roland Edition")
         self.geometry("950x950")
+        self.minsize(900, 780)
         self.configure(bg=BG_GLOBAL)
 
         tk.Label(self, text=f"Ortho4XP {APP_VERSION}", font=("Helvetica", 36, "bold"),
