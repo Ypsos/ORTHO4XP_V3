@@ -86,19 +86,45 @@ def build_lay_text(fields: dict) -> str:
     ]
     lines = []
     for key in order:
-        if key in fields and str(fields[key]).strip() != "":
-            lines.append("{}={}".format(key, fields[key]))
+        if key not in fields:
+            continue
+        val = str(fields[key]).strip()
+        # Si l'utilisateur a collé la LIGNE complète « clé=valeur », on retire
+        # le préfixe « clé= » en trop (sinon on obtenait « url_prefix=url_prefix=… »
+        # ou « layers=layers=… »).
+        if val.lower().startswith(key.lower() + "="):
+            val = val[len(key) + 1:].strip()
+        if val != "":
+            lines.append("{}={}".format(key, val))
     return "\n".join(lines) + "\n"
+
+def _safe_lay_name(provider_name):
+    """Nom de fichier .lay SÛR, SANS extension. Retire un « .lay » final
+    éventuel (sinon « Aoste_2012.lay » donnait « Aoste_2012lay.lay », le point
+    étant supprimé par le filtrage des caractères)."""
+    name = (provider_name or "").strip()
+    if name.lower().endswith(".lay"):
+        name = name[:-4]
+    safe = "".join(c for c in name if c.isalnum() or c in "-_ ").strip()
+    return safe or "provider"
 
 def target_path(lat, lon, provider_name: str) -> str:
     tile = _tile_name(lat, lon)
-    safe = "".join(c for c in provider_name if c.isalnum() or c in "-_ ").strip()
-    if not safe:
-        safe = "provider"
-    return os.path.join(_providers_dir(), tile, safe + ".lay")
+    return os.path.join(_providers_dir(), tile, _safe_lay_name(provider_name) + ".lay")
 
-def write_lay(lat, lon, provider_name: str, fields: dict, overwrite=False):
-    path = target_path(lat, lon, provider_name)
+def target_path_in_dir(dest_dir, provider_name: str) -> str:
+    """Chemin .lay dans un dossier provider CHOISI par l'utilisateur (pour
+    réutiliser un .lay sur d'autres tuiles)."""
+    return os.path.join(dest_dir, _safe_lay_name(provider_name) + ".lay")
+
+def write_lay(lat, lon, provider_name: str, fields: dict, overwrite=False,
+              dest_dir=None):
+    # dest_dir fourni → on écrit LÀ (dossier provider choisi) ; sinon dans
+    # Providers/<tuile active>/ (comportement par défaut conservé).
+    if dest_dir:
+        path = target_path_in_dir(dest_dir, provider_name)
+    else:
+        path = target_path(lat, lon, provider_name)
     if os.path.exists(path) and not overwrite:
         return (False, path, "EXISTS")
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -208,7 +234,50 @@ def run_lay_generator(parent=None):
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
     win.title(tr("lay_win_title", "Générateur de provider (.lay)"))
     win.configure(bg=BG)
-    win.resizable(False, False)
+    win.resizable(True, True)
+    if parent is not None:
+        try:
+            win.transient(parent)
+        except Exception:
+            pass
+
+    # Dossier où sera écrit le .lay. Par défaut : Providers/<tuile active>/
+    # (comportement conservé). L'utilisateur peut en choisir un autre pour
+    # réutiliser le même .lay sur d'autres tuiles.
+    v_dest_dir = tk.StringVar(
+        value=os.path.join(_providers_dir(), _tile_name(cur_lat, cur_lon)))
+    v_dest_disp = tk.StringVar(value="")
+
+    def _maj_dest_disp(*_):
+        p = v_dest_dir.get()
+        try:
+            court = os.path.join(os.path.basename(os.path.dirname(p)),
+                                 os.path.basename(p))
+        except Exception:
+            court = p
+        v_dest_disp.set("→ " + court)
+    v_dest_dir.trace_add("write", _maj_dest_disp)
+    _maj_dest_disp()
+
+    def _fixer_taille_min(w):
+        """Ouvre la fenêtre à la taille de son contenu et EMPÊCHE de la réduire
+        en dessous : rien n'est jamais masqué, ni en largeur ni en hauteur.
+        La fenêtre reste agrandissable et est centrée à l'écran. On ne fige PAS
+        la taille (on ne pose que la position) : ainsi elle grandit d'elle-même
+        si le contenu grandit, et minsize interdit de la rétrécir sous le
+        contenu."""
+        try:
+            w.update_idletasks()
+            rw, rh = w.winfo_reqwidth(), w.winfo_reqheight()
+            sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
+            x = max(0, (sw - rw) // 2)
+            y = max(0, (sh - rh) // 3)
+            w.minsize(rw, rh)
+            w.geometry("+%d+%d" % (x, y))
+            w.resizable(True, True)
+            w.lift()
+        except Exception:
+            pass
 
     # ttk style pour les combobox aux couleurs du thème + fix macOS
     style = ttk.Style(win)
@@ -253,11 +322,7 @@ def run_lay_generator(parent=None):
     lbl(9, "image_type");        v_img = combo(9, ["jpeg", "png"], "jpeg")
     lbl(10, "imagery_dir");      v_dir = combo(10, ["grouped", "code"], "grouped")
 
-    v_gui = tk.BooleanVar(value=True)
-    tk.Checkbutton(win, text=tr("lay_in_gui", "Afficher dans le menu (in_GUI)"), variable=v_gui,
-                   bg=BG, fg=FG, selectcolor=BG, activebackground=BG,
-                   activeforeground=FG, highlightthickness=0).grid(
-                   row=11, column=0, columnspan=2, sticky="w", padx=8, pady=(4, 2))
+    lbl(11, "in_GUI");           v_gui = combo(11, ["True", "False"], "True")
 
     status = tk.Label(win, text="", bg=BG, fg=FG2, anchor="w")
     status.grid(row=12, column=0, columnspan=2, sticky="ew", padx=8)
@@ -273,7 +338,7 @@ def run_lay_generator(parent=None):
             "wms_version": v_ver.get().strip(),
             "image_type": v_img.get().strip(),
             "imagery_dir": v_dir.get().strip(),
-            "in_GUI": "True" if v_gui.get() else "False",
+            "in_GUI": "True" if v_gui.get() == "True" else "False",
         }
         if fields["request_type"] == "tms":
             fields["grid_type"] = "webmercator"
@@ -281,7 +346,7 @@ def run_lay_generator(parent=None):
 
     def refresh_preview(*_):
         try:
-            name = v_name.get().strip() or "provider"
+            name = _safe_lay_name(v_name.get()) or "provider"
             txt = build_lay_text(collect())
             preview.configure(state="normal")
             preview.delete("1.0", "end")
@@ -301,7 +366,7 @@ def run_lay_generator(parent=None):
         v_ver.set(data.get("wms_version", data.get("wmts_version", "1.3.0")))
         v_img.set(data.get("image_type", "jpeg"))
         v_dir.set(data.get("imagery_dir", "grouped"))
-        v_gui.set(str(data.get("in_GUI", "True")).lower() in ("true", "1", "yes"))
+        v_gui.set("True" if str(data.get("in_GUI", "True")).lower() in ("true", "1", "yes") else "False")
         if name:
             v_name.set(name)
 
@@ -338,6 +403,10 @@ def run_lay_generator(parent=None):
 
         def refresh_list(*_):
             flt = v_filter.get().strip().lower()
+            # On tolère que l'utilisateur tape « Swisstopo.lay » : le nom stocké
+            # est sans extension, donc on retire un « .lay » final du filtre.
+            if flt.endswith(".lay"):
+                flt = flt[:-4]
             lst.delete(0, "end")
             shown.clear()
             for folder, name, path in lays:
@@ -377,6 +446,11 @@ def run_lay_generator(parent=None):
 
         win2.grid_columnconfigure(1, weight=1)
         win2.grid_rowconfigure(1, weight=1)
+        try:
+            win2.transient(win)
+        except Exception:
+            pass
+        _fixer_taille_min(win2)
         refresh_list()
         if not lays:
             info.config(text=tr("lay_browse_empty",
@@ -401,7 +475,7 @@ def run_lay_generator(parent=None):
         for v in (v_name, v_prefix, v_template, v_layers):
             v.set("")
         v_type.set("wms"); v_epsg.set("3857"); v_size.set("512")
-        v_ver.set("1.3.0"); v_img.set("jpeg"); v_dir.set("grouped"); v_gui.set(True)
+        v_ver.set("1.3.0"); v_img.set("jpeg"); v_dir.set("grouped"); v_gui.set("True")
         status.config(text="Formulaire effacé.")
 
     def do_load():
@@ -432,9 +506,16 @@ def run_lay_generator(parent=None):
         v_ver.set(data.get("wms_version", data.get("wmts_version", "1.3.0")))
         v_img.set(data.get("image_type", "jpeg"))
         v_dir.set(data.get("imagery_dir", "grouped"))
-        v_gui.set(str(data.get("in_GUI", "True")).lower() in ("true", "1", "yes"))
+        v_gui.set("True" if str(data.get("in_GUI", "True")).lower() in ("true", "1", "yes") else "False")
         v_name.set(os.path.splitext(os.path.basename(path))[0])
         status.config(text="Chargé : {}".format(os.path.basename(path)))
+
+    def _choisir_dossier():
+        d = filedialog.askdirectory(
+            title=tr("lay_dest_pick", "Choisir un dossier provider"),
+            initialdir=_providers_dir())
+        if d:
+            v_dest_dir.set(d)
 
     def do_create():
         name = v_name.get().strip()
@@ -447,11 +528,13 @@ def run_lay_generator(parent=None):
         if problems:
             messagebox.showerror("Provider (.lay)", "\n".join(problems))
             return
-        ok, path, msg = write_lay(cur_lat, cur_lon, name, fields, overwrite=False)
+        ok, path, msg = write_lay(cur_lat, cur_lon, name, fields,
+                                  overwrite=False, dest_dir=v_dest_dir.get())
         if not ok and msg == "EXISTS":
             if messagebox.askyesno("Provider (.lay)",
                     "Un fichier existe déjà :\n{}\n\nÉcraser ?".format(path)):
-                ok, path, msg = write_lay(cur_lat, cur_lon, name, fields, overwrite=True)
+                ok, path, msg = write_lay(cur_lat, cur_lon, name, fields,
+                                          overwrite=True, dest_dir=v_dest_dir.get())
             else:
                 return
         if ok:
@@ -465,6 +548,18 @@ def run_lay_generator(parent=None):
 
     bar = tk.Frame(win, bg=BG)
     bar.grid(row=13, column=0, columnspan=2, pady=12)
+
+    # Rangée : dossier de destination du .lay (défaut = tuile active) + choix.
+    row_folder = tk.Frame(bar, bg=BG)
+    row_folder.pack(side="top", pady=(0, 6))
+    tk.Label(row_folder, text=tr("lay_dest_label", "Dossier provider :"),
+             bg=BG, fg=FG2).pack(side="left", padx=(0, 4))
+    tk.Label(row_folder, textvariable=v_dest_disp, bg=BG, fg=FG,
+             font=("", 11, "bold")).pack(side="left", padx=(0, 8))
+    _make_themed_button(tk, row_folder,
+                        tr("lay_dest_btn", "📁 Autre dossier…"),
+                        _choisir_dossier).pack(side="left")
+
     row_presets = tk.Frame(bar, bg=BG)
     row_presets.pack(side="top", pady=(0, 4))
     row_actions = tk.Frame(bar, bg=BG)
@@ -487,5 +582,6 @@ def run_lay_generator(parent=None):
     refresh_preview()
 
     win.grid_columnconfigure(1, weight=1)
+    _fixer_taille_min(win)
     if parent is None:
         win.mainloop()

@@ -39,6 +39,30 @@ except Exception:
     def _tr(key):
         return key
 
+# Langue active : import protégé. Sert à choisir la version FR ou EN d'un
+# libellé bilingue résolu ICI (sans toucher aux fichiers O4_Lang_*). Même
+# mécanisme que O4_Menu_Avance. Si O4_Lang est absent/ancien → EN par défaut.
+try:
+    from O4_Lang import current_lang as _current_lang
+except Exception:
+    def _current_lang():
+        return "EN"
+
+
+def _lang_code():
+    """Retourne 'FR' si la langue active est le français, sinon 'EN'."""
+    try:
+        code = (_current_lang() or "EN").upper()
+    except Exception:
+        code = "EN"
+    return "FR" if code == "FR" else "EN"
+
+
+def _L(fr, en):
+    """Libellé bilingue résolu ICI (sans toucher aux fichiers O4_Lang_*).
+    FR si langue active = français, EN sinon."""
+    return fr if _lang_code() == "FR" else en
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CHAPITRE 1 — AFFICHAGE DES PROVIDERS + SCORES
 #  Rôle : scanner le dossier Providers/, lister tous les providers (.lay) que
@@ -1223,11 +1247,16 @@ def _make_themed_button_c(tk, parent, text, command):
     return frame
 
 
-def run_comb_generator(parent=None):
+def run_comb_creer(parent=None):
     """
-    Ouvre la fenêtre « Générer un .comb » (v1). Chargée seulement au clic.
-    parent = fenêtre principale Ortho4XP (ou None en test isolé).
-    Retourne la fenêtre (utile aux tests headless).
+    MODE 1 — « Créer un nouveau .comb » (liste des providers à cocher).
+    Fenêtre INCHANGÉE (le mode qui fonctionne) : on coche les providers, on
+    renseigne zone / filtre / priorité, puis Aperçu / Générer. Chargée seulement
+    au clic. parent = fenêtre principale Ortho4XP (ou None en test isolé).
+    Retourne la fenêtre. Appelée par le sélecteur run_comb_generator (écran de
+    choix). L'ancien bouton « Importer un .comb » (qui cochait par erreur dans
+    la liste figée) a été RETIRÉ : l'import se fait désormais en mode 2
+    (run_comb_corriger), une ligne du fichier = une ligne éditable.
     """
     import tkinter as tk
     from tkinter import ttk, messagebox
@@ -1239,19 +1268,22 @@ def run_comb_generator(parent=None):
     CON_FG = _cc("console_fg", "#50fa7b")
     ENTRY_BG = "#f0f4f2"
     ENTRY_FG = "#1e3028"
+    # Police normale — MANQUAIT dans cette fonction : sans elle, la création du
+    # label d'aide levait un NameError, d'où le message d'aide jamais affiché.
+    FONT_N = ("Helvetica", 11) if _OS_UI == "mac" else ("Segoe UI", 9)
 
     # Racine Ortho4XP → dossier Providers/ (là où vivent EUR.comb, etc.).
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     prov_dir = _providers_dir(base_dir)
 
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
-    win.title(_tr("Générer un .comb — mode expert"))
+    win.title(_tr("Créer un nouveau .comb"))
     win.configure(bg=BG)
     # Fenêtre dimensionnée et redimensionnable (cohérence avec l'assembleur ;
     # évite les libellés/boutons coupés selon la plateforme).
     try:
-        win.geometry("1180x680")
-        win.minsize(1180, 680)
+        win.geometry("1180x800")
+        win.minsize(1000, 600)
         win.resizable(True, True)
     except Exception:
         pass
@@ -1280,9 +1312,17 @@ def run_comb_generator(parent=None):
              font=("Helvetica", 11) if _OS_UI == "mac" else ("Segoe UI", 9)
              ).pack(fill="x", padx=12, pady=(0, 8))
 
-    # ── Zone scrollable listant les providers ────────────────────────────────
+    # ── Bas de fenêtre ANCRÉ — créé et empilé AVANT la liste ─────────────────
+    # Empilé en bas (side='bottom') AVANT la zone scrollable : si la fenêtre
+    # manque de hauteur, c'est la LISTE (défilable) qui cède de la place, JAMAIS
+    # le bas. Le message d'aide, les boutons et Fermer restent donc TOUJOURS
+    # visibles. Les enfants du bas sont ajoutés plus bas dans le code.
+    foot = tk.Frame(win, bg=BG)
+    foot.pack(side="bottom", fill="x")
+
+    # ── Zone scrollable listant les providers (défilement vertical) ──────────
     cadre = tk.Frame(win, bg=BG)
-    cadre.pack(fill="both", expand=True, padx=12, pady=4)
+    cadre.pack(side="top", fill="both", expand=True, padx=12, pady=4)
     canvas = tk.Canvas(cadre, bg=BG, highlightthickness=0, height=280)
     scroll = ttk.Scrollbar(cadre, orient="vertical", command=canvas.yview)
     inner = tk.Frame(canvas, bg=BG)
@@ -1368,6 +1408,15 @@ def run_comb_generator(parent=None):
         ok, problemes = valider_selection(sel)
         preview.delete("1.0", "end")
         if not ok:
+            if sel.taille() == 0:
+                preview.insert("1.0",
+                               _L("Cochez au moins un provider dans la liste "
+                                  "de gauche, puis Aperçu.",
+                                  "Tick at least one provider in the list on "
+                                  "the left, then Preview."))
+                status(_L("Cochez au moins un provider avant l'aperçu.",
+                          "Tick at least one provider before previewing."))
+                return
             preview.insert("1.0", "Sélection non valide :\n  - "
                            + "\n  - ".join(problemes))
             status(_tr("Aperçu : sélection incomplète."))
@@ -1380,6 +1429,18 @@ def run_comb_generator(parent=None):
         sel = _selection_depuis_ihm()
         ok, problemes = valider_selection(sel)
         if not ok:
+            # Cas le plus courant : aucune case cochée → message explicite,
+            # plutôt que le libellé technique « Sélection vide : rien à écrire ».
+            if sel.taille() == 0:
+                messagebox.showwarning(
+                    _L("Générer .comb", "Generate .comb"),
+                    _L("Cochez au moins un provider dans la liste de gauche "
+                       "avant de générer.",
+                       "Tick at least one provider in the list on the left "
+                       "before generating."))
+                status(_L("Cochez au moins un provider avant de générer.",
+                          "Tick at least one provider before generating."))
+                return
             messagebox.showwarning(_tr("Générer .comb"),
                                    "Sélection incomplète :\n- "
                                    + "\n- ".join(problemes))
@@ -1419,34 +1480,6 @@ def run_comb_generator(parent=None):
         elif "REFUS" in msg1 or "personnel" in msg1:
             messagebox.showerror(_tr("Générer .comb"), msg1)
 
-    # ── Importer un .comb (Chapitre 5) ───────────────────────────────────────
-    def _importer():
-        from tkinter import filedialog
-        chemin = filedialog.askopenfilename(
-            title=_tr("Importer un .comb"), initialdir=prov_dir,
-            filetypes=[("Fichiers .comb", "*.comb"), ("Tous", "*.*")])
-        if not chemin:
-            return
-        sel, rapport = importer_comb(chemin)
-        if sel is None:
-            messagebox.showerror(_tr("Importer .comb"), "\n".join(rapport))
-            status(rapport[0] if rapport else _tr("Import impossible."))
-            return
-        # reporter l'import sur les cases : on coche/prio/zone selon le fichier
-        par_nom = {e["provider"]: e for e in sel.entrees()}
-        for lg in lignes:
-            e = par_nom.get(lg["provider"])
-            if e:
-                lg["check"].set(1)
-                lg["zone"].set(e["zone"])
-                lg["filtre"].set(e.get("filtre", "none") or "none")
-                lg["prio"].set(_PRIO_AFF.get(e["priorite"], "medium"))
-            else:
-                lg["check"].set(0)
-        preview.delete("1.0", "end")
-        preview.insert("1.0", construire_texte_comb(sel))
-        status(rapport[0] if rapport else _tr("Import effectué."))
-
     # ── Créer un provider (.lay) : ouvre le générateur .lay existant ──────────
     def _creer_lay():
         """Ouvre le générateur de provider (.lay). C'est LUI qui contient les
@@ -1468,7 +1501,7 @@ def run_comb_generator(parent=None):
             status(_tr("Erreur à l'ouverture du générateur .lay : %s") % ex)
 
     # ── Ligne : nom du fichier de sortie ─────────────────────────────────────
-    barre = tk.Frame(win, bg=BG)
+    barre = tk.Frame(foot, bg=BG)
     barre.pack(fill="x", padx=12, pady=(6, 2))
     tk.Label(barre, text=_tr("Nom du fichier :"), bg=BG, fg=FG,
              font=("Helvetica", 11) if _OS_UI == "mac"
@@ -1478,25 +1511,70 @@ def run_comb_generator(parent=None):
              bg=ENTRY_BG, fg=ENTRY_FG,
              insertbackground=ENTRY_FG).pack(side="left", padx=6)
 
-    # ── Rangée de boutons ────────────────────────────────────────────────────
-    btns = tk.Frame(win, bg=BG)
+    # ── Rangée de boutons : Générer/Aperçu (gauche) / Créer un provider (droite) ─
+    btns = tk.Frame(foot, bg=BG)
     btns.pack(fill="x", padx=12, pady=4)
-    for txt, cmd in ((_tr("Importer un .comb"), _importer),
-                     (_tr("Créer un provider (.lay)"), _creer_lay),
-                     (_tr("Aperçu"), _apercu),
-                     (_tr("Générer"), _generer)):
-        _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
+    # Gauche : Générer (action principale de cette fenêtre) puis Aperçu.
+    b_gen = _make_themed_button_c(
+        tk, btns, _L("✅  Générer le .comb", "✅  Generate the .comb"), _generer)
+    b_gen.pack(side="left", padx=4)
+    b_ap = _make_themed_button_c(tk, btns, _L("Aperçu", "Preview"), _apercu)
+    b_ap.pack(side="left", padx=4)
+    # Droite : ouvre un AUTRE outil (fabrique un provider manquant .lay).
+    b_lay = _make_themed_button_c(
+        tk, btns, _L("➕  Créer un provider manquant (.lay)…",
+                     "➕  Create a missing provider (.lay)…"), _creer_lay)
+    b_lay.pack(side="right", padx=4)
+
+    # ── Ligne d'aide FIXE sous les boutons (remplace les info-bulles) ─────────
+    # Deux langues embarquées via _L : identique et lisible sur Windows, macOS
+    # et Linux. Aucun Toplevel, aucune dépendance à un fichier de langue.
+    tk.Label(foot,
+             text=_L("✅ Générer : écrit le .comb (cochez d'abord un provider).   "
+                     "👁 Aperçu : montre le texte sans écrire.   "
+                     "➕ Créer un provider : raccourci pour générer un fichier "
+                     "provider (.lay) manquant (n'écrit pas le .comb).",
+                     "✅ Generate: writes the .comb (tick a provider first).   "
+                     "👁 Preview: shows the text without writing.   "
+                     "➕ Create a provider: shortcut to generate a missing "
+                     "provider (.lay) file (does not write the .comb)."),
+             bg=BG, fg=FG2, anchor="w", justify="left",
+             font=FONT_N).pack(fill="x", padx=12, pady=(0, 4))
 
     # ── Aperçu texte ─────────────────────────────────────────────────────────
-    preview = tk.Text(win, height=5, width=64, bg=CON_BG, fg=CON_FG,
+    preview = tk.Text(foot, height=5, width=64, bg=CON_BG, fg=CON_FG,
                       insertbackground=CON_FG)
     preview.pack(fill="both", expand=False, padx=12, pady=(4, 4))
 
-    tk.Label(win, textvariable=status_var, bg=BG, fg=FG2, anchor="w",
+    tk.Label(foot, textvariable=status_var, bg=BG, fg=FG2, anchor="w",
              font=("Helvetica", 11) if _OS_UI == "mac"
              else ("Segoe UI", 9)).pack(fill="x", padx=12, pady=(2, 2))
 
-    _make_themed_button_c(tk, win, _tr("Fermer"), win.destroy).pack(pady=(2, 10))
+    _make_themed_button_c(tk, foot, _tr("Fermer"), win.destroy).pack(pady=(2, 10))
+
+    # ── Verrou de largeur : aucune colonne ne doit jamais être masquée ────────
+    # On MESURE la largeur réelle de la grille (dépend de la longueur des noms
+    # de providers) et du bas, puis on fixe la largeur MINIMALE de la fenêtre à
+    # cette valeur. Réduire la fenêtre en dessous devient impossible → toutes
+    # les colonnes restent visibles en permanence. Mesure faite une fois la
+    # fenêtre réellement affichée (win.after), sinon winfo_reqwidth() = 1.
+    def _verrouiller_largeur():
+        try:
+            win.update_idletasks()
+            besoin_liste = inner.winfo_reqwidth() + 24 + 20  # padx cadre + défil.
+            besoin_bas = foot.winfo_reqwidth()
+            larg = max(besoin_liste, besoin_bas, 1000)
+            win.minsize(larg, 600)
+            if win.winfo_width() < larg:
+                haut = max(win.winfo_height(), 780)
+                win.geometry("%dx%d" % (larg, haut))
+        except Exception:
+            pass
+
+    try:
+        win.after(80, _verrouiller_largeur)
+    except Exception:
+        pass
 
     return win
 
@@ -1662,10 +1740,9 @@ def run_comb_assembler(parent=None):
              bg=BG, fg=FG,
              font=("Helvetica", 14, "bold") if _OS_UI == "mac"
              else ("Segoe UI", 12, "bold")).pack(fill="x", padx=12, pady=(10, 2))
-    tk.Label(win, text=_tr("BASE = provider large + priorité moyenne (le fond). "
-                           "PATCH = sous-zone + priorité haute (passe dessus). "
-                           "L'ordre (▲▼) et la priorité décident des recouvrements."),
-             bg=BG, fg=FG2, justify="left", wraplength=680,
+    tk.Label(win, text=_tr("Astuce : l'ordre (▲▼) et la priorité décident des "
+                           "recouvrements (BASE = fond, PATCH = passe dessus)."),
+             bg=BG, fg=FG2, justify="left", anchor="w",
              font=FONT_N).pack(fill="x", padx=12, pady=(0, 8))
 
     # ── Zone scrollable du tableau ───────────────────────────────────────────
@@ -1717,9 +1794,9 @@ def run_comb_assembler(parent=None):
 
         hdr = tk.Frame(inner, bg=BG)
         hdr.grid(row=0, column=0, sticky="ew", pady=(0, 4))
-        colonnes = ((_tr("Ordre"), 6), (_tr("Extent"), 18),
-                    (_tr("Provider"), 24), (_tr("Filtre"), 10),
-                    (_tr("Priorité"), 10), (_tr("Couv."), 5), ("", 4))
+        colonnes = ((_tr("Ordre"), 5), (_tr("Extent"), 22),
+                    (_tr("Provider"), 28), (_tr("Filtre"), 9),
+                    (_tr("Priorité"), 9), (_tr("Couv."), 4), ("", 3))
         for c, (txt, w) in enumerate(colonnes):
             tk.Label(hdr, text=txt, bg=BG, fg=FG2, width=w, anchor="w",
                      font=FONT_B).grid(row=0, column=c, padx=2)
@@ -1734,13 +1811,13 @@ def run_comb_assembler(parent=None):
             _mini_bouton(nav, "▼", lambda i=i: _descendre(i)).pack(side="left", padx=1)
 
             ext_cb = ttk.Combobox(rowf, textvariable=r["ext"], values=extents,
-                                  state="readonly", width=16,
+                                  state="readonly", width=20,
                                   style="O4Comb.TCombobox")
             ext_cb.grid(row=0, column=1, padx=2)
 
             prov_cb = ttk.Combobox(rowf, textvariable=r["prov"],
                                    values=_providers_pour(r["ext"].get()),
-                                   state="readonly", width=22,
+                                   state="readonly", width=26,
                                    style="O4Comb.TCombobox")
             prov_cb.grid(row=0, column=2, padx=2)
             r["_prov_cb"] = prov_cb
@@ -1917,15 +1994,18 @@ def run_comb_assembler(parent=None):
         except Exception as ex:
             status(_tr("Erreur à l'ouverture du générateur .lay : %s") % ex)
 
-    # ── Rangée de boutons ────────────────────────────────────────────────────
+    # ── Rangée de boutons : bloc TABLEAU (gauche) / bloc SORTIE (droite) ──────
     btns = tk.Frame(win, bg=BG)
     btns.pack(fill="x", padx=12, pady=(8, 2))
+    # Gauche : actions qui construisent/modifient le tableau.
     for txt, cmd in ((_tr("Proposer depuis les extents"), _proposer_depuis_extents),
                      (_tr("Ajouter une ligne"), _ajouter_ligne),
-                     (_tr("Créer un provider (.lay)"), _creer_lay),
-                     (_tr("Aperçu"), _apercu),
-                     (_tr("Générer"), _generer)):
+                     (_tr("Créer un provider (.lay)"), _creer_lay)):
         _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
+    # Droite : actions de sortie (aperçu puis génération du fichier).
+    for txt, cmd in ((_tr("Générer"), _generer),
+                     (_tr("Aperçu"), _apercu)):
+        _make_themed_button_c(tk, btns, txt, cmd).pack(side="right", padx=4)
 
     # ── Rappel du fichier de sortie (fixe, non éditable = anti-ZonePhoto) ─────
     tk.Label(win, text=_tr("Fichier généré : Providers/%s") % COMB_OUTPUT_NAME,
@@ -1942,10 +2022,12 @@ def run_comb_assembler(parent=None):
 
     _make_themed_button_c(tk, win, _tr("Fermer"), win.destroy).pack(pady=(2, 10))
 
-    # Démarrage : proposer d'emblée une ligne par extent (garde-fou anti-blanc).
-    _proposer_depuis_extents()
-    if not rows:
-        _ajouter_ligne()
+    # Démarrage : tableau vide et propre (plus de remplissage automatique).
+    # L'utilisateur clique « Proposer depuis les extents » pour préremplir,
+    # ou « Ajouter une ligne » pour partir de zéro.
+    _rebuild()
+    status(_tr("Cliquez « Proposer depuis les extents » pour préremplir, "
+               "ou « Ajouter une ligne »."))
 
     return win
 
@@ -1972,4 +2054,467 @@ def _demo_chapitre8():
     sel.ajouter("Esri_07-2022", zone="EUR", filtre="none", priorite="medium")
     sel.ajouter("IGN_FR", zone="FR", filtre="none", priorite="high")
     sel.ajouter("DE_Bayern", zone="Bayern", filtre="none", priorite="high")
+    apercu_comb(sel)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CHAPITRE 9 — MODE EXPERT À DEUX VOIES (écran de choix)
+#  Rôle : poser DEVANT le mode expert un écran de choix à deux voies distinctes,
+#  demandé par Roland :
+#     1) « Créer un nouveau .comb »   → run_comb_creer (mode 1, liste à cocher —
+#        inchangé, celui qui fonctionne).
+#     2) « Corriger un .comb existant » → run_comb_corriger (CE chapitre) : on
+#        importe un .comb et le tableau se RECONSTRUIT à partir des LIGNES du
+#        fichier — une ligne du fichier = une ligne éditable (Provider / Zone /
+#        Filtre / Priorité). Aucune case à cocher, aucune liste figée de
+#        providers : donc plus AUCUNE perte des lignes à noms longs
+#        (EXCEPTION_…, FRANCE_…), plus aucune colonne vide, plus aucun cochage
+#        parasite. 149 lignes dans le fichier = 149 lignes éditables.
+#
+#  Le point d'entrée du menu reste run_comb_generator : il devient l'ÉCRAN DE
+#  CHOIX (aucun fichier menu à modifier). Sortie toujours dans
+#  Providers/Provider_Extents.comb — jamais ZonePhoto.comb (garde-fou Ch.4).
+#
+#  RÉUTILISE sans les modifier : parser_lignes_comb (Ch.5, conserve TOUTES les
+#  lignes du fichier dans l'ordre, y compris noms longs et filtres non-none),
+#  SelectionComb (Ch.2), valider_selection / construire_texte_comb / ecrire_comb
+#  (Ch.4), COMB_OUTPUT_NAME / recharger_comb_a_chaud (Ch.7), les helpers GUI et
+#  _PRIO_* (Ch.6). Aucune logique métier nouvelle : que de l'assemblage d'API
+#  déjà validées.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def run_comb_corriger(parent=None):
+    """
+    MODE 2 — « Corriger un .comb existant ».
+    Importe un .comb et reconstruit UN tableau éditable : une ligne du fichier =
+    une ligne éditable (Provider / Zone / Filtre / Priorité). On édite exactement
+    les lignes du fichier (noms longs EXCEPTION_/FRANCE_ compris), on peut
+    réordonner (▲▼), supprimer (✕) ou ajouter une ligne, puis régénérer.
+    Sortie : Providers/Provider_Extents.comb (jamais ZonePhoto.comb).
+    parent = fenêtre Ortho4XP (ou None en test isolé). Retourne la fenêtre.
+    """
+    import tkinter as tk
+    from tkinter import ttk, messagebox, filedialog
+
+    BG = _cc("bg", "#3b5b49")
+    FG = _cc("fg", "#e8f0ec")
+    FG2 = _cc("fg_secondary", "#a6e3a1")
+    CON_BG = _cc("console_bg", "#0f0f1a")
+    CON_FG = _cc("console_fg", "#50fa7b")
+    ENTRY_BG = "#f0f4f2"
+    ENTRY_FG = "#1e3028"
+    BTN_BG = _cc("btn_bg", "#4a6b59")
+    BTN_FG = _cc("btn_fg", "#ffffff")
+    BTN_HOVER = _cc("accent", "#5a7b69")
+
+    FONT_N = ("Helvetica", 11) if _OS_UI == "mac" else ("Segoe UI", 9)
+    FONT_B = ("Helvetica", 11, "bold") if _OS_UI == "mac" else ("Segoe UI", 9, "bold")
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    prov_dir = _providers_dir(base_dir)
+
+    win = tk.Toplevel(parent) if parent is not None else tk.Tk()
+    win.title(_tr("Corriger un .comb existant"))
+    win.configure(bg=BG)
+    try:
+        win.geometry("1180x680")
+        win.minsize(1180, 680)
+        win.resizable(True, True)
+    except Exception:
+        pass
+
+    style = ttk.Style(win)
+    try:
+        style.theme_use("alt")
+    except Exception:
+        pass
+    style.configure("O4Comb.TCombobox", fieldbackground=ENTRY_BG,
+                    background=ENTRY_BG, foreground=ENTRY_FG)
+
+    # ── Petit bouton Mac-safe (Label cliquable) pour ▲ ▼ ✕ ────────────────────
+    def _mini_bouton(parent_w, texte, cmd):
+        lbl = tk.Label(parent_w, text=texte, bg=BTN_BG, fg=BTN_FG,
+                       padx=6, pady=2, cursor="hand2", font=FONT_N)
+
+        def _enter(e=None):
+            lbl.configure(bg=BTN_HOVER)
+
+        def _leave(e=None):
+            lbl.configure(bg=BTN_BG)
+
+        def _clic(e=None):
+            if callable(cmd):
+                cmd()
+
+        lbl.bind("<Enter>", _enter)
+        lbl.bind("<Leave>", _leave)
+        lbl.bind("<Button-1>", _clic)
+        return lbl
+
+    # ── État : liste ordonnée de lignes (StringVars persistantes) ─────────────
+    rows = []
+
+    def _new_row(prov="", zone="", filtre="none", prio_aff=None):
+        return {
+            "prov": tk.StringVar(value=prov),
+            "zone": tk.StringVar(value=zone),
+            "filtre": tk.StringVar(value=filtre or "none"),
+            "prio": tk.StringVar(value=prio_aff or _PRIO_AFF["medium"]),
+        }
+
+    # ── Titre + aide ─────────────────────────────────────────────────────────
+    tk.Label(win, text=_tr("Corriger un .comb : chaque ligne du fichier est éditable"),
+             bg=BG, fg=FG,
+             font=("Helvetica", 14, "bold") if _OS_UI == "mac"
+             else ("Segoe UI", 12, "bold")).pack(fill="x", padx=12, pady=(10, 2))
+    tk.Label(win, text=_tr("Importe ton .comb : une ligne du fichier = une ligne "
+                           "éditable (Provider / Zone / Filtre / Priorité). "
+                           "Réordonne (▲▼), supprime (✕) ou ajoute des lignes, "
+                           "puis Générer."),
+             bg=BG, fg=FG2, justify="left", wraplength=980,
+             font=FONT_N).pack(fill="x", padx=12, pady=(0, 8))
+
+    # ── Zone scrollable du tableau ───────────────────────────────────────────
+    cadre = tk.Frame(win, bg=BG)
+    cadre.pack(fill="both", expand=True, padx=12, pady=4)
+    canvas = tk.Canvas(cadre, bg=BG, highlightthickness=0, height=320)
+    scroll = ttk.Scrollbar(cadre, orient="vertical", command=canvas.yview)
+    inner = tk.Frame(canvas, bg=BG)
+    inner.bind("<Configure>",
+               lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=inner, anchor="nw")
+    canvas.configure(yscrollcommand=scroll.set)
+    canvas.pack(side="left", fill="both", expand=True)
+    scroll.pack(side="right", fill="y")
+
+    status_var = tk.StringVar(value="")
+
+    def status(msg):
+        status_var.set(msg)
+
+    # ── (Re)dessin du tableau depuis 'rows' ──────────────────────────────────
+    def _rebuild():
+        for w in inner.winfo_children():
+            w.destroy()
+
+        hdr = tk.Frame(inner, bg=BG)
+        hdr.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        colonnes = ((_tr("Ordre"), 6), (_tr("Provider"), 34),
+                    (_tr("Zone / extent"), 34), (_tr("Filtre"), 18),
+                    (_tr("Priorité"), 10), ("", 4))
+        for c, (txt, w) in enumerate(colonnes):
+            tk.Label(hdr, text=txt, bg=BG, fg=FG2, width=w, anchor="w",
+                     font=FONT_B).grid(row=0, column=c, padx=2)
+
+        for i, r in enumerate(rows):
+            rowf = tk.Frame(inner, bg=BG)
+            rowf.grid(row=i + 1, column=0, sticky="ew", pady=1)
+
+            nav = tk.Frame(rowf, bg=BG)
+            nav.grid(row=0, column=0, padx=2)
+            _mini_bouton(nav, "▲", lambda i=i: _monter(i)).pack(side="left", padx=1)
+            _mini_bouton(nav, "▼", lambda i=i: _descendre(i)).pack(side="left", padx=1)
+
+            # Provider et Zone en SAISIE LIBRE : on ne perd aucun nom long,
+            # aucune liste figée, aucune déduction. Le champ défile si le nom
+            # dépasse la largeur ; la valeur complète est conservée.
+            tk.Entry(rowf, textvariable=r["prov"], width=32, bg=ENTRY_BG,
+                     fg=ENTRY_FG, relief="solid", bd=1, highlightthickness=0,
+                     insertbackground=ENTRY_FG).grid(row=0, column=1, padx=2)
+            tk.Entry(rowf, textvariable=r["zone"], width=32, bg=ENTRY_BG,
+                     fg=ENTRY_FG, relief="solid", bd=1, highlightthickness=0,
+                     insertbackground=ENTRY_FG).grid(row=0, column=2, padx=2)
+            tk.Entry(rowf, textvariable=r["filtre"], width=16, bg=ENTRY_BG,
+                     fg=ENTRY_FG, relief="solid", bd=1, highlightthickness=0,
+                     insertbackground=ENTRY_FG).grid(row=0, column=3, padx=2)
+            ttk.Combobox(rowf, textvariable=r["prio"], values=_PRIO_LISTE,
+                         state="readonly", width=8,
+                         style="O4Comb.TCombobox").grid(row=0, column=4, padx=2)
+
+            _mini_bouton(rowf, "✕", lambda i=i: _supprimer(i)).grid(
+                row=0, column=5, padx=2)
+
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    # ── Actions sur les lignes ───────────────────────────────────────────────
+    def _ajouter_ligne():
+        rows.append(_new_row())
+        _rebuild()
+        status(_tr("Ligne ajoutée."))
+
+    def _supprimer(i):
+        if 0 <= i < len(rows):
+            del rows[i]
+            _rebuild()
+            status(_tr("Ligne supprimée."))
+
+    def _monter(i):
+        if 0 < i < len(rows):
+            rows[i - 1], rows[i] = rows[i], rows[i - 1]
+            _rebuild()
+
+    def _descendre(i):
+        if 0 <= i < len(rows) - 1:
+            rows[i + 1], rows[i] = rows[i], rows[i + 1]
+            _rebuild()
+
+    # ── Import : une ligne du fichier = une ligne éditable ───────────────────
+    def _importer():
+        chemin = filedialog.askopenfilename(
+            title=_tr("Importer un .comb à corriger"), initialdir=prov_dir,
+            filetypes=[("Fichiers .comb", "*.comb"), ("Tous", "*.*")])
+        if not chemin:
+            return
+        try:
+            with open(chemin, encoding="utf-8") as fp:
+                texte = fp.read()
+        except Exception as ex:
+            messagebox.showerror(_tr("Importer .comb"),
+                                 _tr("Lecture impossible : %s") % ex)
+            status(_tr("Lecture impossible : %s") % ex)
+            return
+        # parser_lignes_comb (Ch.5) conserve TOUTES les lignes valides du
+        # fichier, dans l'ordre, sans dédoublonnage ni liste figée.
+        entrees, rapport = parser_lignes_comb(texte)
+        rows.clear()
+        for e in entrees:
+            rows.append(_new_row(prov=e["provider"], zone=e["zone"],
+                                 filtre=e.get("filtre", "none"),
+                                 prio_aff=_PRIO_AFF.get(e["priorite"], "medium")))
+        _rebuild()
+
+        note_zp = ""
+        if _est_zonephoto(chemin):
+            note_zp = ("  " + _tr("(ZonePhoto.comb chargé pour édition — la "
+                                  "sortie ira dans Provider_Extents.comb.)"))
+        ecartees = len(rapport)
+        status(_tr("%d ligne(s) importée(s)%s.")
+               % (len(rows), (", %d écartée(s)" % ecartees) if ecartees else "")
+               + note_zp)
+
+        # Rapport des lignes écartées (mauvais nombre de colonnes ou priorité
+        # inconnue) affiché dans l'aperçu, jamais masqué.
+        preview.delete("1.0", "end")
+        if rapport:
+            preview.insert("1.0", _tr("Lignes écartées à l'import :") + "\n- "
+                           + "\n- ".join(rapport))
+        else:
+            preview.insert("1.0", _tr("Import : toutes les lignes ont été "
+                                      "reprises telles quelles."))
+
+    # ── En-tête du fichier généré ────────────────────────────────────────────
+    def _entete():
+        return [
+            "Provider_Extents.comb — corrige via l'ecran « Corriger un .comb » (Ch.9).",
+            "Chaque ligne provient d'un .comb importe puis edite a la main.",
+            "L'ordre des lignes et la priorite decident des recouvrements.",
+        ]
+
+    # ── Construire une SelectionComb depuis le tableau ───────────────────────
+    def _selection_depuis_table():
+        sel = SelectionComb()
+        incompletes = 0
+        dups = 0
+        for r in rows:
+            prov = r["prov"].get().strip()
+            zone = r["zone"].get().strip()
+            if not prov or not zone:
+                incompletes += 1
+                continue
+            prio = _PRIO_VAL.get(r["prio"].get(), "medium")
+            filtre = r["filtre"].get().strip() or "none"
+            if not sel.ajouter(prov, zone=zone, filtre=filtre, priorite=prio):
+                dups += 1
+        return sel, incompletes, dups
+
+    def _note_lignes(incompletes, dups):
+        notes = []
+        if incompletes:
+            notes.append(_tr("%d ligne(s) incomplète(s) ignorée(s)") % incompletes)
+        if dups:
+            notes.append(_tr("%d doublon(s) exact(s) fusionné(s)") % dups)
+        return ("  (" + ", ".join(notes) + ")") if notes else ""
+
+    # ── Aperçu (Ch.4, sans écrire) ───────────────────────────────────────────
+    def _apercu():
+        sel, incompletes, dups = _selection_depuis_table()
+        ok, problemes = valider_selection(sel)
+        preview.delete("1.0", "end")
+        if not ok:
+            preview.insert("1.0", _tr("Sélection non valide :") + "\n  - "
+                           + "\n  - ".join(problemes))
+            status(_tr("Aperçu : sélection incomplète."))
+            return
+        preview.insert("1.0", construire_texte_comb(sel, _entete()))
+        status(_tr("Aperçu généré (%d ligne(s)).") % sel.taille()
+               + _note_lignes(incompletes, dups))
+
+    # ── Générer → Providers/Provider_Extents.comb ────────────────────────────
+    def _generer():
+        sel, incompletes, dups = _selection_depuis_table()
+        ok, problemes = valider_selection(sel)
+        if not ok:
+            messagebox.showwarning(_tr("Corriger .comb"),
+                                   _tr("Sélection incomplète :") + "\n- "
+                                   + "\n- ".join(problemes))
+            return
+        chemin = os.path.join(prov_dir, COMB_OUTPUT_NAME)
+        ok1, msg1 = ecrire_comb(sel, chemin, entete_lignes=_entete(),
+                                forcer=False)
+        if not ok1 and "existe déjà" in msg1:
+            if messagebox.askyesno(
+                    _tr("Corriger .comb"),
+                    "%s %s" % (COMB_OUTPUT_NAME,
+                               _tr("existe déjà.\nLe remplacer ? "
+                                   "(sauvegarde .bak automatique)"))):
+                ok1, msg1 = ecrire_comb(sel, chemin, entete_lignes=_entete(),
+                                        forcer=True)
+        status(msg1 + _note_lignes(incompletes, dups))
+        if ok1:
+            recharge = recharger_comb_a_chaud()   # Chapitre 7
+            suffixe = ("\n\n" + _tr("Liste imagery rafraîchie.")) if recharge \
+                else ("\n\n" + _tr("Relancez Ortho4XP pour voir l'entrée dans "
+                                   "imagery."))
+            messagebox.showinfo(_tr("Corriger .comb"), msg1 + suffixe)
+        else:
+            messagebox.showerror(_tr("Corriger .comb"), msg1)
+
+    # ── Rangée de boutons ────────────────────────────────────────────────────
+    btns = tk.Frame(win, bg=BG)
+    btns.pack(fill="x", padx=12, pady=(8, 2))
+    for txt, cmd in ((_tr("Importer un .comb"), _importer),
+                     (_tr("Ajouter une ligne"), _ajouter_ligne),
+                     (_tr("Aperçu"), _apercu),
+                     (_tr("Générer"), _generer)):
+        _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
+
+    # ── Rappel du fichier de sortie (fixe = anti-ZonePhoto) ───────────────────
+    tk.Label(win, text=_tr("Fichier généré : Providers/%s") % COMB_OUTPUT_NAME,
+             bg=BG, fg=FG2, anchor="w",
+             font=FONT_N).pack(fill="x", padx=12, pady=(4, 0))
+
+    # ── Aperçu texte ─────────────────────────────────────────────────────────
+    preview = tk.Text(win, height=8, width=68, bg=CON_BG, fg=CON_FG,
+                      insertbackground=CON_FG)
+    preview.pack(fill="both", expand=False, padx=12, pady=(4, 4))
+
+    tk.Label(win, textvariable=status_var, bg=BG, fg=FG2, anchor="w",
+             font=FONT_N).pack(fill="x", padx=12, pady=(2, 2))
+
+    _make_themed_button_c(tk, win, _tr("Fermer"), win.destroy).pack(pady=(2, 10))
+
+    # Démarrage : on propose d'emblée l'import (cœur du mode 2). Si l'utilisateur
+    # annule, on laisse une ligne vide éditable (garde-fou anti-page-blanche).
+    _importer()
+    if not rows:
+        _ajouter_ligne()
+
+    return win
+
+
+def run_comb_generator(parent=None):
+    """
+    ÉCRAN DE CHOIX du mode expert .comb (point d'entrée appelé par le menu).
+    Deux voies distinctes :
+      1) « Créer un nouveau .comb »   → run_comb_creer   (liste à cocher, inchangé)
+      2) « Corriger un .comb existant » → run_comb_corriger (tableau éditable
+         ligne à ligne, reconstruit depuis le fichier importé)
+    Le bouton choisi ouvre la fenêtre voulue puis ferme ce sélecteur.
+    parent = fenêtre Ortho4XP (ou None en test isolé). Retourne la fenêtre.
+    Le nom est conservé (run_comb_generator) pour que le menu reste inchangé.
+    """
+    import tkinter as tk
+
+    BG = _cc("bg", "#3b5b49")
+    FG = _cc("fg", "#e8f0ec")
+    FG2 = _cc("fg_secondary", "#a6e3a1")
+
+    win = tk.Toplevel(parent) if parent is not None else tk.Tk()
+    win.title(_tr("Mode expert .comb — choisir"))
+    win.configure(bg=BG)
+    try:
+        win.resizable(False, False)
+    except Exception:
+        pass
+
+    tk.Label(win, text=_tr("Que veux-tu faire ?"), bg=BG, fg=FG,
+             font=("Helvetica", 15, "bold") if _OS_UI == "mac"
+             else ("Segoe UI", 12, "bold")).pack(fill="x", padx=18, pady=(14, 2))
+    tk.Label(win, text=_tr("Deux voies : partir de zéro, ou corriger un fichier "
+                           ".comb existant."),
+             bg=BG, fg=FG2,
+             font=("Helvetica", 11) if _OS_UI == "mac" else ("Segoe UI", 9)
+             ).pack(fill="x", padx=18, pady=(0, 12))
+
+    def _ouvrir_creer():
+        try:
+            run_comb_creer(parent)
+        finally:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+    def _ouvrir_corriger():
+        try:
+            run_comb_corriger(parent)
+        finally:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+    zone = tk.Frame(win, bg=BG)
+    zone.pack(fill="both", expand=True, padx=18, pady=4)
+    _make_themed_button_c(
+        tk, zone,
+        _tr("🆕  Créer un nouveau .comb (liste des providers à cocher)"),
+        _ouvrir_creer).pack(fill="x", pady=6)
+    _make_themed_button_c(
+        tk, zone,
+        _tr("✏  Corriger un .comb existant (tableau éditable ligne à ligne)"),
+        _ouvrir_corriger).pack(fill="x", pady=6)
+
+    _make_themed_button_c(tk, win, _tr("Fermer"), win.destroy).pack(pady=(6, 14))
+
+    return win
+
+
+def _demo_chapitre9():
+    """Démonstration headless du Chapitre 9 (aucune interface, aucun disque).
+    Prouve le POINT CLÉ du mode 2 : le chargement conserve TOUTES les lignes du
+    fichier (noms longs EXCEPTION_/FRANCE_, filtres non-none, séparateurs
+    tabulation/espaces, plusieurs lignes pour un même provider avec zones
+    différentes) — une ligne du fichier = une ligne éditable, aucune perte.
+    N'est jamais appelée automatiquement."""
+    texte = (
+        "# en-tete de test\n"
+        "\n"
+        "FRorth\tFrance\tnone\tmedium\n"
+        "Arc@\tIreland\tnone\tmedium\n"
+        "Arc@\tUK\tnone\tmedium\n"
+        "EXCEPTION_FRANCE_Auvergne-Rhone-Alpes_43_Histo-2019_IGN\t"
+        "EXCEPTION_FRANCE_43\tEXCEPTION_FRANCE_43_PATCH\thigh\n"
+        "FRANCE_Ortho-Litto-V2_GEOLITTORAL\t62-Pas-de-Calais\tnone\thigh\n"
+        "FRANCE_Ortho-Litto-V2_GEOLITTORAL\t59-Nord\tnone\thigh\n"
+        "LigneCassee   SansAssezDeColonnes\n"            # 2 colonnes → écartée
+        "X\tY\tnone\tinconnue\n"                          # priorité invalide → écartée
+    )
+    entrees, rapport = parser_lignes_comb(texte)
+    print("### Chargement mode 2 (parser_lignes_comb)")
+    print("   Lignes retenues (= lignes éditables) :", len(entrees))
+    for e in entrees:
+        print("     %-52s | %-18s | %-28s | %s"
+              % (e["provider"], e["zone"], e["filtre"], e["priorite"]))
+    print("   Lignes écartées :", len(rapport))
+    for m in rapport:
+        print("     ⚠", m)
+
+    # Aller-retour : reconstruire un SelectionComb et le texte .comb.
+    sel = SelectionComb()
+    for e in entrees:
+        sel.ajouter(e["provider"], zone=e["zone"], filtre=e["filtre"],
+                    priorite=e["priorite"])
+    print("\n### Réécriture (construire_texte_comb) — aucune perte attendue")
+    print("   Lignes dans la sélection :", sel.taille())
     apercu_comb(sel)

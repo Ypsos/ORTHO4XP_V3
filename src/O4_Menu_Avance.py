@@ -386,6 +386,31 @@ def _ouvrir_extent_generator(parent, status):
                   "Error opening the Extent Generator: %s") % ex)
 
 
+def _ouvrir_lay_generator(parent, status):
+    """Ouvre le Générateur de provider (.lay) directement depuis le menu Avancé.
+    Même module que le bouton contextuel du générateur .comb (O4_lay_generator),
+    point d'entrée run_lay_generator(parent). Import LOCAL et protégé : la fenêtre
+    Avancé reste ouvrable même si le module est absent."""
+    try:
+        import O4_lay_generator as LG
+    except Exception as ex:
+        status(_L("Générateur de provider (.lay) introuvable : %s",
+                  "Provider (.lay) generator not found: %s") % ex)
+        return
+    fn = getattr(LG, "run_lay_generator", None)
+    if not callable(fn):
+        status(_L("O4_lay_generator présent mais run_lay_generator() absent.",
+                  "O4_lay_generator present but run_lay_generator() missing."))
+        return
+    try:
+        fn(parent)
+        status(_L("Générateur de provider (.lay) ouvert.",
+                  "Provider (.lay) generator opened."))
+    except Exception as ex:
+        status(_L("Erreur à l'ouverture du générateur .lay : %s",
+                  "Error opening the .lay generator: %s") % ex)
+
+
 # ── Fenêtre « Avancé » ────────────────────────────────────────────────────────
 def run_menu_avance(parent=None):
     """
@@ -429,6 +454,9 @@ def run_menu_avance(parent=None):
         (_L("🧩  Générer un .comb — mode expert",
             "🧩  Generate a .comb — expert mode"),
          lambda: _ouvrir_comb(parent, status)),
+        (_L("🗂  Créer / modifier un provider (.lay)",
+            "🗂  Create / edit a provider (.lay)"),
+         lambda: _ouvrir_lay_generator(parent, status)),
         (tr("JOSM / Extents (masques, zones)"), lambda: _ouvrir_josm(parent, status)),
         (_L("🗺  Générer un Extent (pays / région)",
             "🗺  Generate an Extent (country / region)"),

@@ -59,6 +59,11 @@ _NODATA = -99999.0
 _CRS_REPLI = "EPSG:2154"
 
 _EXT_RASTER = (".tif", ".tiff", ".vrt", ".asc", ".img", ".hgt", ".dt2")
+# Plafond de sur-échantillonnage : on autorise une sortie plus fine que la
+# source (ex. Sonny 27 m → 4 m, comme dans QGIS = interpolation, grille
+# uniforme), mais on borne le facteur pour éviter une explosion mémoire sur
+# une saisie extrême (16 couvre largement 27 m → ~1,7 m).
+_RATIO_MAX = 16.0
 
 # Bornes d'altitude physiquement possibles sur Terre, avec une marge
 # large (Everest 8 849 m, fosse des Mariannes -10 984 m). Toute valeur
@@ -91,6 +96,7 @@ CFG_PAYS = "dem_last_country"    # ANCIEN — conservé pour la reprise
 CFG_STOCK = "dem_stock_dir"      # dossier des sources, choisi par l'utilisateur
 CFG_SORTIE = "dem_output_dir"    # dossier du résultat assemblé
 CFG_QGIS = "qgis_app"            # application QGIS (comme patch_editor_app)
+CFG_PREP_SRC = "dem_prepare_src_dir"  # dernier dossier source ouvert (Préparer)
 
 
 def chemins_structure(racine):
@@ -641,7 +647,7 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
 
     if not os.path.isdir(dossier_source):
         raise RuntimeError("Dossier source introuvable : %s" % dossier_source)
-    ratio = max(0.01, min(1.0, float(ratio)))
+    ratio = max(0.01, min(_RATIO_MAX, float(ratio)))
 
     sources = []
     for rep, _d, fichiers in os.walk(dossier_source, followlinks=True):
@@ -1894,12 +1900,18 @@ def open_altimetrie_window(gui):
                                 _tr("Dossiers non configurés."), parent=win)
             _remonter()
             return
+        # Mémorise le dernier dossier ouvert : évite de renaviguer depuis la
+        # racine du disque à chaque fois.
+        _memo_src = _cfg_get(CFG_PREP_SRC) or _stock[0] or ""
         src = filedialog.askdirectory(
             parent=win,
-            title=_tr("Dossier des données brutes (.asc, .tif…)"))
+            title=_tr("Dossier des données brutes (.asc, .tif…)"),
+            initialdir=(_memo_src if _memo_src and os.path.isdir(_memo_src)
+                        else ""))
         _remonter()
         if not src:
             return
+        _cfg_set(CFG_PREP_SRC, src)
         # Résolution réelle de la source : évite de « réduire » du Sonny
         # (~20 m) en dessous de sa résolution native.
         res_m = None
@@ -1922,38 +1934,46 @@ def open_altimetrie_window(gui):
             _remonter()
             return
 
-        # Ratio proposé : 25 % pour du 1 m (procédure IGN), 100 % si la
-        # source est déjà grossière.
-        defaut = "25" if res_m <= 2.0 else "100"
-        rep_ratio = _saisie(
+        # L'utilisateur choisit la RÉSOLUTION VOULUE en sortie (en mètres),
+        # PAS un pourcentage : une source 1 m, 3 m, 27 m… donne toujours la
+        # même sortie (ex. 4 m). Le ratio se calcule tout seul :
+        #     ratio = résolution source / résolution voulue.
+        # Cible PLUS FINE que la source (ex. Sonny 27 m → 4 m) : autorisé,
+        # comme dans QGIS (interpolation bilinéaire). Ça ne crée pas de détail
+        # réel — c'est un lissage sur grille plus fine — mais ça donne une
+        # grille uniforme (mosaïquable avec du LiDAR déjà en 4 m). Rien codé
+        # en dur.
+        cible_def = "4"
+        rep_cible = _saisie(
             _tr("Altimétrie / DEM"),
             _tr("Résolution source détectée : {r} m\n\n"
-                "Ratio de réduction en % (25 = diviser par 4) :\n"
-                "100 = aucune réduction.").format(r=("%.1f" % res_m)),
-            parent=win, initialvalue=defaut)
+                "Résolution VOULUE en sortie, en mètres (ex. 4).\n"
+                "Plus GRAND que la source = allègement (moins de points).\n"
+                "Plus PETIT que la source = grille plus fine par "
+                "interpolation\n(lissage, sans détail supplémentaire — "
+                "utile pour une grille uniforme)."
+                ).format(r=("%.1f" % res_m)),
+            parent=win, initialvalue=cible_def)
         _remonter()
-        if not rep_ratio:
+        if not rep_cible:
             return
         try:
-            ratio = float(rep_ratio.replace(",", ".").replace("%", "")) / 100.0
+            cible_m = float(rep_cible.replace(",", ".")
+                            .replace("m", "").replace("M", "").strip())
         except Exception:
             messagebox.showerror(_tr("Altimétrie / DEM"),
-                                 _tr("Ratio invalide."), parent=win)
+                                 _tr("Valeur invalide."), parent=win)
             _remonter()
             return
-        ratio = max(0.01, min(1.0, ratio))
-        res_finale = res_m / ratio
-        if ratio < 1.0 and res_m > 5.0:
-            if not messagebox.askyesno(
-                    _tr("Altimétrie / DEM"),
-                    _tr("La source est déjà à {a} m. Réduire encore "
-                        "donnerait {b} m et ferait perdre du relief.\n\n"
-                        "Continuer quand même ?").format(
-                            a=("%.1f" % res_m), b=("%.1f" % res_finale)),
-                    parent=win):
-                _remonter()
-                return
+        if cible_m <= 0:
+            messagebox.showerror(_tr("Altimétrie / DEM"),
+                                 _tr("Valeur invalide."), parent=win)
             _remonter()
+            return
+        # ratio = source / voulue. Peut être > 1 (sur-échantillonnage) ; borné
+        # par _RATIO_MAX pour la mémoire.
+        ratio = max(0.01, min(_RATIO_MAX, res_m / cible_m))
+        res_finale = res_m / ratio
 
         suffixe = "%dM" % int(round(res_finale)) if res_finale >= 1 else "1M"
         nom_def = "%s-%s-reduit.tif" % (os.path.basename(
@@ -1968,9 +1988,11 @@ def open_altimetrie_window(gui):
         if not nom.lower().endswith(".tif"):
             nom += ".tif"
 
-        # Le fichier réduit est écrit dans le dossier des sources choisi
-        # par l'utilisateur : aucun sous-dossier n'est créé.
-        dest = os.path.join(_stock[0], nom)
+        # Le fichier réduit est écrit DANS le dossier source choisi par
+        # l'utilisateur (ex. …/France/), et NON à la racine du stock : c'est
+        # là qu'il l'attend. Le stock étant scanné récursivement, le fichier
+        # reste utilisé automatiquement pour les tuiles qu'il recouvre.
+        dest = os.path.join(src, nom)
         if os.path.isfile(dest):
             if not messagebox.askyesno(
                     _tr("Altimétrie / DEM"),
@@ -1983,8 +2005,11 @@ def open_altimetrie_window(gui):
         txt.delete("1.0", tk.END)
         _log(_tr("Préparation :") + " " + src)
         _log(_tr("Résolution source :") + " %.1f m" % res_m)
-        _log(_tr("Ratio :") + " %.0f %%  →  %.1f m" % (ratio * 100,
-                                                       res_finale))
+        _log(_tr("Résolution voulue :") + " %.1f m" % res_finale)
+        _log(_tr("Facteur de grille :") + " %.0f %% " % (ratio * 100)
+             + (_tr("(interpolation)") if ratio > 1.0
+                else _tr("(allègement)") if ratio < 1.0
+                else _tr("(identique)")))
         _log(_tr("Destination :") + " " + dest)
         _log()
         _travail[0] = True

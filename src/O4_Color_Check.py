@@ -3193,10 +3193,12 @@ class FusionPreviewWindow(tk.Toplevel):
     def _assemble_mosaic(self):
         """Assemble une mosaïque 3×3 : image centrale au centre, 4 DDS voisins
         (haut/bas/gauche/droite) autour, coins noirs. Les voisins sont lus sur
-        DISQUE dans le même dossier, même provider et même ZL — on ne remplace
-        que le préfixe X_Y du nom, le suffixe (provider+ZL) est conservé tel quel.
-        Aucun téléchargement réseau. Voisine absente → bloc noir. En cas de
-        moindre souci, on retombe proprement sur l'affichage centre seul."""
+        DISQUE dans le même dossier, à MÊME ZL mais TOUS PROVIDERS confondus
+        (sur une côte le voisin peut venir d'un autre provider). Le voisin retenu
+        est celui exactement adjacent (±1 pas de grille), jamais une image
+        lointaine. Aucun téléchargement réseau. Voisine absente sur disque →
+        bloc noir. En cas de moindre souci, on retombe proprement sur
+        l'affichage centre seul."""
         try:
             if self._arr_full is None:
                 return
@@ -3207,41 +3209,70 @@ class FusionPreviewWindow(tk.Toplevel):
             if len(parts) < 3:
                 return                                   # format inattendu → centre seul
             try:
-                X0 = int(parts[0]); Y0 = int(parts[1])
+                # Noms Ortho4XP : parts[0] = til_y (ligne, croît vers le SUD),
+                #                 parts[1] = til_x (colonne, croît vers l'EST).
+                TY0 = int(parts[0]); TX0 = int(parts[1])
             except ValueError:
                 return
-            # Suffixe = tout ce qui suit "X_Y" (provider collé au ZL), conservé mot pour mot
-            prefix_len = len(parts[0]) + 1 + len(parts[1]) + 1
-            suffix = fname[prefix_len:]                  # ex : "IGN_Ortho_France17.dds"
+            # ZL du centre = suite de chiffres finale du nom (ex : "...clarify17" -> 17).
+            # On compare uniquement des voisins de MÊME ZL (sinon les coordonnées
+            # til_y/til_x ne sont pas à la même échelle).
+            import re as _re
+            m0 = _re.search(r"(\d+)$", os.path.splitext(fname)[0])
+            zl0 = m0.group(1) if m0 else None
 
-            # Recense les DDS de même suffixe présents et leurs coordonnées X,Y
+            # Recense les DDS voisins par COORDONNÉE (til_y, til_x), TOUS PROVIDERS
+            # confondus à même ZL. Sur une côte, le voisin nord/ouest peut venir
+            # d'un autre provider (IGN, patch mer, BI…) : on ne filtre donc plus
+            # sur le suffixe, seulement sur la position et le ZL.
             same = {}
             try:
                 listing = os.listdir(textures_dir)
             except Exception:
                 listing = []
             for f in listing:
-                if f.endswith(suffix) and f != fname:
-                    p = os.path.splitext(f)[0].split("_")
-                    if len(p) >= 2:
-                        try:
-                            same[(int(p[0]), int(p[1]))] = f
-                        except ValueError:
-                            pass
+                if not f.lower().endswith(".dds") or f == fname:
+                    continue
+                stem = os.path.splitext(f)[0]
+                p = stem.split("_")
+                if len(p) < 3:
+                    continue
+                mz = _re.search(r"(\d+)$", stem)
+                if zl0 is not None and (mz is None or mz.group(1) != zl0):
+                    continue                              # ZL différent → ignoré
+                try:
+                    same[(int(p[0]), int(p[1]))] = f
+                except ValueError:
+                    pass
 
-            # Voisine la plus proche sur chaque axe : on ne suppose PAS le pas
-            # de la grille, on prend la plus proche réellement présente sur disque.
-            def nearest(cond, dist):
-                cand = [(k, v) for k, v in same.items() if cond(k)]
-                if not cand:
-                    return None
-                return min(cand, key=lambda kv: dist(kv[0]))[1]
+            # Pas réel de la grille (constant à ZL fixe) déduit du disque, jamais
+            # supposé : plus petit écart positif entre coordonnées alignées.
+            from collections import defaultdict as _dd
+            _coords = list(same.keys()) + [(TY0, TX0)]
+            _tx_by_ty = _dd(list)
+            _ty_by_tx = _dd(list)
+            for (_ty, _tx) in _coords:
+                _tx_by_ty[_ty].append(_tx)
+                _ty_by_tx[_tx].append(_ty)
+            _diffs = []
+            for _ty, _txs in _tx_by_ty.items():
+                _s = sorted(set(_txs))
+                _diffs += [b - a for a, b in zip(_s, _s[1:])]
+            for _tx, _tys in _ty_by_tx.items():
+                _s = sorted(set(_tys))
+                _diffs += [b - a for a, b in zip(_s, _s[1:])]
+            step = min(_diffs) if _diffs else None
 
-            left  = nearest(lambda k: k[1] == Y0 and k[0] < X0, lambda k: X0 - k[0])
-            right = nearest(lambda k: k[1] == Y0 and k[0] > X0, lambda k: k[0] - X0)
-            # Dans les noms Ortho4XP, Y croît vers le bas → "haut" = Y plus petit
-            up    = nearest(lambda k: k[0] == X0 and k[1] < Y0, lambda k: Y0 - k[1])
-            down  = nearest(lambda k: k[0] == X0 and k[1] > Y0, lambda k: k[1] - Y0)
+            # Voisin EXACTEMENT adjacent (±1 pas) uniquement. Si le voisin
+            # immédiat n'est pas sur disque → bloc noir. On ne prend JAMAIS une
+            # image lointaine (ce qui affichait de la terre en pleine mer).
+            if step:
+                left  = same.get((TY0, TX0 - step))   # ouest  : même ligne, colonne -1
+                right = same.get((TY0, TX0 + step))   # est    : même ligne, colonne +1
+                up    = same.get((TY0 - step, TX0))   # nord   : ligne -1 (til_y plus petit), même colonne
+                down  = same.get((TY0 + step, TX0))   # sud    : ligne +1, même colonne
+            else:
+                left = right = up = down = None
 
             black = np.zeros((cH, cW, 3), dtype=np.float32)
 

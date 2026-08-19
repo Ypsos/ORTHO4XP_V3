@@ -648,6 +648,7 @@ def run_extent_generator(parent=None):
       • Par nom (expert) : on saisit directement un nom de zone (cascade de clés).
     Import tkinter LOCAL (au clic). parent = fenêtre principale ou None (test)."""
     import tkinter as tk
+    from tkinter import ttk
 
     BG = _c("bg", "#3b5b49")
     FG = _c("fg", "#e8f0ec")
@@ -658,7 +659,43 @@ def run_extent_generator(parent=None):
     win.title(_L("Ortho4XP — Générateur d'Extents",
                  "Ortho4XP — Extent Generator"))
     win.configure(bg=BG)
-    win.resizable(False, False)
+    win.resizable(True, True)
+
+    def _fixer_taille_min(w):
+        """Ouvre la fenêtre à la taille de son contenu et EMPÊCHE de la réduire
+        en dessous : rien n'est jamais masqué, ni en largeur ni en hauteur. On
+        ne fige PAS la taille (position seule), donc la fenêtre grandit d'elle-
+        même quand le contenu grandit (changement de mode) ; minsize interdit
+        de la rétrécir sous le contenu courant."""
+        try:
+            w.update_idletasks()
+            rw, rh = w.winfo_reqwidth(), w.winfo_reqheight()
+            sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
+            x = max(0, (sw - rw) // 2)
+            y = max(0, (sh - rh) // 3)
+            w.minsize(rw, rh)
+            w.geometry("+%d+%d" % (x, y))
+            w.resizable(True, True)
+            w.lift()
+        except Exception:
+            pass
+
+    # Style pour la liste déroulante de destination. Sur macOS, tk.OptionMenu
+    # n'affiche pas sa valeur (case vide) ; une ttk.Combobox readonly l'affiche
+    # de façon fiable sur les 3 OS. On configure un style nommé SANS changer le
+    # thème global (pas d'effet de bord sur les autres fenêtres ttk).
+    _style = ttk.Style(win)
+    _style.configure("O4Dest.TCombobox", fieldbackground=ENTRY_BG,
+                     background=_c("btn_bg", "#4a6b59"), foreground=FG,
+                     arrowcolor=FG)
+    try:
+        _style.map("O4Dest.TCombobox",
+                   fieldbackground=[("readonly", ENTRY_BG)],
+                   foreground=[("readonly", FG)],
+                   selectbackground=[("readonly", ENTRY_BG)],
+                   selectforeground=[("readonly", FG)])
+    except Exception:
+        pass
 
     def _font(sz, bold=False):
         fam = "Helvetica" if _OS == "mac" else "Segoe UI"
@@ -698,9 +735,10 @@ def run_extent_generator(parent=None):
     NOUVEAU = _L("＋ Nouveau…", "＋ New…")
     dest_choices = pays_existants + [NOUVEAU]
     dest_var = tk.StringVar(value=dest_choices[0] if dest_choices else NOUVEAU)
-    dest_menu = tk.OptionMenu(dest_frame, dest_var, *dest_choices)
-    dest_menu.configure(bg=_c("btn_bg", "#4a6b59"), fg=_c("btn_fg", "#ffffff"),
-                        highlightthickness=0, font=_font(11 if _OS == "mac" else 9))
+    dest_menu = ttk.Combobox(dest_frame, textvariable=dest_var,
+                             values=dest_choices, state="readonly",
+                             style="O4Dest.TCombobox",
+                             font=_font(11 if _OS == "mac" else 9))
     dest_menu.pack(side="left", fill="x", expand=True)
 
     # Ligne dédiée pour le nom du nouveau dossier (apparaît si « Nouveau… »).
@@ -881,6 +919,11 @@ def run_extent_generator(parent=None):
     ).pack(side="left")
 
     osm_pick_row = tk.Frame(nom_frame, bg=BG)  # affiché seulement si coché
+    # Nom du fichier choisi, affiché clairement (le chemin complet reste dans
+    # osm_path_var, utilisé par la construction). Avant : chemin complet en
+    # petite police secondaire, difficile à voir → on montre « ✓ nom.osm.bz2 ».
+    osm_disp_var = tk.StringVar(value="")
+    _osm_dernier_dir = {"d": ""}  # mémoire de session du dernier dossier ouvert
 
     def _choisir_osm():
         try:
@@ -888,9 +931,13 @@ def run_extent_generator(parent=None):
             chemin = filedialog.askopenfilename(
                 title=_L("Choisir un fichier .osm.bz2",
                          "Choose a .osm.bz2 file"),
+                initialdir=(_osm_dernier_dir["d"]
+                            if _osm_dernier_dir["d"] else ""),
                 filetypes=[("OSM bz2", "*.osm.bz2"), ("Tous", "*.*")])
             if chemin:
                 osm_path_var.set(chemin)
+                osm_disp_var.set("✓ " + os.path.basename(chemin))
+                _osm_dernier_dir["d"] = os.path.dirname(chemin)
         except Exception:
             pass
 
@@ -898,8 +945,8 @@ def run_extent_generator(parent=None):
         tk, osm_pick_row,
         _L("📂 Choisir le .osm.bz2", "📂 Choose the .osm.bz2"),
         _choisir_osm).pack(side="left", padx=(0, 6))
-    tk.Label(osm_pick_row, textvariable=osm_path_var, bg=BG,
-             fg=FG2, font=_font(9 if _OS == "mac" else 8),
+    tk.Label(osm_pick_row, textvariable=osm_disp_var, bg=BG,
+             fg=FG, font=_font(11 if _OS == "mac" else 9),
              anchor="w").pack(side="left", fill="x", expand=True)
 
     def _on_osm_toggle(*_a):
@@ -918,6 +965,10 @@ def run_extent_generator(parent=None):
         else:
             tuile_frame.pack_forget()
             nom_frame.pack(fill="x", padx=14, pady=(2, 2), after=level_frame)
+        # Le contenu change de hauteur selon le mode : on ré-ajuste pour que
+        # rien ne soit masqué et que la fenêtre ne puisse pas être réduite en
+        # dessous du contenu courant.
+        _fixer_taille_min(win)
     mode_var.trace_add("write", _on_mode_change)
 
     # ── Réglages avancés (repliés) ──
@@ -954,9 +1005,7 @@ def run_extent_generator(parent=None):
             # Marquer que l'utilisateur a pris la main dès qu'il tape dans px.
             ent.bind("<Key>",
                      lambda e: _px_touche_par_user.__setitem__("on", True))
-    # Guide de résolution (conseil issu du retour testeur).
-        # Guide de résolution (conseils Oscar Pilote / tests extents)
-        # Guide de résolution (conseils Oscar Pilote / tests extents)
+    # Guide de résolution (conseils Oscar Pilote / tests extents).
     tk.Label(adv_frame,
              text=_L(
                  "Finesse = précision du masque.\n"
@@ -1084,6 +1133,7 @@ def run_extent_generator(parent=None):
                "Ready. “By tile” mode: enter a number (+48+007) then "
                "“List the areas”."))
 
+    _fixer_taille_min(win)
     return win
 
 

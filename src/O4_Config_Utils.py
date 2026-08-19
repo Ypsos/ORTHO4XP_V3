@@ -363,6 +363,27 @@ too low to grab these details.",
         "default": True,
         "hint": "When set, the no_data values in the raster will be filled by a nearest neighbour algorithm. If unset, they are turned into zero (can be useful for rasters with no_data over the whole oceanic part or partial LIDAR data).",
     },
+    # Clés écrites dans Ortho4XP.cfg par le sélecteur de langue (FR/EN) et par
+    # le module altimétrie. Déclarées ici (type str, sans module -> global) pour
+    # que la lecture du fichier global les reconnaisse sans afficher
+    # "Global config file contains an invalid line". Non ajoutées à
+    # list_global_cfg : leur préservation à l'écriture reste assurée par le
+    # mécanisme extra_lines de write_global_cfg.
+    "language": {
+        "type": str,
+        "default": "",
+        "hint": "Interface language code (e.g. FR or EN). Managed by the language selector.",
+    },
+    "dem_output_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Directory used by the altimetry module for assembled DEM output.",
+    },
+    "dem_stock_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Directory used by the altimetry module for source DEM/TIFF storage.",
+    },
 }
 
 list_app_vars = [
