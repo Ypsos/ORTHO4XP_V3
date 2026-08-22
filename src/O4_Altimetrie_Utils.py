@@ -926,6 +926,81 @@ def open_altimetrie_window(gui):
     import subprocess
     import sys
 
+    # ── Boutons look CustomTkinter (repli ttk conservé) ──────────────────
+    #  Convertit les boutons TEXTE au style de la fenêtre principale validée.
+    #  Si CustomTkinter est absent, on retombe sur ttk.Button : la fenêtre
+    #  marche exactement comme avant. Le CTkButton renvoyé porte une méthode
+    #  .state() compatible ttk pour que les appels b.state(["disabled"]) /
+    #  b.state(["!disabled"]) déjà en place (Assembler / Préparer)
+    #  continuent de fonctionner sans être modifiés.
+    try:
+        import customtkinter as ctk
+        _HAS_CTK = True
+    except Exception:
+        _HAS_CTK = False
+
+    def _lighten_hex(hexcol, factor):
+        try:
+            h = hexcol.lstrip("#")
+            r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+            r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+            return "#%02x%02x%02x" % (r, g, b)
+        except Exception:
+            return hexcol
+
+    def _ctk_button(parent, text=None, command=None, **ttk_kw):
+        """Bouton texte look CTk ; repli ttk.Button si CTk absent."""
+        if _HAS_CTK:
+            try:
+                try:
+                    import O4_Theme_Manager as _TM2
+                    _t2 = _TM2.get_theme()
+                except Exception:
+                    _t2 = {}
+                base = _t2.get("btn_bg", "#4a6b59")
+                b = ctk.CTkButton(
+                    parent, text=text, command=command,
+                    corner_radius=8, border_width=1, height=30,
+                    fg_color=base, hover_color=_lighten_hex(base, 1.30),
+                    border_color=_t2.get("border", base),
+                    text_color=_t2.get("btn_fg", "#ffffff"))
+
+                # .state() compatible ttk : traduit ["disabled"] /
+                # ["!disabled"] en configure(state=...). Les appels
+                # existants restent inchangés.
+                def _state(spec=None, _b=b):
+                    if spec is None:
+                        return ()
+                    try:
+                        if "disabled" in spec and "!disabled" not in spec:
+                            _b.configure(state="disabled")
+                        elif "!disabled" in spec:
+                            _b.configure(state="normal")
+                    except Exception:
+                        pass
+                    return ()
+                b.state = _state  # type: ignore[attr-defined]
+
+                if "state" in ttk_kw:
+                    try:
+                        b.configure(state=ttk_kw["state"])
+                    except Exception:
+                        pass
+                # CORRECTIF macOS OBLIGATOIRE : redessin après mise en page.
+                b.after_idle(
+                    lambda btn=b, c=base: btn.winfo_exists()
+                    and btn.configure(fg_color=c))
+                return b
+            except Exception:
+                pass  # échec CTk → repli ttk
+        kw = {}
+        if text is not None:
+            kw["text"] = text
+        if command is not None:
+            kw["command"] = command
+        kw.update(ttk_kw)
+        return ttk.Button(parent, **kw)
+
     try:
         from O4_Lang import tr as _tr
     except Exception:
@@ -1054,8 +1129,8 @@ def open_altimetrie_window(gui):
             res["v"] = None
             dlg.destroy()
 
-        ttk.Button(bar, text=_tr("Valider"), command=_ok).pack(side="left")
-        ttk.Button(bar, text=_tr("Annuler"),
+        _ctk_button(bar, text=_tr("Valider"), command=_ok).pack(side="left")
+        _ctk_button(bar, text=_tr("Annuler"),
                    command=_annuler).pack(side="right")
 
         dlg.bind("<Return>", _ok)
@@ -1433,13 +1508,13 @@ def open_altimetrie_window(gui):
             except Exception:
                 pass
 
-        ttk.Button(dlg, text=DOSSIER_STOCK,
+        _ctk_button(dlg, text=DOSSIER_STOCK,
                    command=lambda: _pick("stock")).grid(
             row=2, column=0, padx=(14, 7), pady=(0, 6), sticky="ew", ipady=4)
-        ttk.Button(dlg, text=DOSSIER_ASSEMBLE,
+        _ctk_button(dlg, text=DOSSIER_ASSEMBLE,
                    command=lambda: _pick("sortie")).grid(
             row=2, column=1, padx=(7, 14), pady=(0, 6), sticky="ew", ipady=4)
-        ttk.Button(dlg, text=_tr("Annuler"),
+        _ctk_button(dlg, text=_tr("Annuler"),
                    command=lambda: _pick(None)).grid(
             row=3, column=0, columnspan=2, padx=14, pady=(0, 14))
 
@@ -2420,7 +2495,7 @@ def open_altimetrie_window(gui):
          (_tr("Fermer"), win.destroy, 2, 3),
     ]
     for _txt, _cmd, _r, _c in _defs:
-        _b = ttk.Button(frm_bot, text=_txt, command=_cmd)
+        _b = _ctk_button(frm_bot, text=_txt, command=_cmd)
         _b.grid(row=_r, column=_c, padx=5, pady=(8, 0) if _r else 0,
                 ipadx=6, ipady=4)
         # Le bouton Fermer reste actif même pendant un assemblage.

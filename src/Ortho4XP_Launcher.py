@@ -167,26 +167,18 @@ def _ctk_button(parent, text=None, command=None, width=None,
 
 
 class HoverButton(tk.Canvas):
-    def __init__(self, parent, text, command, width=380, height=55, font_size=13,
-                 fill_color=None, hover_color=None, text_color=None):
-        # fill_color / hover_color / text_color : optionnels. Sans valeur,
-        # comportement identique a l'origine (BTN_COLOR / BTN_HOVER / BTN_TEXT).
-        # La couleur est memorisee par instance -> elle persiste au survol
-        # (le <Leave> revient a self._fill, plus a la constante globale).
+    def __init__(self, parent, text, command, width=380, height=55, font_size=13):
         super().__init__(parent, width=width+15, height=height+15, 
                          bg=BG_GLOBAL, highlightthickness=0, cursor="hand2")
         self.command = command
         self.width, self.height = width, height
-        self._fill  = fill_color  or BTN_COLOR
-        self._hover = hover_color or BTN_HOVER
         self.create_rounded_rect(8, 8, width+5, height+5, 12, fill=SHADOW_COLOR)
-        self.rect = self.create_rounded_rect(2, 2, width, height, 12, fill=self._fill)
+        self.rect = self.create_rounded_rect(2, 2, width, height, 12, fill=BTN_COLOR)
         self.create_text(width//2 + 2, height//2 + 2, text=text, 
-                         fill=(text_color or BTN_TEXT),
-                         font=("Helvetica", font_size, "bold"))
+                         fill=BTN_TEXT, font=("Helvetica", font_size, "bold"))
         self.bind("<Button-1>", lambda e: self.on_click())
-        self.bind("<Enter>", lambda e: self.itemconfig(self.rect, fill=self._hover))
-        self.bind("<Leave>", lambda e: self.itemconfig(self.rect, fill=self._fill))
+        self.bind("<Enter>", lambda e: self.itemconfig(self.rect, fill=BTN_HOVER))
+        self.bind("<Leave>", lambda e: self.itemconfig(self.rect, fill=BTN_COLOR))
 
     def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
         points = [x1+r,y1, x1+r,y1, x2-r,y1, x2-r,y1, x2,y1, x2,y1+r,
@@ -708,16 +700,6 @@ class Launcher(tk.Tk):
         tk.Label(win, text=tr("Tout s'installe dans venv/ — rien dans le système"),
                  font=("Helvetica", 12), fg="#a6e3a1", bg=BG_GLOBAL).pack(pady=(0, 16))
 
-        # Couleurs du thème actif pour mettre en valeur la plateforme courante
-        # (même comportement que Roland, mais dans les teintes du thème choisi).
-        try:
-            _th = self._tm.get_theme() if self._tm else {}
-        except Exception:
-            _th = {}
-        _accent   = _th.get("accent",       "#a6e3a1")   # plateforme courante
-        _dark_txt = _th.get("bg",           "#1a2e1a")   # texte foncé lisible
-        _dim      = _th.get("bg_secondary", "#2a3d33")   # lanceurs non courants
-
         # Boutons plateformes — plateforme courante mise en évidence
         platforms = [
             ("🍎  macOS  (Homebrew + pip)", "Darwin",  self._install_mac),
@@ -725,15 +707,14 @@ class Launcher(tk.Tk):
             ("🪟  Windows  (pip)",          "Windows", self._install_windows),
         ]
         for label, plat, cmd in platforms:
-            _cur = (plat == SYSTEM)
+            color = "#2a6b45" if plat == SYSTEM else BTN_COLOR
             btn = HoverButton(win, label, lambda c=cmd, w=win: [w.destroy(), c()],
-                              width=420, height=60, font_size=14,
-                              fill_color=(_accent if _cur else BTN_COLOR),
-                              text_color=(_dark_txt if _cur else None))
+                              width=420, height=60, font_size=14)
+            btn.itemconfig(btn.rect, fill=color)
             btn.pack(pady=6, padx=30)
 
         # ── Séparateur ───────────────────────────────────────────────────
-        tk.Frame(win, bg=_accent, height=2).pack(fill="x", padx=30, pady=(10, 6))
+        tk.Frame(win, bg="#2a6b45", height=2).pack(fill="x", padx=30, pady=(10, 6))
         tk.Label(win, text=tr("Créer le lanceur Ortho4XP (double-clic quotidien)"),
                  font=("Helvetica", 12, "bold"), fg="#a6e3a1", bg=BG_GLOBAL).pack(pady=(0, 6))
 
@@ -743,11 +724,10 @@ class Launcher(tk.Tk):
             ("🪟  Créer Lanceur Ortho4XP — Windows", "Windows", self._create_launcher_windows),
         ]
         for label, plat, cmd in launchers:
-            _cur = (plat == SYSTEM)
+            color = "#1a5a35" if plat == SYSTEM else "#2a3d33"
             btn = HoverButton(win, label, lambda c=cmd, w=win: [w.destroy(), c()],
-                              width=420, height=55, font_size=13,
-                              fill_color=(_accent if _cur else _dim),
-                              text_color=(_dark_txt if _cur else None))
+                              width=420, height=55, font_size=13)
+            btn.itemconfig(btn.rect, fill=color)
             btn.pack(pady=4, padx=30)
 
         _ctk_button(win, text="Annuler", command=win.destroy
@@ -799,13 +779,19 @@ class Launcher(tk.Tk):
 
     def _create_launcher_mac(self):
         self._log("── 🍎 Création Lanceur ORTHO4XP.app ──────")
-        # Autonome : ne dépend plus du script externe create_launcher_ORTHO.py.
-        # Réutilise la méthode interne éprouvée (binaire C compilé, .app posé à
-        # la racine BASE_DIR), celle du flux d'installation macOS.
+        script = BASE_DIR / "create_launcher_ORTHO.py"
+        if not script.exists():
+            self._log("❌ create_launcher_ORTHO.py introuvable."); return
+        py = str(VENV_PY) if VENV_PY.exists() else sys.executable
         try:
-            self._create_mac_daily_launcher()
-        except Exception as e:
-            self._log(f"❌ {e}")
+            r = subprocess.run([py, str(script)], cwd=str(BASE_DIR),
+                               capture_output=True, text=True)
+            for line in r.stdout.splitlines(): self._log(line)
+            if r.returncode == 0:
+                self._log("✅ Lanceur ORTHO4XP.app créé — double-clic pour lancer !")
+            else:
+                self._log(f"❌ {r.stderr[:300]}")
+        except Exception as e: self._log(f"❌ {e}")
 
     def _create_launcher_linux(self):
         self._log("── 🐧 Création Lanceur ORTHO4XP.desktop ──")

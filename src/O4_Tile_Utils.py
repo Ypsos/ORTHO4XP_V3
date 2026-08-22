@@ -15,6 +15,64 @@ import O4_Overlay_Utils as OVL
 from O4_Parallel_Utils import parallel_launch, parallel_join
 from O4_Lang import tr
 
+# ── Boutons look CustomTkinter (repli ttk conservé) ─────────────────────────
+#  Helper unique au niveau module : convertit les boutons TEXTE des deux
+#  fenêtres de gestion des patches au style de la fenêtre principale validée.
+#  Il importe lui-même tkinter.ttk (utilisé seulement à l'ouverture d'une
+#  fenêtre). Si CustomTkinter est absent, repli ttk.Button → l'appli marche
+#  exactement comme avant. AUCUNE logique de pipeline (Step 2.x, mer, mesh,
+#  masques, DSF) n'est touchée : on ne remplace que le widget bouton.
+try:
+    import customtkinter as _ctk
+    _HAS_CTK = True
+except Exception:
+    _HAS_CTK = False
+
+
+def _lighten_hex(hexcol, factor):
+    """Éclaircit une couleur hex (#rrggbb) — survol des boutons CTk."""
+    try:
+        h = hexcol.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+        return "#%02x%02x%02x" % (r, g, b)
+    except Exception:
+        return hexcol
+
+
+def _ctk_button(parent, text=None, command=None, **ttk_kw):
+    """Bouton texte look CTk ; repli ttk.Button si CTk absent."""
+    if _HAS_CTK:
+        try:
+            try:
+                import O4_Theme_Manager as _TMt
+                _tt = _TMt.get_theme()
+            except Exception:
+                _tt = {}
+            base = _tt.get("btn_bg", "#4a6b59")
+            b = _ctk.CTkButton(
+                parent, text=text, command=command,
+                corner_radius=8, border_width=1, height=30,
+                fg_color=base, hover_color=_lighten_hex(base, 1.30),
+                border_color=_tt.get("border", base),
+                text_color=_tt.get("btn_fg", "#ffffff"))
+            b.config = b.configure  # type: ignore[assignment]
+            # CORRECTIF macOS OBLIGATOIRE : redessin après mise en page.
+            b.after_idle(
+                lambda btn=b, c=base: btn.winfo_exists()
+                and btn.configure(fg_color=c))
+            return b
+        except Exception:
+            pass  # échec CTk → repli ttk
+    import tkinter.ttk as _ttk_fallback
+    kw = {}
+    if text is not None:
+        kw["text"] = text
+    if command is not None:
+        kw["command"] = command
+    kw.update(ttk_kw)
+    return _ttk_fallback.Button(parent, **kw)
+
 # Lot A — Memory Manager (non bloquant)
 # Appelé UNIQUEMENT en fin de build_tile() (étape 3), après la jointure de
 # tous les threads : build_dsf_thread.join(), download_thread.join() et
@@ -125,10 +183,10 @@ def _ask_patch_management(patch_dir, existing_files):
 
         # ttk.Button : texte toujours lisible sur macOS/Windows/Linux
         # (Color Check utilise le même pattern)
-        ttk.Button(frm_btn, text=_tr("🗑  Tout supprimer"),  command=_do_all).grid(row=0, column=0, padx=12, pady=8, ipadx=10, ipady=6)
-        ttk.Button(frm_btn, text=_tr("✅  Tout conserver"),  command=_do_none).grid(row=0, column=1, padx=12, pady=8, ipadx=10, ipady=6)
-        ttk.Button(frm_btn, text=_tr("🔍  Sélection patches"), command=_do_select).grid(row=0, column=2, padx=12, pady=8, ipadx=10, ipady=6)
-        ttk.Button(frm_btn, text=_tr("🖊  Correction patches"), command=lambda: _open_correction_window(win, patch_dir, existing_files, BG, FG, FG2, PREV_BG, FONT, FONT_T, _tr)).grid(row=0, column=3, padx=12, pady=8, ipadx=10, ipady=6)
+        _ctk_button(frm_btn, text=_tr("🗑  Tout supprimer"),  command=_do_all).grid(row=0, column=0, padx=12, pady=8, ipadx=10, ipady=6)
+        _ctk_button(frm_btn, text=_tr("✅  Tout conserver"),  command=_do_none).grid(row=0, column=1, padx=12, pady=8, ipadx=10, ipady=6)
+        _ctk_button(frm_btn, text=_tr("🔍  Sélection patches"), command=_do_select).grid(row=0, column=2, padx=12, pady=8, ipadx=10, ipady=6)
+        _ctk_button(frm_btn, text=_tr("🖊  Correction patches"), command=lambda: _open_correction_window(win, patch_dir, existing_files, BG, FG, FG2, PREV_BG, FONT, FONT_T, _tr)).grid(row=0, column=3, padx=12, pady=8, ipadx=10, ipady=6)
 
         # Centrer après création
         win.update_idletasks()
@@ -328,8 +386,8 @@ def _ask_patch_management(patch_dir, existing_files):
         def _sel_none():
             for v in check_vars.values(): v.set(False)
 
-        ttk.Button(frm_bot, text=_tr("Tout cocher"),   command=_sel_all).grid(row=0, column=0, padx=6, ipadx=8, ipady=4)
-        ttk.Button(frm_bot, text=_tr("Tout décocher"), command=_sel_none).grid(row=0, column=1, padx=6, ipadx=8, ipady=4)
+        _ctk_button(frm_bot, text=_tr("Tout cocher"),   command=_sel_all).grid(row=0, column=0, padx=6, ipadx=8, ipady=4)
+        _ctk_button(frm_bot, text=_tr("Tout décocher"), command=_sel_none).grid(row=0, column=1, padx=6, ipadx=8, ipady=4)
 
         def _validate():
             # Conserver = coché → supprimer = non coché
@@ -337,7 +395,7 @@ def _ask_patch_management(patch_dir, existing_files):
             sel_result["to_delete"] = to_delete
             sel.destroy()
 
-        ttk.Button(frm_bot, text="✅  Valider",
+        _ctk_button(frm_bot, text="✅  Valider",
                    command=_validate).grid(row=0, column=2, padx=12, ipadx=16, ipady=6)
 
         # Afficher le premier patch au démarrage (ordre affiché, rubriques comprises)
@@ -700,18 +758,18 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                 _tr("Erreur ouverture"),
                 _tr("Impossible d'ouvrir l'application") + f" :\n{_oe}")
 
-    ttk.Button(frm_bot, text=_tr("Tout cocher"),
+    _ctk_button(frm_bot, text=_tr("Tout cocher"),
                command=_sel_all).grid(row=0, column=0, padx=6, ipadx=8, ipady=4)
-    ttk.Button(frm_bot, text=_tr("Tout décocher"),
+    _ctk_button(frm_bot, text=_tr("Tout décocher"),
                command=_sel_none).grid(row=0, column=1, padx=6, ipadx=8, ipady=4)
-    ttk.Button(frm_bot, text=_tr("🗑  Supprimer patches sélectionnés"),
+    _ctk_button(frm_bot, text=_tr("🗑  Supprimer patches sélectionnés"),
                command=_delete_selected).grid(row=0, column=2, padx=12,
                                               ipadx=12, ipady=4)
-    ttk.Button(frm_bot, text=_tr("🖊  Correction (choisir application)"),
+    _ctk_button(frm_bot, text=_tr("🖊  Correction (choisir application)"),
                command=_choose_editor).grid(row=1, column=0, columnspan=2,
                                             padx=6, pady=(8, 0),
                                             ipadx=10, ipady=5)
-    ttk.Button(frm_bot, text=_tr("▶  Ouvrir dans l'éditeur"),
+    _ctk_button(frm_bot, text=_tr("▶  Ouvrir dans l'éditeur"),
                command=_open_in_editor).grid(row=1, column=2, padx=12,
                                              pady=(8, 0), ipadx=10, ipady=5)
 

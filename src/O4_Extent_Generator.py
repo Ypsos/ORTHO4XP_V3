@@ -96,6 +96,28 @@ def _c(key, fallback):
     return fallback
 
 
+# --- CustomTkinter (boutons look fenêtre principale) -------------------------
+# Repli TOUJOURS conservé : si CTk absent, on garde la fabrique Frame+Label
+# Mac-safe existante (voir _make_themed_button).
+try:
+    import customtkinter as ctk
+    _HAS_CTK = True
+except Exception:
+    _HAS_CTK = False
+
+
+def _lighten_hex(hexcol, factor):
+    """Éclaircit une couleur hex (#rrggbb) d'un facteur. Utilisé pour le
+    survol des boutons CTk, comme dans la fenêtre principale validée."""
+    try:
+        h = hexcol.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hexcol
+
+
 # ── Chemins projet ────────────────────────────────────────────────────────────
 # Ce fichier vit dans src/. La racine du projet est un niveau au-dessus.
 # Extents/ est à la racine ; O4_Mask_Utils.py est dans src/ (à côté de nous).
@@ -157,6 +179,43 @@ def _make_themed_button(tk, parent, text, command):
     active = _c("fg_secondary", "#a6e3a1")
     border = _c("btn_bg", "#4a6b59")
 
+    # --- Branche CustomTkinter : bouton look fenêtre principale ------------
+    # Si CTk présent, on retourne un CTkButton (mêmes couleurs de thème).
+    # .pack() et .set_enabled() restent disponibles → appelants inchangés.
+    if _HAS_CTK:
+        try:
+            b = ctk.CTkButton(
+                parent, text=text, command=command,
+                corner_radius=8, border_width=1, height=30,
+                fg_color=bg, hover_color=_lighten_hex(bg, 1.30),
+                border_color=border, text_color=fg,
+                font=("Helvetica", 12) if _OS == "mac" else ("Segoe UI", 10))
+
+            # Griser / réactiver (même API que le repli Frame+Label).
+            def _set_enabled_ctk(flag, _b=b):
+                try:
+                    if flag:
+                        _b.configure(state="normal", fg_color=bg,
+                                     text_color=fg)
+                    else:
+                        _b.configure(state="disabled",
+                                     fg_color=_c("bg_secondary", "#2a4235"),
+                                     text_color=_c("fg_secondary", "#a6e3a1"))
+                except Exception:
+                    pass
+            b.set_enabled = _set_enabled_ctk  # type: ignore[attr-defined]
+
+            # CORRECTIF macOS OBLIGATOIRE : le remplissage arrondi n'est
+            # dessiné qu'une fois le bouton dimensionné → sinon rectangle
+            # sombre derrière le texte au repos. On force un redessin.
+            b.after_idle(
+                lambda btn=b, c=bg: btn.winfo_exists()
+                and btn.configure(fg_color=c))
+            return b
+        except Exception:
+            pass  # échec CTk → on retombe sur la fabrique Frame+Label
+
+    # --- Repli Mac-safe conservé (Frame+Label) : CTk absent ---------------
     frame = tk.Frame(parent, bg=bg, highlightthickness=1,
                      highlightbackground=border, highlightcolor=active, bd=0)
     label = tk.Label(frame, text=text, bg=bg, fg=fg, padx=10, pady=5,

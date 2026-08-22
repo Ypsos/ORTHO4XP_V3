@@ -30,11 +30,63 @@ except ImportError:
         return text
 
 
+# ── Boutons look CustomTkinter (repli Label Mac-safe conservé) ──────────────
+#  Si CustomTkinter est absent, on garde la fabrique Label existante :
+#  l'appli fonctionne exactement comme avant.
+try:
+    import customtkinter as ctk
+    _HAS_CTK = True
+except Exception:
+    _HAS_CTK = False
+
+
+def _lighten_hex(hexcol, factor):
+    """Éclaircit une couleur hex (#rrggbb) — pour le survol des boutons CTk."""
+    try:
+        h = hexcol.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hexcol
+
+
 def cree_bouton_mac(parent, text, command, bg_color="#3A5F50", fg_color="white", hover_bg="#4A7563"):
     """
     Crée un bouton personnalisé sous forme de Label aux couleurs du thème
     pour contourner le bug visuel des boutons blancs/transparents natifs Tkinter sur macOS.
     """
+    # Couleurs : priorité au thème actif (O4_Theme_Manager) ; les valeurs
+    # passées en argument servent de repli si le thème est absent.
+    if THEME is not None:
+        try:
+            _t = THEME.get_theme()
+            bg_color = _t.get("btn_bg", bg_color)
+            fg_color = _t.get("btn_fg", fg_color)
+            hover_bg = _lighten_hex(_t.get("btn_bg", bg_color), 1.30)
+        except Exception:
+            pass
+
+    # --- Branche CustomTkinter : bouton look fenêtre principale ------------
+    #  .pack()/.side() restent disponibles → les 4 appelants sont inchangés.
+    if _HAS_CTK:
+        try:
+            b = ctk.CTkButton(
+                parent, text=text, command=command,
+                corner_radius=8, border_width=1, height=30,
+                fg_color=bg_color, hover_color=hover_bg,
+                border_color=bg_color, text_color=fg_color,
+                font=("Helvetica", 11, "bold"))
+            # CORRECTIF macOS OBLIGATOIRE : redessin du remplissage arrondi
+            # après mise en page (sinon rectangle sombre au repos).
+            b.after_idle(
+                lambda btn=b, c=bg_color: btn.winfo_exists()
+                and btn.configure(fg_color=c))
+            return b
+        except Exception:
+            pass  # échec CTk → repli Label ci-dessous
+
+    # --- Repli Mac-safe conservé (Label) : CTk absent ---------------------
     btn = tk.Label(
         parent,
         text=text,

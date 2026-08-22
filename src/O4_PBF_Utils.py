@@ -1051,6 +1051,68 @@ def open_pbf_window(parent=None):
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
 
+    # ── Boutons look CustomTkinter (repli ttk conservé) ──────────────────
+    #  Convertit les boutons TEXTE au style de la fenêtre principale validée.
+    #  Si CustomTkinter est absent, on retombe sur ttk.Button : la fenêtre
+    #  marche exactement comme avant. Le CTkButton reçoit .config = .configure
+    #  pour que btn_run.config(state="disabled"/"normal") continue de griser
+    #  le bouton pendant le build, sans être modifié.
+    try:
+        import customtkinter as ctk
+        _HAS_CTK = True
+    except Exception:
+        _HAS_CTK = False
+
+    def _lighten_hex(hexcol, factor):
+        try:
+            h = hexcol.lstrip("#")
+            r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+            r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+            return "#%02x%02x%02x" % (r, g, b)
+        except Exception:
+            return hexcol
+
+    def _ctk_button(parent, text=None, command=None, width=None, **ttk_kw):
+        """Bouton texte look CTk ; repli ttk.Button si CTk absent."""
+        if _HAS_CTK:
+            try:
+                try:
+                    import O4_Theme_Manager as _TMp
+                    _tp = _TMp.get_theme()
+                except Exception:
+                    _tp = {}
+                base = _tp.get("btn_bg", "#4a6b59")
+                b = ctk.CTkButton(
+                    parent, text=text, command=command,
+                    corner_radius=8, border_width=1, height=30,
+                    fg_color=base, hover_color=_lighten_hex(base, 1.30),
+                    border_color=_tp.get("border", base),
+                    text_color=_tp.get("btn_fg", "#ffffff"))
+                if width:
+                    b.configure(width=width)
+                b.config = b.configure  # type: ignore[assignment]
+                if "state" in ttk_kw:
+                    try:
+                        b.configure(state=ttk_kw["state"])
+                    except Exception:
+                        pass
+                # CORRECTIF macOS OBLIGATOIRE : redessin après mise en page.
+                b.after_idle(
+                    lambda btn=b, c=base: btn.winfo_exists()
+                    and btn.configure(fg_color=c))
+                return b
+            except Exception:
+                pass  # échec CTk → repli ttk
+        kw = {}
+        if text is not None:
+            kw["text"] = text
+        if command is not None:
+            kw["command"] = command
+        if width:
+            kw["width"] = width
+        kw.update(ttk_kw)
+        return ttk.Button(parent, **kw)
+
     _reload_theme()
     tr = _get_tr()
 
@@ -1110,7 +1172,7 @@ def open_pbf_window(parent=None):
         if paths:
             v_pbf.set(";".join(paths))
 
-    ttk.Button(row_file, text=tr(K_BROWSE), command=browse,
+    _ctk_button(row_file, text=tr(K_BROWSE), command=browse,
                width=26).pack(side="left")
 
     # Astuce multi-selection, juste sous le champ fichier
@@ -1206,9 +1268,9 @@ def open_pbf_window(parent=None):
             bar["value"] = 0
             lbl_state.config(text="")
 
-    btn_run = ttk.Button(row_btn, text=tr(K_RUN), command=run, width=32)
+    btn_run = _ctk_button(row_btn, text=tr(K_RUN), command=run, width=32)
     btn_run.pack(side="left", padx=(0, 6), fill="x", expand=True)
-    ttk.Button(row_btn, text=tr(K_CLOSE), command=win.destroy,
+    _ctk_button(row_btn, text=tr(K_CLOSE), command=win.destroy,
                width=14).pack(side="left")
 
     # ── Application du theme global ───────────────────────────────

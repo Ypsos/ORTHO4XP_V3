@@ -53,6 +53,75 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox, N, S, E, W, RIDGE, END
 
+# ── Boutons look CustomTkinter (repli ttk conservé) ─────────────────────────
+#  Convertit les boutons TEXTE au style de la fenêtre principale validée.
+#  Si CustomTkinter est absent, on retombe sur ttk.Button : l'appli marche
+#  exactement comme avant. Aucune autre partie de l'UI n'est touchée.
+try:
+    import customtkinter as ctk
+    _HAS_CTK = True
+except Exception:
+    _HAS_CTK = False
+
+
+def _lighten_hex(hexcol, factor):
+    """Éclaircit une couleur hex (#rrggbb) — pour le survol des boutons CTk."""
+    try:
+        h = hexcol.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hexcol
+
+
+def _ctk_button(parent, text=None, command=None, width=None,
+                corner_radius=8, **ttk_kw):
+    """Bouton texte look CustomTkinter ; repli ttk.Button si CTk absent.
+
+    Les kwargs ttk (style, takefocus…) ne s'appliquent qu'au repli ttk ;
+    seul « state » est aussi transmis à CTk (bouton « à venir » grisé)."""
+    if _HAS_CTK:
+        try:
+            try:
+                import O4_Theme_Manager as _TM
+                _t = _TM.get_theme()
+            except Exception:
+                _t = {}
+            base = _t.get("btn_bg", "#4a6b59")
+            b = ctk.CTkButton(
+                parent, text=text, command=command,
+                corner_radius=corner_radius, border_width=1, height=30,
+                fg_color=base, hover_color=_lighten_hex(base, 1.30),
+                border_color=_t.get("border", base),
+                text_color=_t.get("btn_fg", "#ffffff"))
+            if width:
+                b.configure(width=width)
+            # « state » (ex. disabled pour « à venir ») transmis à CTk.
+            if "state" in ttk_kw:
+                try:
+                    b.configure(state=ttk_kw["state"])
+                except Exception:
+                    pass
+            # CORRECTIF macOS OBLIGATOIRE : le remplissage arrondi n'est
+            # dessiné qu'une fois le bouton dimensionné → sinon rectangle
+            # sombre derrière le texte au repos. On force un redessin.
+            b.after_idle(
+                lambda btn=b, c=base: btn.winfo_exists()
+                and btn.configure(fg_color=c))
+            return b
+        except Exception:
+            pass  # échec CTk → repli ttk ci-dessous
+    kw = {}
+    if text is not None:
+        kw["text"] = text
+    if command is not None:
+        kw["command"] = command
+    if width:
+        kw["width"] = max(1, int(width / 8))
+    kw.update(ttk_kw)
+    return ttk.Button(parent, **kw)
+
 # ── Traduction : non bloquante ──────────────────────────────────────────────
 #  Si O4_Lang est absent ou si la clé n'existe pas encore, le texte français
 #  écrit dans le code est renvoyé tel quel. Les clés seront ajoutées aux
@@ -1018,13 +1087,13 @@ class AvanceWindow(tk.Toplevel):
         # ── Pied ───────────────────────────────────────────────────────
         foot = tk.Frame(self, bg=self.BG)
         foot.grid(row=3, column=0, sticky=E+W, padx=6, pady=(0, 8))
-        ttk.Button(foot, text=tr("Aide JOSM"),
+        _ctk_button(foot, text=tr("Aide JOSM"),
                    command=self._show_help).pack(side="left", padx=4)
-        ttk.Button(foot, text=tr("Choisir l'application JOSM"),
+        _ctk_button(foot, text=tr("Choisir l'application JOSM"),
                    command=self._choose_josm).pack(side="left", padx=4)
-        ttk.Button(foot, text=tr("Sauvegardes…"),
+        _ctk_button(foot, text=tr("Sauvegardes…"),
                    command=self._open_backups).pack(side="left", padx=4)
-        ttk.Button(foot, text=tr("Fermer"),
+        _ctk_button(foot, text=tr("Fermer"),
                    command=self._on_close).pack(side="right", padx=4)
 
         self.bind("<Escape>", lambda e: self._on_close())
@@ -1066,9 +1135,9 @@ class AvanceWindow(tk.Toplevel):
             row=1, column=0, padx=6, pady=(0, 4), sticky=W)
         if bouton:
             if command is None:
-                b = ttk.Button(f, text=tr("à venir"), state="disabled")
+                b = _ctk_button(f, text=tr("à venir"), state="disabled")
             else:
-                b = ttk.Button(f, text=tr("Ouvrir dans JOSM"),
+                b = _ctk_button(f, text=tr("Ouvrir dans JOSM"),
                                command=command)
             b.grid(row=2, column=0, padx=6, pady=(0, 8), sticky=E+W)
         return f
@@ -1138,7 +1207,7 @@ class AvanceWindow(tk.Toplevel):
                     fichiers = []
 
         if not fichiers:
-            b = ttk.Button(f, text=tr("Aucune donnée — lancer l'étape 1"),
+            b = _ctk_button(f, text=tr("Aucune donnée — lancer l'étape 1"),
                            command=self._open_osm_data)
             b.grid(row=2, column=0, padx=6, pady=(0, 8), sticky=E+W)
             self._osm_buttons.append(b)
@@ -1150,7 +1219,7 @@ class AvanceWindow(tk.Toplevel):
             lab = _layer_label(nom)
             texte = lab if lab else nom
             chemin = os.path.join(d, nom)
-            b = ttk.Button(
+            b = _ctk_button(
                 f, text=texte,
                 command=lambda c=chemin: self._protect_and_open(c))
             b.grid(row=r, column=0, padx=6, pady=(0, 3), sticky=E+W)
@@ -1316,9 +1385,9 @@ class AvanceWindow(tk.Toplevel):
             win.destroy()
             self._protect_and_open(os.path.join(d, fname))
 
-        ttk.Button(bar, text=tr("Ouvrir dans JOSM"),
+        _ctk_button(bar, text=tr("Ouvrir dans JOSM"),
                    command=_go).pack(side="left", padx=4)
-        ttk.Button(bar, text=tr("Annuler"),
+        _ctk_button(bar, text=tr("Annuler"),
                    command=win.destroy).pack(side="right", padx=4)
         lb.bind("<Double-Button-1>", _go)
         lb.bind("<Return>", _go)
@@ -1492,8 +1561,8 @@ class AvanceWindow(tk.Toplevel):
             res["v"] = None
             win.destroy()
 
-        ttk.Button(bar, text=tr("Valider"), command=_ok).pack(side="left")
-        ttk.Button(bar, text=tr("Annuler"),
+        _ctk_button(bar, text=tr("Valider"), command=_ok).pack(side="left")
+        _ctk_button(bar, text=tr("Annuler"),
                    command=_annuler).pack(side="right")
 
         win.bind("<Return>", _ok)
@@ -1688,9 +1757,9 @@ class AvanceWindow(tk.Toplevel):
                 parent=self)
             self._create_and_open(path, contenu)
 
-        ttk.Button(bar, text=tr("Créer et ouvrir"),
+        _ctk_button(bar, text=tr("Créer et ouvrir"),
                    command=_go).pack(side="left", padx=4)
-        ttk.Button(bar, text=tr("Annuler"),
+        _ctk_button(bar, text=tr("Annuler"),
                    command=win.destroy).pack(side="right", padx=4)
         lb.bind("<Double-Button-1>", _go)
         lb.bind("<Return>", _go)
@@ -1900,16 +1969,16 @@ class AvanceWindow(tk.Toplevel):
                          "reconstruite")).grid(
             row=0, column=0, padx=10, pady=10, sticky=W)
 
-        ttk.Button(win, text=tr("Sauvegarder mes modifications maintenant"),
+        _ctk_button(win, text=tr("Sauvegarder mes modifications maintenant"),
                    command=lambda: (win.destroy(), self._save_modified())
                    ).grid(row=1, column=0, padx=10, pady=3, sticky=E+W)
-        ttk.Button(win, text=tr("Réappliquer mes modifications"),
+        _ctk_button(win, text=tr("Réappliquer mes modifications"),
                    command=lambda: (win.destroy(), self._reapply_modified())
                    ).grid(row=2, column=0, padx=10, pady=3, sticky=E+W)
-        ttk.Button(win, text=tr("Restaurer l'original"),
+        _ctk_button(win, text=tr("Restaurer l'original"),
                    command=lambda: (win.destroy(), self._restore_original())
                    ).grid(row=3, column=0, padx=10, pady=3, sticky=E+W)
-        ttk.Button(win, text=tr("Fermer"), command=win.destroy).grid(
+        _ctk_button(win, text=tr("Fermer"), command=win.destroy).grid(
             row=4, column=0, padx=10, pady=(10, 10), sticky=E)
         win.bind("<Escape>", lambda e: win.destroy())
         win.update_idletasks()
@@ -2074,9 +2143,9 @@ class AvanceWindow(tk.Toplevel):
                 messagebox.showerror(tr("Restaurer l'original"), str(e),
                                      parent=self)
 
-        ttk.Button(bar, text=tr("Restaurer"),
+        _ctk_button(bar, text=tr("Restaurer"),
                    command=_go).pack(side="left", padx=4)
-        ttk.Button(bar, text=tr("Annuler"),
+        _ctk_button(bar, text=tr("Annuler"),
                    command=win.destroy).pack(side="right", padx=4)
         lb.bind("<Double-Button-1>", _go)
         lb.bind("<Return>", _go)

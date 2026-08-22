@@ -16,6 +16,89 @@ import O4_Tile_Utils as TILE
 import O4_Overlay_Utils as OVL
 from O4_Lang import tr
 
+# --- langue active : bilingue en dur (meme schema que O4_Extent_Generator) ---
+# On ne touche PAS aux fichiers O4_Lang_* : les deux libelles FR/EN sont ecrits
+# directement dans le module via _L(fr, en). Import protege, repli EN.
+try:
+    from O4_Lang import current_lang as _current_lang
+except Exception:
+    def _current_lang():
+        return "EN"
+
+
+def _lang_code():
+    """Retourne 'FR' si la langue active est le francais, sinon 'EN'.
+    Toute langue autre que FR retombe volontairement sur EN."""
+    try:
+        code = (_current_lang() or "EN").upper()
+    except Exception:
+        code = "EN"
+    return "FR" if code == "FR" else "EN"
+
+
+def _L(fr, en):
+    """Libelle bilingue resolu ICI (sans toucher aux fichiers O4_Lang_*).
+    FR si langue active = francais, EN sinon."""
+    return fr if _lang_code() == "FR" else en
+
+
+try:
+    import customtkinter as ctk
+    _HAS_CTK = True
+except Exception:
+    _HAS_CTK = False
+
+
+def _lighten_hex(hexcol, factor):
+    # Teinte plus claire (facteur > 1) pour l'eclat au survol.
+    try:
+        h = hexcol.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hexcol
+
+
+def _ctk_button(parent, text=None, command=None, width=None,
+                corner_radius=8, **ttk_kw):
+    """Bouton texte au look CustomTkinter (meme style que la fenetre
+    principale) ; repli automatique sur ttk.Button si CustomTkinter absent.
+    Les kwargs ttk (takefocus, style...) ne s'appliquent qu'au repli ttk.
+    """
+    if _HAS_CTK:
+        try:
+            import O4_Theme_Manager as _TM
+            _t = _TM.get_theme()
+        except Exception:
+            _t = {}
+        base = _t.get("btn_bg", "#4a6b59")
+        b = ctk.CTkButton(
+            parent, text=text, command=command,
+            corner_radius=corner_radius, border_width=1, height=30,
+            fg_color=base, hover_color=_lighten_hex(base, 1.30),
+            border_color=_t.get("border", base),
+            text_color=_t.get("btn_fg", "#ffffff"))
+        if width:
+            b.configure(width=width)
+        # macOS : le remplissage arrondi du CTkButton n'est dessine qu'une
+        # fois le bouton dimensionne. On force un redessin apres la mise en
+        # page pour eviter le rectangle sombre derriere le texte au repos
+        # (qui ne disparaissait qu'au survol).
+        b.after_idle(
+            lambda btn=b, c=base: btn.winfo_exists()
+            and btn.configure(fg_color=c))
+        return b
+    kw = {}
+    if text is not None:
+        kw["text"] = text
+    if command is not None:
+        kw["command"] = command
+    if width:
+        kw["width"] = max(1, int(width / 8))
+    kw.update(ttk_kw)
+    return ttk.Button(parent, **kw)
+
 
 cfg_vars = {
     # App
@@ -770,18 +853,27 @@ class Ortho4XP_Config(tk.Toplevel):
         self.frame_lastbtn = tk.Frame(
             self.main_frame, border=0, padx=5, pady=self.pady, bg="#3b5b49"
         )
+        # Bandeau bascule Config Tuile / Config Globale + zone de statut.
+        self.frame_mode = tk.Frame(
+            self.main_frame, border=0, padx=5, pady=self.pady, bg="#3b5b49"
+        )
         # Frames properties
         for j in range(8):
             self.frame_cfg.columnconfigure(j, weight=1)
         self.frame_cfg.rowconfigure(0, weight=1)
-        for j in range(6):
+        for j in range(8):
             self.frame_lastbtn.columnconfigure(j, weight=1)
         self.frame_lastbtn.rowconfigure(0, weight=1)
+        self.frame_mode.columnconfigure(1, weight=1)
+        self.frame_mode.rowconfigure(0, weight=1)
 
         # Frames placement
         self.main_frame.grid(row=0, column=0, sticky=N + S + W + E)
         self.frame_cfg.grid(row=0, column=0, pady=10, sticky=N + S + E + W)
-        self.frame_lastbtn.grid(row=1, column=0, pady=10, sticky=N + S + E + W)
+        self.frame_mode.grid(
+            row=1, column=0, pady=(0, 4), sticky=N + S + E + W
+        )
+        self.frame_lastbtn.grid(row=2, column=0, pady=10, sticky=N + S + E + W)
 
         # Variables and widgets and their placement
         self.v_ = {}
@@ -795,10 +887,10 @@ class Ortho4XP_Config(tk.Toplevel):
         col = 0
         next_row = 0
         for (title, sub_list) in (
-            (tr("Vector data"), list_vector_vars),
-            (tr("Mesh"), list_mesh_vars),
-            (tr("Masks"), list_mask_vars),
-            (tr("DSF/Imagery"), list_dsf_vars),
+            (_L("Donnees vectorielles", "Vector data"), list_vector_vars),
+            (_L("Maillage", "Mesh"), list_mesh_vars),
+            (_L("Masques", "Masks"), list_mask_vars),
+            (_L("DSF/Imagerie", "DSF/Imagery"), list_dsf_vars),
         ):
             tk.Label(
                 self.frame_cfg,
@@ -821,7 +913,7 @@ class Ortho4XP_Config(tk.Toplevel):
                     if "short_name" not in cfg_vars[item]
                     else cfg_vars[item]["short_name"]
                 )
-                ttk.Button(
+                _ctk_button(
                     self.frame_cfg,
                     text=text,
                     takefocus=False,
@@ -865,7 +957,7 @@ class Ortho4XP_Config(tk.Toplevel):
             row=row, column=0, columnspan=6, sticky=N + S + W + E
         )
         item = "custom_dem"
-        ttk.Button(
+        _ctk_button(
             self.frame_dem,
             text=item,
             takefocus=False,
@@ -894,7 +986,7 @@ class Ortho4XP_Config(tk.Toplevel):
         dem_button.bind("<Shift-ButtonPress-1>", self.add_dem)
 
         item = "custom_bathy_dem"
-        ttk.Button(
+        _ctk_button(
             self.frame_dem,
             text=item,
             takefocus=False,
@@ -914,7 +1006,7 @@ class Ortho4XP_Config(tk.Toplevel):
         ).grid(row=1, column=2, padx=2, pady=0, sticky=W)
 
         item = "fill_nodata"
-        ttk.Button(
+        _ctk_button(
             self.frame_cfg,
             text=item,
             takefocus=False,
@@ -938,7 +1030,7 @@ class Ortho4XP_Config(tk.Toplevel):
         row += 1
         tk.Label(
             self.frame_cfg,
-            text=tr("Application "),
+            text=_L("Application ", "Application "),
             bg="#3b5b49",
             fg="#e8f0ec",
             anchor=W,
@@ -957,7 +1049,7 @@ class Ortho4XP_Config(tk.Toplevel):
                 if "short_name" not in cfg_vars[item]
                 else cfg_vars[item]["short_name"]
             )
-            ttk.Button(
+            _ctk_button(
                 self.frame_cfg,
                 text=text,
                 takefocus=False,
@@ -995,7 +1087,7 @@ class Ortho4XP_Config(tk.Toplevel):
         row = this_row + l
 
         for item in gui_app_vars_long:
-            ttk.Button(
+            _ctk_button(
                 self.frame_cfg,
                 text=item,
                 takefocus=False,
@@ -1025,60 +1117,97 @@ class Ortho4XP_Config(tk.Toplevel):
             ).grid(row=row, column=6, padx=2, pady=0, sticky=N + S + W)
             row += 1
 
-        self.button1 = ttk.Button(
+        self.button1 = _ctk_button(
             self.frame_lastbtn,
-            text=tr("Load Tile Cfg "),
+            text=_L("Charger cfg tuile", "Load Tile Cfg "),
             command=self.load_tile_cfg,
         )
         self.button1.grid(
             row=0, column=0, padx=5, pady=self.pady, sticky=N + S + E + W
         )
-        self.button2 = ttk.Button(
+        self.button2 = _ctk_button(
             self.frame_lastbtn,
-            text=tr("Write Tile Cfg"),
+            text=_L("Ecrire cfg tuile", "Write Tile Cfg"),
             command=self.write_tile_cfg,
         )
         self.button2.grid(
             row=0, column=1, padx=5, pady=self.pady, sticky=N + S + E + W
         )
-        self.button3 = ttk.Button(
+        self.button3 = _ctk_button(
             self.frame_lastbtn,
-            text=tr("Reload App Cfg"),
+            text=_L("Recharger cfg app", "Reload App Cfg"),
             command=self.load_global_cfg,
         )
         self.button3.grid(
             row=0, column=2, padx=5, pady=self.pady, sticky=N + S + E + W
         )
-        self.button4 = ttk.Button(
+        self.button4 = _ctk_button(
             self.frame_lastbtn,
-            text=tr("Write App Cfg "),
+            text=_L("Ecrire cfg app", "Write App Cfg "),
             command=self.write_global_cfg,
         )
         self.button4.grid(
             row=0, column=3, padx=5, pady=self.pady, sticky=N + S + E + W
         )
-        self.button5 = ttk.Button(
+        self.button5 = _ctk_button(
             self.frame_lastbtn,
-            text=tr("    Apply     "),
+            text=_L("   Appliquer   ", "    Apply     "),
             command=self.apply_changes,
         )
         self.button5.grid(
             row=0, column=4, padx=5, pady=self.pady, sticky=N + S + E + W
         )
-        self.button6 = ttk.Button(
-            self.frame_lastbtn, text=tr("     Exit     "), command=self.destroy
+        self.button6 = _ctk_button(
+            self.frame_lastbtn, text=_L("    Quitter    ", "     Exit     "), command=self.destroy
         )
         self.button6.grid(
             row=0, column=5, padx=5, pady=self.pady, sticky=N + S + E + W
         )
-        self.button7 = ttk.Button(
+        self.button7 = _ctk_button(
             self.frame_lastbtn,
-            text=tr("🎚 Visualisation réglages"),
+            text=_L("🎚 Visualisation reglages", "🎚 Settings Preview"),
             command=self._open_simulator,
         )
         self.button7.grid(
             row=0, column=6, padx=5, pady=self.pady, sticky=N + S + E + W
         )
+
+        # ── Bouton "Reset to global" (actif en mode Config Tuile) ─────
+        self.button_reset = _ctk_button(
+            self.frame_lastbtn,
+            text=_L("Reinit. sur config globale", "Reset to global"),
+            command=self._reset_tile_to_global,
+        )
+        self.button_reset.grid(
+            row=0, column=7, padx=5, pady=self.pady, sticky=N + S + E + W
+        )
+
+        # ── Bascule Config Tuile / Config Globale + zone de statut ────
+        self._cfg_mode = "tile"
+        self.button_toggle = _ctk_button(
+            self.frame_mode,
+            text=_L("Mode : Config Tuile", "Mode: Tile Config") + "  \u21c4",
+            command=self._toggle_mode,
+        )
+        self.button_toggle.grid(
+            row=0, column=0, padx=5, pady=self.pady, sticky=W
+        )
+        self._status_var = tk.StringVar(value="")
+        self._status_label = tk.Label(
+            self.frame_mode,
+            textvariable=self._status_var,
+            bg="#3b5b49",
+            fg="#ffe08a",
+            anchor=W,
+            font="TKFixedFont 12",
+        )
+        self._status_label.grid(
+            row=0, column=1, padx=10, pady=self.pady, sticky=W + E
+        )
+
+        # Groupes de boutons pilotes par le mode courant.
+        self._tile_buttons = [self.button1, self.button2, self.button_reset]
+        self._global_buttons = [self.button3, self.button4]
 
         # Initialize fields and variables
         self.v_["default_website"] = parent.default_website
@@ -1090,6 +1219,10 @@ class Ortho4XP_Config(tk.Toplevel):
             _TM.apply_to_root(self)
         except Exception:
             pass
+        # Mode par defaut : Config Tuile. Programme apres les after_idle de
+        # coloration des CTkButton pour que les boutons desactives restent
+        # visuellement grises au repos.
+        self.after_idle(lambda: self._set_mode("tile"))
 
     def _open_simulator(self):
         try:
@@ -1112,6 +1245,183 @@ class Ortho4XP_Config(tk.Toplevel):
             if var in ("default_website", "default_zl"):
                 continue
             self.v_[var].set(str(cfg_get(var)))
+
+    # ─────────────────────────────────────────────────────────────────
+    # Bascule Config Tuile / Config Globale (verrouillage anti-erreur)
+    # ─────────────────────────────────────────────────────────────────
+    def _status(self, msg):
+        try:
+            self._status_var.set(msg)
+        except Exception:
+            pass
+
+    def _btn_enable(self, btn, on):
+        """Active/desactive un bouton, compatible CTkButton et ttk.Button."""
+        try:
+            btn.configure(state=("normal" if on else "disabled"))
+            return
+        except Exception:
+            pass
+        try:
+            if on:
+                btn.state(["!disabled"])
+            else:
+                btn.state(["disabled"])
+        except Exception:
+            pass
+
+    def _update_mode_ui(self):
+        is_tile = (self._cfg_mode == "tile")
+        for b in getattr(self, "_tile_buttons", []):
+            self._btn_enable(b, is_tile)
+        for b in getattr(self, "_global_buttons", []):
+            self._btn_enable(b, not is_tile)
+        if hasattr(self, "button_toggle"):
+            label = (
+                _L("Mode : Config Tuile", "Mode: Tile Config")
+                if is_tile
+                else _L("Mode : Config Globale", "Mode: Global Config")
+            )
+            try:
+                self.button_toggle.configure(text=label + "  \u21c4")
+            except Exception:
+                pass
+
+    def _tile_cfg_info(self):
+        """(lat, lon, build_dir, path_ou_None) pour la tuile active."""
+        try:
+            (lat, lon) = self.parent.get_lat_lon()
+        except Exception:
+            return (None, None, None, None)
+        try:
+            custom_build_dir = self.parent.custom_build_dir_entry.get()
+        except Exception:
+            custom_build_dir = ""
+        build_dir = FNAMES.build_dir(lat, lon, custom_build_dir)
+        path = os.path.join(
+            build_dir,
+            "Ortho4XP_" + FNAMES.short_latlon(lat, lon) + ".cfg",
+        )
+        if not os.path.isfile(path):
+            alt = os.path.join(build_dir, "Ortho4XP.cfg")
+            path = alt if os.path.isfile(alt) else None
+        return (lat, lon, build_dir, path)
+
+    def _silent_load_tile(self):
+        """Charge la config tuile dans les champs sans popup.
+        Retourne (charge?, lat, lon)."""
+        (lat, lon, build_dir, path) = self._tile_cfg_info()
+        if not path:
+            return (False, lat, lon)
+        zone_list = []
+        try:
+            f = open(path, "r")
+        except Exception:
+            return (False, lat, lon)
+        try:
+            for line in f.readlines():
+                line = line.strip()
+                if not line or line[0] == "#":
+                    continue
+                try:
+                    (var, value) = line.split("=", 1)
+                    if value and value[0] in ('"', "'"):
+                        value = value[1:]
+                    if value and value[-1] in ('"', "'"):
+                        value = value[:-1]
+                    if var not in self.v_:
+                        continue
+                    v = self.v_[var]
+                    if hasattr(v, "set"):
+                        v.set(value)
+                except Exception:
+                    if "zone_list.append" in line:
+                        try:
+                            zone_list.append(cfg_parse_zone_append(line))
+                        except Exception:
+                            pass
+            if zone_list and not self.v_["zone_list"].get():
+                self.v_["zone_list"].set(str(zone_list))
+        finally:
+            f.close()
+        return (True, lat, lon)
+
+    def _silent_load_global(self):
+        """Charge la config globale (Ortho4XP.cfg) dans les champs sans popup.
+        Repli sur les valeurs en memoire si le fichier est absent."""
+        cfg_path = os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
+        try:
+            f = open(cfg_path, "r")
+        except Exception:
+            self.load_interface_from_variables()
+            return
+        try:
+            for line in f.readlines():
+                line = line.strip()
+                if not line or line[0] == "#":
+                    continue
+                try:
+                    (var, value) = line.split("=", 1)
+                    if value and value[0] in ('"', "'"):
+                        value = value[1:]
+                    if value and value[-1] in ('"', "'"):
+                        value = value[:-1]
+                    if var not in self.v_:
+                        continue
+                    v = self.v_[var]
+                    if hasattr(v, "set"):
+                        v.set(value)
+                except Exception:
+                    pass
+        finally:
+            f.close()
+
+    def _set_mode(self, mode):
+        """Bascule l'affichage/edition entre config tuile et config globale."""
+        self._cfg_mode = "global" if mode == "global" else "tile"
+        if self._cfg_mode == "global":
+            self._silent_load_global()
+            self._status(_L("Configuration globale de l'application",
+                            "Application global configuration"))
+        else:
+            (loaded, lat, lon) = self._silent_load_tile()
+            if loaded:
+                try:
+                    name = FNAMES.short_latlon(lat, lon)
+                except Exception:
+                    name = ""
+                self._status(
+                    _L("Configuration de la tuile ", "Tile configuration ")
+                    + str(name)
+                    + _L(" chargee", " loaded")
+                )
+            else:
+                self.load_interface_from_variables()
+                self._status(
+                    _L(
+                        "Pas de configuration tuile, "
+                        "utilisation de la configuration par defaut",
+                        "No tile configuration, "
+                        "using the default configuration"
+                    )
+                )
+        self._update_mode_ui()
+
+    def _toggle_mode(self):
+        self._set_mode(
+            "global" if self._cfg_mode == "tile" else "tile"
+        )
+
+    def _reset_tile_to_global(self):
+        """Reinitialise les champs tuile sur la config globale (a sauvegarder)."""
+        if self._cfg_mode != "tile":
+            return
+        self._silent_load_global()
+        self._status(
+            _L("Config tuile reinitialisee sur la config globale "
+               "(pensez a sauvegarder)",
+               "Tile config reset to global config (remember to save)")
+        )
 
     def choose_dem(self):
         tmp = filedialog.askopenfilename(
@@ -1378,7 +1688,7 @@ class Ortho4XP_Config(tk.Toplevel):
         ttk.Label(
             self.popupwindow, text=input_text, wraplength=600, anchor=W
         ).pack(side="top", fill="x", padx=5, pady=0)
-        ttk.Button(
-            self.popupwindow, text=tr("Ok"), command=self.popupwindow.destroy
+        _ctk_button(
+            self.popupwindow, text=_L("Ok", "Ok"), command=self.popupwindow.destroy
         ).pack(pady=5)
         return

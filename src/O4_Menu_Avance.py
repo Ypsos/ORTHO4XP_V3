@@ -50,6 +50,23 @@ except Exception:
     _TM = None
     _HAS_THEME = False
 
+# CustomTkinter : importé si présent, sinon repli sur le bouton Frame+Label.
+try:
+    import customtkinter as ctk
+    _HAS_CTK = True
+except Exception:
+    _HAS_CTK = False
+
+
+def _lighten_hex(hexcol, factor):
+    try:
+        h = hexcol.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hexcol
+
 # Traduction : import protégé. Si O4_Lang est absent, tr() renvoie le texte
 # tel quel (aucun plantage, interface reste lisible en français).
 try:
@@ -98,6 +115,24 @@ def _c(key, fallback):
 # ── Bouton Mac-safe : Frame + Label (JAMAIS tk.Button) ────────────────────────
 # Patron identique à _make_themed_button d'O4_lay_generator.py.
 def _make_themed_button(tk, parent, text, command):
+    # Look CustomTkinter (identique à la fenêtre principale) si CTk présent ;
+    # repli Frame+Label Mac-safe conservé si CTk absent (l'appli marche sans CTk).
+    if _HAS_CTK:
+        base = _c("btn_bg", "#4a6b59")
+        b = ctk.CTkButton(
+            parent, text=text,
+            command=(command if callable(command) else None),
+            corner_radius=8, border_width=1, height=30,
+            fg_color=base, hover_color=_lighten_hex(base, 1.30),
+            border_color=_c("border", base),
+            text_color=_c("btn_fg", "#ffffff"))
+        # CORRECTIF macOS : force un redessin après mise en page (évite le
+        # rectangle sombre derrière le texte au repos).
+        b.after_idle(
+            lambda btn=b, c=base: btn.winfo_exists()
+            and btn.configure(fg_color=c))
+        return b
+
     bg = _c("btn_bg", "#4a6b59")
     fg = _c("btn_fg", "#ffffff")
     hover = _c("accent", "#5a7b69")

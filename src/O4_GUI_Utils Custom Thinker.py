@@ -381,29 +381,35 @@ class Ortho4XP_GUI(tk.Tk):
         self.frame_data.grid(row=0, column=0, sticky=N+S+W+E)
         self.frame_data.columnconfigure(5, weight=1)
 
-        self._themed_button(self.frame_data,
-            tr("⛰ Altimétrie / DEM"), self.open_altimetrie_module,
-            width=165).grid(row=0, column=0, padx=5, pady=2, sticky=W)
+        ttk.Button(self.frame_data,
+            text=tr("⛰ Altimétrie / DEM"),
+            command=self.open_altimetrie_module,
+            width=22).grid(row=0, column=0, padx=5, pady=2, sticky=W)
 
-        self._themed_button(self.frame_data,
-            tr("🌊 Bathymétrie"), self.open_bathymetrie_module,
-            width=165).grid(row=0, column=1, padx=5, pady=2, sticky=W)
+        ttk.Button(self.frame_data,
+            text=tr("🌊 Bathymétrie"),
+            command=self.open_bathymetrie_module,
+            width=22).grid(row=0, column=1, padx=5, pady=2, sticky=W)
 
-        self._themed_button(self.frame_data,
-            tr("🖼 Add Image Provider"), self.open_lay_generator_module,
-            width=225).grid(row=0, column=2, padx=5, pady=2, sticky=W)
+        ttk.Button(self.frame_data,
+            text=tr("🖼 Add Image Provider"),
+            command=self.open_lay_generator_module,
+            width=30).grid(row=0, column=2, padx=5, pady=2, sticky=W)
 
-        self._themed_button(self.frame_data,
-            tr("🗺 Cache OSM local (.pbf)"), self.open_pbf_module,
-            width=165).grid(row=0, column=3, padx=5, pady=2, sticky=W)
+        ttk.Button(self.frame_data,
+            text=tr("🗺 Cache OSM local (.pbf)"),
+            command=self.open_pbf_module,
+            width=22).grid(row=0, column=3, padx=5, pady=2, sticky=W)
 
-        self._themed_button(self.frame_data,
-            tr("📊 Analyse Fournisseurs"), self.open_provider_score_module,
-            width=165).grid(row=0, column=4, padx=5, pady=2, sticky=W)
+        ttk.Button(self.frame_data,
+            text=tr("📊 Analyse Fournisseurs"),
+            command=self.open_provider_score_module,
+            width=22).grid(row=0, column=4, padx=5, pady=2, sticky=W)
 
-        self._themed_button(self.frame_data,
-            tr("⏱ Timeline"), self._show_timeline,
-            width=110).grid(row=0, column=5, padx=5, pady=2, sticky=W)
+        ttk.Button(self.frame_data,
+            text=tr("⏱ Timeline"),
+            command=self._show_timeline,
+            width=14).grid(row=0, column=5, padx=5, pady=2, sticky=W)
 
         # Label RAM live (mise à jour périodique conservée à l'identique)
         self._ram_label = tk.Label(self.frame_data,
@@ -441,9 +447,10 @@ class Ortho4XP_GUI(tk.Tk):
         self._cnorm_desc_label.grid(row=1, column=0, columnspan=2, padx=2, sticky=W)
 
         self.cnorm_strength = tk.IntVar(value=100)
-        self.cnorm_slider = self._themed_slider(
-            lf_norm, 0, 100, self.cnorm_strength,
-            self.update_cnorm_strength, width=int(180*s))
+        self.cnorm_slider = tk.Scale(lf_norm, from_=0, to=100, orient=HORIZONTAL,
+            variable=self.cnorm_strength, command=self.update_cnorm_strength,
+            bg=_BG, fg=_FG, troughcolor="#1a2e25",
+            length=int(180*s), showvalue=True)
         self.cnorm_slider.grid(row=2, column=0, padx=2, sticky=W+E)
 
         self.cnorm_pct_label = tk.Label(lf_norm, text="100%",
@@ -477,9 +484,10 @@ class Ortho4XP_GUI(tk.Tk):
         self._cnorm_sat_desc_label.grid(row=1, column=0, columnspan=2, padx=2, sticky=W)
 
         self.cnorm_sat_value = tk.IntVar(value=100)
-        self.cnorm_sat_slider = self._themed_slider(
-            lf_sat, 0, 200, self.cnorm_sat_value,
-            self.update_cnorm_sat, width=int(180*s))
+        self.cnorm_sat_slider = tk.Scale(lf_sat, from_=0, to=200, orient=HORIZONTAL,
+            variable=self.cnorm_sat_value, command=self.update_cnorm_sat,
+            bg=_BG, fg=_FG, troughcolor="#1a2e25",
+            length=int(180*s), showvalue=True)
         self.cnorm_sat_slider.grid(row=2, column=0, padx=2, sticky=W+E)
 
         self.cnorm_sat_label = tk.Label(lf_sat, text=tr('100%  (réf.)'),
@@ -503,25 +511,23 @@ class Ortho4XP_GUI(tk.Tk):
         self.frame_steps.grid(row=0, column=0, sticky=N+S+W+E)
         for i in range(6): self.frame_steps.columnconfigure(i, weight=1)
 
-        self._themed_button(self.frame_steps, tr("Assemble Vector data"),
-            self.build_poly_file).grid(row=0, column=0, padx=5, pady=0, sticky=N+S+E+W)
-
-        build_mesh_button = self._themed_button(self.frame_steps, tr("Triangulate 3D Mesh"))
+        ttk.Button(self.frame_steps, text=tr("Assemble Vector data"), command=self.build_poly_file).grid(
+            row=0, column=0, padx=5, pady=0, sticky=N+S+E+W)
+        build_mesh_button = ttk.Button(self.frame_steps, text=tr("Triangulate 3D Mesh"))
         build_mesh_button.grid(row=0, column=1, padx=5, pady=0, sticky=N+S+E+W)
-        self._bind_clicks(build_mesh_button, self._on_mesh_click)
-
-        self._themed_button(self.frame_steps, tr("Sea Patches (2.1)"),
-            self.build_sea_patches).grid(row=0, column=2, padx=5, pady=0, sticky=N+S+E+W)
-
-        build_masks_button = self._themed_button(self.frame_steps, tr(" Draw Water Masks  "))
+        build_mesh_button.bind("<ButtonPress-1>",         self.build_mesh)
+        build_mesh_button.bind("<Shift-ButtonPress-1>",   self.sort_mesh)
+        build_mesh_button.bind("<Control-ButtonPress-1>", self.community_mesh)
+        ttk.Button(self.frame_steps, text=tr("Sea Patches (2.1)"), command=self.build_sea_patches).grid(
+            row=0, column=2, padx=5, pady=0, sticky=N+S+E+W)
+        build_masks_button = ttk.Button(self.frame_steps, text=tr(" Draw Water Masks  "))
         build_masks_button.grid(row=0, column=3, padx=5, pady=0, sticky=N+S+E+W)
-        self._bind_clicks(build_masks_button, self._on_masks_click)
-
-        self._themed_button(self.frame_steps, tr(" Build Imagery/DSF "),
-            self.build_tile).grid(row=0, column=4, padx=5, pady=0, sticky=N+S+E+W)
-
-        self._themed_button(self.frame_steps, tr("    All in one     "),
-            self.build_all).grid(row=0, column=5, padx=5, pady=0, sticky=N+S+E+W)
+        build_masks_button.bind("<ButtonPress-1>",       self.build_masks)
+        build_masks_button.bind("<Shift-ButtonPress-1>", self.build_masks)
+        ttk.Button(self.frame_steps, text=tr(" Build Imagery/DSF "), command=self.build_tile).grid(
+            row=0, column=4, padx=5, pady=0, sticky=N+S+E+W)
+        ttk.Button(self.frame_steps, text=tr("    All in one     "), command=self.build_all).grid(
+            row=0, column=5, padx=5, pady=0, sticky=N+S+E+W)
 
         # ── Barres de progression ─────────────────────────────────────
         self.frame_bars = tk.Frame(sec_build, border=0, padx=5, pady=5, bg=_BG)
@@ -580,17 +586,20 @@ class Ortho4XP_GUI(tk.Tk):
         self.frame_advanced.grid(row=0, column=0, sticky=N+S+W+E)
         for i in range(3): self.frame_advanced.columnconfigure(i, weight=1)
 
-        self._themed_button(self.frame_advanced,
-            tr("🛠 Avancé"), self.open_avance_module
-            ).grid(row=0, column=0, padx=5, pady=2, sticky=N+S+E+W)
+        ttk.Button(self.frame_advanced,
+            text=tr("🛠 Avancé"),
+            command=self.open_avance_module,
+            width=22).grid(row=0, column=0, padx=5, pady=2, sticky=N+S+E+W)
 
-        self._themed_button(self.frame_advanced,
-            tr("RGB adjustments, sharpness, saturation"), self.open_color_check
-            ).grid(row=0, column=1, padx=5, pady=2, sticky=N+S+E+W)
+        ttk.Button(self.frame_advanced,
+            text=tr("RGB adjustments, sharpness, saturation"),
+            command=self.open_color_check,
+            width=32).grid(row=0, column=1, padx=5, pady=2, sticky=N+S+E+W)
 
-        self._themed_button(self.frame_advanced,
-            tr("🖊 Correction imagerie/zone"), self.open_correction_module
-            ).grid(row=0, column=2, padx=5, pady=2, sticky=N+S+E+W)
+        ttk.Button(self.frame_advanced,
+            text=tr("🖊 Correction imagerie/zone"),
+            command=self.open_correction_module,
+            width=22).grid(row=0, column=2, padx=5, pady=2, sticky=N+S+E+W)
 
         # ── CONSOLE (row=1 principal — extensible) ─────────────────────
         self.frame_console = tk.Frame(self, border=4, relief=RIDGE, bg=_BG)
@@ -690,7 +699,7 @@ class Ortho4XP_GUI(tk.Tk):
         """Cadre Normalisation : curseur + titres/textes actifs seulement si la case est cochée."""
         on = bool(self.cnorm_enabled.get())
         try:
-            self.cnorm_slider.configure(state=("normal" if on else "disabled"))
+            self.cnorm_slider.config(state=("normal" if on else "disabled"))
         except Exception:
             pass
         grey = self._CNORM_INACTIVE_FG
@@ -703,7 +712,7 @@ class Ortho4XP_GUI(tk.Tk):
         """Cadre Saturation : curseur + titres/textes actifs seulement si la case est cochée."""
         on = bool(self.cnorm_sat_enabled.get())
         try:
-            self.cnorm_sat_slider.configure(state=("normal" if on else "disabled"))
+            self.cnorm_sat_slider.config(state=("normal" if on else "disabled"))
         except Exception:
             pass
         grey = self._CNORM_INACTIVE_FG
@@ -750,7 +759,7 @@ class Ortho4XP_GUI(tk.Tk):
             txt.insert("1.0", report)
             txt.config(state="disabled")
             # Bouton fermer
-            _ctk_button(win, text=tr("Fermer"), command=win.destroy).pack(pady=4)
+            ttk.Button(win, text=tr("Fermer"), command=win.destroy).pack(pady=4)
             # Taille minimale : le bouton Fermer reste toujours visible même
             # si l'utilisateur réduit la fenêtre ; agrandissement libre conservé.
             win.update_idletasks()
@@ -1045,12 +1054,37 @@ class Ortho4XP_GUI(tk.Tk):
 
             # 3. Boutons avec gestion Mac / highlightbackground pour éviter les carrés blancs
             import sys
-            btn_apply = _ctk_button(
-                frame_btn,
-                text=tr("Utiliser le meilleur provider pour la tuile active"),
-                command=apply_best)
-            btn_close = _ctk_button(
-                frame_btn, text=tr("Fermer"), command=win.destroy)
+            if sys.platform == "darwin":
+                btn_apply = tk.Button(
+                    frame_btn,
+                    text=tr("Utiliser le meilleur provider pour la tuile active"),
+                    command=apply_best,
+                    fg="black", highlightbackground=_BTN_BG,
+                    font=("TkFixedFont", 10, "bold"),
+                    padx=10, pady=4)
+                
+                btn_close = tk.Button(
+                    frame_btn,
+                    text=tr("Fermer"),
+                    command=win.destroy,
+                    fg="black", highlightbackground=_BTN_BG,
+                    padx=10, pady=4)
+            else:
+                btn_apply = tk.Button(
+                    frame_btn,
+                    text=tr("Utiliser le meilleur provider pour la tuile active"),
+                    command=apply_best,
+                    bg=_BTN_BG, fg=_BTN_FG,
+                    activebackground=_ACCENT,
+                    font=("TkFixedFont", 10, "bold"),
+                    padx=10, pady=4)
+
+                btn_close = tk.Button(
+                    frame_btn,
+                    text=tr("Fermer"),
+                    command=win.destroy,
+                    bg=_BTN_BG, fg=_BTN_FG,
+                    padx=10, pady=4)
 
             btn_apply.pack(side="right", padx=5)
             btn_close.pack(side="right", padx=5)
@@ -1372,153 +1406,10 @@ class Ortho4XP_GUI(tk.Tk):
         except Exception:
             pass
 
-    @staticmethod
-    def _lighten(hexcol, factor):
-        # Teinte plus claire (facteur > 1) pour l'éclat au survol.
-        try:
-            h = hexcol.lstrip("#")
-            r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
-            r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
-            return f"#{r:02x}{g:02x}{b:02x}"
-        except Exception:
-            return hexcol
-
-    def _themed_button(self, parent, text, command=None, width=None,
-                       corner_radius=8):
-        # Bouton au look moderne (CustomTkinter) si disponible, sinon repli
-        # ttk. Les couleurs suivent O4_Theme_Manager ; survol « vivant ».
-        if _HAS_CTK:
-            try:
-                import O4_Theme_Manager as _TM
-                _t = _TM.get_theme()
-            except Exception:
-                _t = {}
-            base = _t.get("btn_bg", "#4a6b59")
-            b = ctk.CTkButton(
-                parent, text=text, command=command,
-                corner_radius=corner_radius, border_width=1, height=30,
-                fg_color=base, hover_color=self._lighten(base, 1.30),
-                border_color=_t.get("border", base),
-                text_color=_t.get("btn_fg", "#ffffff"))
-            if width:
-                b.configure(width=width)
-            # macOS : le remplissage arrondi du CTkButton n'est dessine
-            # qu'une fois le bouton dimensionne. On force un redessin apres
-            # la mise en page pour eviter le rectangle sombre derriere le
-            # texte au repos (qui ne disparaissait qu'au survol).
-            b.after_idle(
-                lambda btn=b, c=base: btn.winfo_exists()
-                and btn.configure(fg_color=c))
-            return b
-        kw = {"text": text}
-        if command is not None:
-            kw["command"] = command
-        if width:
-            kw["width"] = max(1, int(width / 8))
-        return ttk.Button(parent, **kw)
-
-    def _bind_clicks(self, btn, handler):
-        # Lie un gestionnaire de clic à un bouton, qu'il soit CTkButton
-        # (surfaces internes _canvas/_text_label) ou ttk/tk (widget seul).
-        # Le gestionnaire lit event.state pour Shift/Ctrl → fire une seule
-        # fois (return "break" stoppe la propagation).
-        targets = []
-        for attr in ("_canvas", "_text_label"):
-            w = getattr(btn, attr, None)
-            if w is not None:
-                targets.append(w)
-        if not targets:
-            targets = [btn]
-        for w in targets:
-            w.bind("<ButtonPress-1>", handler, add="+")
-
-    def _on_mesh_click(self, event):
-        # Triangulate 3D Mesh : clic = build_mesh, Shift+clic = sort_mesh,
-        # Ctrl+clic = community_mesh (comportement d'origine préservé).
-        try:
-            if event.state & 0x0001:        # Shift
-                self.sort_mesh(event)
-            elif event.state & 0x0004:      # Control
-                self.community_mesh(event)
-            else:
-                self.build_mesh(event)
-        except Exception as e:
-            print(f"[GUI] clic mesh: {e}")
-        return "break"
-
-    def _on_masks_click(self, event):
-        # Draw Water Masks : clic (avec ou sans Shift) = build_masks.
-        try:
-            self.build_masks(event)
-        except Exception as e:
-            print(f"[GUI] clic masks: {e}")
-        return "break"
-
-    def _themed_slider(self, parent, frm, to, variable, callback, width=180):
-        # Curseur moderne (CTkSlider) si dispo, sinon repli tk.Scale.
-        # CTkSlider envoie un flottant → on passe un entier au callback,
-        # qui attend int(value) comme avec tk.Scale.
-        if _HAS_CTK:
-            try:
-                import O4_Theme_Manager as _TM
-                _t = _TM.get_theme()
-            except Exception:
-                _t = {}
-            acc = _t.get("accent", "#a6e3a1")
-            return ctk.CTkSlider(
-                parent, from_=frm, to=to, number_of_steps=int(to - frm),
-                variable=variable, width=width, height=18,
-                command=lambda v: callback(int(float(v))),
-                fg_color=_t.get("bg_secondary", "#2a4235"),
-                progress_color=acc, button_color=acc,
-                button_hover_color=self._lighten(acc, 1.15))
-        return tk.Scale(parent, from_=frm, to=to, orient=HORIZONTAL,
-            variable=variable, command=callback,
-            bg=_BG, fg=_FG, troughcolor="#1a2e25",
-            length=width, showvalue=True)
-
 if __name__ == "__main__":
     Ortho4XP_GUI().mainloop()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-def _ctk_button(parent, text=None, command=None, width=None,
-                corner_radius=8, **ttk_kw):
-    """Bouton texte au look CustomTkinter (meme style que la fenetre
-    principale) ; repli automatique sur ttk.Button si CustomTkinter absent.
-    Les kwargs ttk (style, takefocus...) ne s'appliquent qu'au repli ttk.
-    """
-    if _HAS_CTK:
-        try:
-            import O4_Theme_Manager as _TM
-            _t = _TM.get_theme()
-        except Exception:
-            _t = {}
-        base = _t.get("btn_bg", "#4a6b59")
-        b = ctk.CTkButton(
-            parent, text=text, command=command,
-            corner_radius=corner_radius, border_width=1, height=30,
-            fg_color=base, hover_color=Ortho4XP_GUI._lighten(base, 1.30),
-            border_color=_t.get("border", base),
-            text_color=_t.get("btn_fg", "#ffffff"))
-        if width:
-            b.configure(width=width)
-        # Meme correctif macOS que _themed_button : redessin force apres
-        # mise en page pour supprimer le rectangle sombre au repos.
-        b.after_idle(
-            lambda btn=b, c=base: btn.winfo_exists()
-            and btn.configure(fg_color=c))
-        return b
-    kw = {}
-    if text is not None:
-        kw["text"] = text
-    if command is not None:
-        kw["command"] = command
-    if width:
-        kw["width"] = max(1, int(width / 8))
-    kw.update(ttk_kw)
-    return ttk.Button(parent, **kw)
-
-
 class Ortho4XP_PersonalProvider(tk.Toplevel):
     """Fenêtre de gestion des providers personnels (TMS).
     Crée / modifie / supprime des fichiers .lay dans Providers/Personnel/.
@@ -1637,16 +1528,16 @@ class Ortho4XP_PersonalProvider(tk.Toplevel):
         frm_btn.pack(fill="x", padx=10, pady=8)
         for i in range(4):
             frm_btn.columnconfigure(i, weight=1)
-        _ctk_button(frm_btn, text=tr("personal_provider_save_btn"),
+        ttk.Button(frm_btn, text=tr("personal_provider_save_btn"),
                    command=self._save).grid(
                    row=0, column=0, sticky="ew", padx=4)
-        _ctk_button(frm_btn, text=tr("personal_provider_modify_btn"),
+        ttk.Button(frm_btn, text=tr("personal_provider_modify_btn"),
                    command=self._modify).grid(
                    row=0, column=1, sticky="ew", padx=4)
-        _ctk_button(frm_btn, text=tr("personal_provider_delete_btn"),
+        ttk.Button(frm_btn, text=tr("personal_provider_delete_btn"),
                    command=self._delete).grid(
                    row=0, column=2, sticky="ew", padx=4)
-        _ctk_button(frm_btn, text=tr("personal_provider_cancel_btn"),
+        ttk.Button(frm_btn, text=tr("personal_provider_cancel_btn"),
                    command=self._on_close).grid(
                    row=0, column=3, sticky="ew", padx=4)
 
@@ -1950,7 +1841,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         self.zl_combo.grid(row=2, column=0, padx=5, pady=3, sticky=E)
         row += 1
 
-        _ctk_button(
+        ttk.Button(
             self.frame_left,
             text=tr("Preview"),
             command=lambda: self.preview_tile(lat, lon),
@@ -2020,21 +1911,21 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         ).grid(row=row, column=0, padx=5, pady=10, sticky=E)
         row += 1
 
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("  Save zone  "), command=self.save_zone_cmd
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("Delete ZL zone"), command=self.delete_zone_cmd
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left,
             text=tr("Make GeoTiffs"),
             command=self.build_geotiffs_ifc,
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("Extract Mesh "), command=self.extract_mesh_ifc
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
@@ -2048,15 +1939,15 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             font=("Helvetica", 10),
         ).grid(row=row, column=0, padx=5, pady=10, sticky=N + S + E + W)
         row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("    Apply    "), command=self.save_zone_list
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("    Reset    "), command=self.delAll
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("    Exit     "), command=self.destroy
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
@@ -2798,7 +2689,7 @@ class Ortho4XP_Earth_Preview(tk.Toplevel):
                 highlightthickness=0,
             ).grid(row=row, column=0, padx=5, pady=5, sticky=N + S + E + W)
             row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("  Delete    "), command=self.trash
         ).grid(row=row, column=0, padx=5, pady=5, sticky=N + S + E + W)
         row += 1
@@ -2826,17 +2717,17 @@ class Ortho4XP_Earth_Preview(tk.Toplevel):
                 highlightthickness=0,
             ).grid(row=row, column=0, padx=5, pady=5, sticky=N + S + E + W)
             row += 1
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("  Batch Build   "), command=self.batch_build
         ).grid(row=row, column=0, padx=5, pady=5, sticky=N + S + E + W)
         row += 1
         # Refresh window
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("    Refresh     "), command=self.refresh
         ).grid(row=row, column=0, padx=5, pady=5, sticky=N + S + E + W)
         row += 1
         # Exit
-        _ctk_button(
+        ttk.Button(
             self.frame_left, text=tr("      Exit      "), command=self.exit
         ).grid(row=row, column=0, padx=5, pady=5, sticky=N + S + E + W)
         row += 1
@@ -3593,18 +3484,18 @@ class Ortho4XP_Simulator(tk.Toplevel):
         btn_fr = tk.Frame(self, bg=self.BG, padx=10, pady=8)
         btn_fr.pack(fill="x")
 
-        _ctk_button(btn_fr, text=tr("↺  Recharger depuis cfg"),
+        ttk.Button(btn_fr, text=tr("↺  Recharger depuis cfg"),
             command=self._load_values).pack(side="left", padx=4)
-        _ctk_button(btn_fr, text=tr("✅  Write Tile cfg"),
+        ttk.Button(btn_fr, text=tr("✅  Write Tile cfg"),
             command=self._write_tile).pack(side="left", padx=4)
-        _ctk_button(btn_fr, text=tr("🌍  Write App cfg"),
+        ttk.Button(btn_fr, text=tr("🌍  Write App cfg"),
             command=self._write_app).pack(side="left", padx=4)
 
         self._status = tk.Label(btn_fr, text="", bg=self.BG,
             fg=self.FG2, font=("TkFixedFont", fs(10)))
         self._status.pack(side="left", padx=16)
 
-        _ctk_button(btn_fr, text=tr("✖  Fermer"),
+        ttk.Button(btn_fr, text=tr("✖  Fermer"),
             command=self._on_close).pack(side="right", padx=4)
 
     # ── Helper : créer un onglet avec canvas en haut + curseurs en bas ─

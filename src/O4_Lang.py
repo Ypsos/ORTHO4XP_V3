@@ -466,19 +466,33 @@ def show_language_dialog(parent=None, on_change=None):
 
 def make_language_button(parent, on_change=None):
     """
-    Cree et retourne un bouton ttk pret a etre place dans un frame.
+    Cree et retourne un bouton pret a etre place dans un frame.
+
+    Utilise la fabrique maison _themed_button (Canvas arrondi aux couleurs
+    du theme, lisible sur les 3 OS) — meme look que les boutons de la fenetre
+    de choix de langue. Repli ttk.Button si la fabrique echoue.
 
     Exemple :
         from O4_Lang import make_language_button
         make_language_button(frame_tools, on_change=rebuild_cb).pack(
             side=tk.LEFT, padx=8, pady=4)
     """
-    return ttk.Button(
-        parent,
-        text="  " + tr("language_menu_change_lang"),
-        style="TButton",
-        command=lambda: show_language_dialog(parent, on_change=on_change),
-    )
+    _cmd = lambda: show_language_dialog(parent, on_change=on_change)
+    try:
+        return _themed_button(
+            parent,
+            "  " + tr("language_menu_change_lang"),
+            _cmd,
+            _theme_colors(),
+            width=210, height=40, font_size=12,
+        )
+    except Exception:
+        return ttk.Button(
+            parent,
+            text="  " + tr("language_menu_change_lang"),
+            style="TButton",
+            command=_cmd,
+        )
 
 
 # ──────────────────────────────────────────────────────────────────

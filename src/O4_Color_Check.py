@@ -83,6 +83,72 @@ import numpy as np
 from PIL import Image, ImageTk, ImageEnhance, ImageFilter
 from O4_Lang import tr
 
+# ── Boutons look CustomTkinter (repli ttk conservé) ─────────────────────────
+#  Convertit les boutons TEXTE au style de la fenêtre principale validée.
+#  Si CustomTkinter est absent, on retombe sur ttk.Button : l'appli marche
+#  exactement comme avant. Le CTkButton renvoyé reçoit .config = .configure
+#  pour que les appels existants btn.config(state="disabled"/"normal")
+#  (btn_build, btn_build_single) continuent de griser le bouton sans être
+#  modifiés. NB : aucune logique d'aperçu (FusionPreviewWindow, _render,
+#  _compute, zoom/pan) n'est touchée — on ne remplace que le widget bouton.
+try:
+    import customtkinter as ctk
+    _HAS_CTK = True
+except Exception:
+    _HAS_CTK = False
+
+
+def _lighten_hex(hexcol, factor):
+    """Éclaircit une couleur hex (#rrggbb) — survol des boutons CTk."""
+    try:
+        h = hexcol.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+        return "#%02x%02x%02x" % (r, g, b)
+    except Exception:
+        return hexcol
+
+
+def _ctk_button(parent, text=None, command=None, **ttk_kw):
+    """Bouton texte look CTk ; repli ttk.Button si CTk absent."""
+    if _HAS_CTK:
+        try:
+            try:
+                import O4_Theme_Manager as _TMcc
+                _tcc = _TMcc.get_theme()
+            except Exception:
+                _tcc = {}
+            base = _tcc.get("btn_bg", "#4a6b59")
+            b = ctk.CTkButton(
+                parent, text=text, command=command,
+                corner_radius=8, border_width=1, height=30,
+                fg_color=base, hover_color=_lighten_hex(base, 1.30),
+                border_color=_tcc.get("border", base),
+                text_color=_tcc.get("btn_fg", "#ffffff"))
+            # Les appels existants .config(state=...) doivent viser le bouton :
+            # on aliase .config sur la vraie méthode configure du CTkButton.
+            b.config = b.configure  # type: ignore[assignment]
+            if "state" in ttk_kw:
+                try:
+                    b.configure(state=ttk_kw["state"])
+                except Exception:
+                    pass
+            # CORRECTIF macOS OBLIGATOIRE : redessin du remplissage arrondi
+            # après mise en page (sinon rectangle sombre au repos).
+            b.after_idle(
+                lambda btn=b, c=base: btn.winfo_exists()
+                and btn.configure(fg_color=c))
+            return b
+        except Exception:
+            pass  # échec CTk → repli ttk
+    kw = {}
+    if text is not None:
+        kw["text"] = text
+    if command is not None:
+        kw["command"] = command
+    kw.update(ttk_kw)
+    return ttk.Button(parent, **kw)
+
 CORRECTIONS_FILE = "color_corrections.ccorr"
 COMB_EXT         = ".comb"   # extension des fichiers générés par Color Check
 
@@ -809,7 +875,7 @@ class ColorCheckWindow(tk.Toplevel):
             ("🗑 Supprimer DDS sélect.",   self._delete_one),
             ("🗑 Supprimer TOUS DDS ZL",   self._delete_all),
         ]:
-            _b = ttk.Button(left, text=tr(text), command=cmd)
+            _b = _ctk_button(left, text=tr(text), command=cmd)
             _b.pack(fill=tk.X, padx=6, pady=2)
             _btn_refs[text] = _b
 
@@ -820,7 +886,7 @@ class ColorCheckWindow(tk.Toplevel):
             "d'autres groupes → puis « Lancer construction » UNE seule fois "
             "pour tout construire (économise des builds)."))
 
-        self.btn_build = ttk.Button(left, text=tr("🔨 Lancer Build (groupe)"),
+        self.btn_build = _ctk_button(left, text=tr("🔨 Lancer Build (groupe)"),
                                     command=self._launch_build, state="disabled")
         self.btn_build.pack(fill=tk.X, padx=6, pady=2)
         _attach_tooltip(self.btn_build, tr(
@@ -828,7 +894,7 @@ class ColorCheckWindow(tk.Toplevel):
             "lance la construction (utilise votre quota). Traite d'un coup "
             "toutes les corrections enregistrées en série."))
 
-        self.btn_build_single = ttk.Button(left, text=tr("🔨 Construire cette image"),
+        self.btn_build_single = _ctk_button(left, text=tr("🔨 Construire cette image"),
                                     command=self._launch_build_single)
         self.btn_build_single.pack(fill=tk.X, padx=6, pady=2)
         _attach_tooltip(self.btn_build_single, tr(
@@ -843,10 +909,10 @@ class ColorCheckWindow(tk.Toplevel):
                  font=("TkFixedFont", fs(8))).pack()
         _bf = tk.Frame(left, bg="#3b5b49")
         _bf.pack(fill=tk.X, padx=6, pady=(2, 4))
-        ttk.Button(_bf, text=tr("💾 Archiver"),
+        _ctk_button(_bf, text=tr("💾 Archiver"),
                    command=self._archive_corrections).pack(
                    side=LEFT, fill=tk.X, expand=True, padx=(0, 2))
-        ttk.Button(_bf, text=tr("📂 Restaurer"),
+        _ctk_button(_bf, text=tr("📂 Restaurer"),
                    command=self._restore_corrections).pack(
                    side=LEFT, fill=tk.X, expand=True, padx=(2, 0))
 
@@ -880,12 +946,12 @@ class ColorCheckWindow(tk.Toplevel):
                  font=("TkFixedFont", fs(7)), justify="left").pack(
                  fill=tk.X, padx=8, pady=(0, 4))
 
-        ttk.Button(
+        _ctk_button(
             left, text=tr("👁 Preview dégradé (avant Build)"),
             command=self._open_fusion_preview,
         ).pack(fill=tk.X, padx=6, pady=(0, 2))
 
-        ttk.Button(
+        _ctk_button(
             left, text=tr("🛡 Générer .comb seam (zone protégée)"),
             command=self._generate_seam_comb,
         ).pack(fill=tk.X, padx=6, pady=(0, 8))
@@ -1021,9 +1087,9 @@ class ColorCheckWindow(tk.Toplevel):
         # Boutons d'action
         cb = tk.Frame(center, bg="#3b5b49")
         cb.pack(fill=tk.X, padx=6, pady=6)
-        ttk.Button(cb, text=tr("🎯 Auto-détecter"),    command=self._auto_detect).pack(side=LEFT, padx=4)
-        ttk.Button(cb, text=tr("↺ Reset curseurs"),    command=self._reset_sliders).pack(side=LEFT, padx=4)
-        ttk.Button(cb, text=tr("🔬 Auto depuis Cible"), command=self._auto_from_target).pack(side=LEFT, padx=4)
+        _ctk_button(cb, text=tr("🎯 Auto-détecter"),    command=self._auto_detect).pack(side=LEFT, padx=4)
+        _ctk_button(cb, text=tr("↺ Reset curseurs"),    command=self._reset_sliders).pack(side=LEFT, padx=4)
+        _ctk_button(cb, text=tr("🔬 Auto depuis Cible"), command=self._auto_from_target).pack(side=LEFT, padx=4)
 
 
         self.status = tk.Label(self, text=tr("En attente…"),
@@ -1940,9 +2006,9 @@ class ColorCheckWindow(tk.Toplevel):
                 self.status.config(text=f"⚠ Erreur restauration : {e}")
         btn_f = tk.Frame(sel_win, bg="#3b5b49")
         btn_f.pack(pady=(4, 10))
-        ttk.Button(btn_f, text=tr("✅ Restaurer"),
+        _ctk_button(btn_f, text=tr("✅ Restaurer"),
                    command=_do_restore).pack(side=LEFT, padx=6)
-        ttk.Button(btn_f, text=tr("Annuler"),
+        _ctk_button(btn_f, text=tr("Annuler"),
                    command=sel_win.destroy).pack(side=LEFT, padx=6)
 
     def _export_list(self):
@@ -2177,11 +2243,11 @@ class CombZoneEditor(tk.Toplevel):
         self._label_var = tk.StringVar(value="piste")
         tk.Entry(right, textvariable=self._label_var, bg="#223322", fg="white",
                  font=("TkFixedFont", 9), insertbackground="white").pack(fill=tk.X, padx=4)
-        ttk.Button(right, text=tr("✏ Renommer sélect."),
+        _ctk_button(right, text=tr("✏ Renommer sélect."),
                    command=self._rename_zone).pack(fill=tk.X, padx=4, pady=2)
-        ttk.Button(right, text=tr("🗑 Supprimer sélect."),
+        _ctk_button(right, text=tr("🗑 Supprimer sélect."),
                    command=self._delete_selected).pack(fill=tk.X, padx=4, pady=2)
-        ttk.Button(right, text=tr("🗑 Tout effacer"),
+        _ctk_button(right, text=tr("🗑 Tout effacer"),
                    command=self._clear_all).pack(fill=tk.X, padx=4, pady=(8, 2))
 
         # ── Statut + boutons bas ──
@@ -2192,9 +2258,9 @@ class CombZoneEditor(tk.Toplevel):
 
         bf = tk.Frame(self, bg="#1a1a2a")
         bf.pack(pady=(0, 10))
-        ttk.Button(bf, text=tr("✅ Valider et générer .comb"),
+        _ctk_button(bf, text=tr("✅ Valider et générer .comb"),
                    command=self._confirm).pack(side=LEFT, padx=8)
-        ttk.Button(bf, text=tr("Annuler"),
+        _ctk_button(bf, text=tr("Annuler"),
                    command=self.destroy).pack(side=LEFT, padx=8)
 
         # Bindings dessin
@@ -2460,7 +2526,7 @@ class BatchPreviewWindow(tk.Toplevel):
                                     font=("TkFixedFont", 9))
         self._lbl_status.pack(fill=tk.X, padx=8, pady=(2, 6))
 
-        ttk.Button(self, text=tr("Fermer"), command=self.destroy).pack(pady=(0, 8))
+        _ctk_button(self, text=tr("Fermer"), command=self.destroy).pack(pady=(0, 8))
 
         threading.Thread(target=self._load_all, daemon=True).start()
         # ── Thème couleurs ────────────────────────────────────────────
@@ -2685,8 +2751,8 @@ class BatchZoomWindow(tk.Toplevel):
 
         bf = tk.Frame(self, bg="#0e1e0e")
         bf.pack(pady=(0, 8))
-        ttk.Button(bf, text=tr("↺ Reset zoom"), command=self._reset_zoom).pack(side=LEFT, padx=6)
-        ttk.Button(bf, text=tr("Fermer"),        command=self.destroy).pack(side=LEFT, padx=6)
+        _ctk_button(bf, text=tr("↺ Reset zoom"), command=self._reset_zoom).pack(side=LEFT, padx=6)
+        _ctk_button(bf, text=tr("Fermer"),        command=self.destroy).pack(side=LEFT, padx=6)
 
         self.after(100, self._render)
         # ── Thème couleurs ────────────────────────────────────────────
@@ -2998,13 +3064,13 @@ class FusionPreviewWindow(tk.Toplevel):
         # Boutons
         bf = tk.Frame(self, bg="#1a2a20")
         bf.pack(pady=(6, 10))
-        ttk.Button(bf, text=tr("✅ Appliquer ce rayon et fermer"),
+        _ctk_button(bf, text=tr("✅ Appliquer ce rayon et fermer"),
                    command=self._apply).pack(side=tk.LEFT, padx=8)
-        ttk.Button(bf, text=tr("🔨 Build avec dégradé (toute la tuile)"),
+        _ctk_button(bf, text=tr("🔨 Build avec dégradé (toute la tuile)"),
                    command=self._build).pack(side=tk.LEFT, padx=8)
-        ttk.Button(bf, text=tr("↺ Vue entière"),
+        _ctk_button(bf, text=tr("↺ Vue entière"),
                    command=self._reset_fit).pack(side=tk.LEFT, padx=8)
-        ttk.Button(bf, text=tr("✖ Fermer sans appliquer"),
+        _ctk_button(bf, text=tr("✖ Fermer sans appliquer"),
                    command=self.destroy).pack(side=tk.LEFT, padx=8)
 
         import threading

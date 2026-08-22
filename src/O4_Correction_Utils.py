@@ -59,6 +59,57 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     import subprocess
     import sys
 
+    # ── Boutons look CustomTkinter (repli ttk conservé) ──────────────────
+    #  Convertit les boutons TEXTE au style de la fenêtre principale validée.
+    #  Si CustomTkinter est absent, on retombe sur ttk.Button : la fenêtre
+    #  marche exactement comme avant. On ne touche QUE les widgets bouton
+    #  (aucune case à cocher, aucun aperçu, aucune logique de patch modifiés).
+    try:
+        import customtkinter as ctk
+        _HAS_CTK = True
+    except Exception:
+        _HAS_CTK = False
+
+    def _lighten_hex(hexcol, factor):
+        try:
+            h = hexcol.lstrip("#")
+            r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+            r, g, b = (max(0, min(255, int(c * factor))) for c in (r, g, b))
+            return "#%02x%02x%02x" % (r, g, b)
+        except Exception:
+            return hexcol
+
+    def _ctk_button(parent, text=None, command=None, **ttk_kw):
+        """Bouton texte look CTk ; repli ttk.Button si CTk absent."""
+        if _HAS_CTK:
+            try:
+                try:
+                    import O4_Theme_Manager as _TMcc
+                    _tcc = _TMcc.get_theme()
+                except Exception:
+                    _tcc = {}
+                base = _tcc.get("btn_bg", "#4a6b59")
+                b = ctk.CTkButton(
+                    parent, text=text, command=command,
+                    corner_radius=8, border_width=1, height=30,
+                    fg_color=base, hover_color=_lighten_hex(base, 1.30),
+                    border_color=_tcc.get("border", base),
+                    text_color=_tcc.get("btn_fg", "#ffffff"))
+                # CORRECTIF macOS OBLIGATOIRE : redessin après mise en page.
+                b.after_idle(
+                    lambda btn=b, c=base: btn.winfo_exists()
+                    and btn.configure(fg_color=c))
+                return b
+            except Exception:
+                pass  # échec CTk → repli ttk
+        kw = {}
+        if text is not None:
+            kw["text"] = text
+        if command is not None:
+            kw["command"] = command
+        kw.update(ttk_kw)
+        return ttk.Button(parent, **kw)
+
     _cfg_key = "patch_editor_app"
 
     def _read_editor_path():
@@ -464,7 +515,7 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
             # Fenêtre minimale (message + Fermer) pour les cas sans DDS.
             tk.Label(viz, text=message, font=FONT, bg=BG,
                      fg="#888888").pack(pady=(0, 16), padx=24)
-            ttk.Button(viz, text=_tr("Fermer"),
+            _ctk_button(viz, text=_tr("Fermer"),
                        command=viz.destroy).pack(pady=(0, 16), ipadx=12, ipady=4)
             viz.update_idletasks()
             vw = max(480, viz.winfo_reqwidth())
@@ -506,11 +557,11 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
         # Pas de bouton « Transférer » : c'est la CASE sous la vignette qui
         # transfère (voir _cocher_vignette). Un bouton en plus ferait
         # doublon et retransférerait ce qui est déjà dans la liste.
-        ttk.Button(frm_viz_bot,
+        _ctk_button(frm_viz_bot,
                    text=_tr("Effacer JPG source et relancer étape 3"),
                    command=lambda: _effacer_et_relancer()).pack(
                        side=tk.LEFT, padx=6, ipadx=8, ipady=4)
-        ttk.Button(frm_viz_bot, text=_tr("Fermer"),
+        _ctk_button(frm_viz_bot, text=_tr("Fermer"),
                    command=viz.destroy).pack(side=tk.LEFT, padx=6,
                                              ipadx=12, ipady=4)
 
@@ -838,11 +889,11 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                     _cur[0] = (_cur[0] + delta) % n
                     _charger(_cur[0])
 
-            ttk.Button(nav, text="< " + _tr("Précédent"),
+            _ctk_button(nav, text="< " + _tr("Précédent"),
                        command=lambda: _go(-1)).pack(side=tk.LEFT, padx=6)
-            ttk.Button(nav, text=_tr("Suivant") + " >",
+            _ctk_button(nav, text=_tr("Suivant") + " >",
                        command=lambda: _go(1)).pack(side=tk.LEFT, padx=6)
-            ttk.Button(nav, text=_tr("Fermer"),
+            _ctk_button(nav, text=_tr("Fermer"),
                        command=det.destroy).pack(side=tk.LEFT, padx=6)
 
             # Ordre d'empilage : on réserve d'abord le HAUT puis le BAS, et
@@ -1025,24 +1076,24 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                 _tr("Suppression dossier Preview"), str(_e), parent=corr)
 
     # ── Ligne 1 : actions génériques ─────────────────────────────────
-    ttk.Button(frm_bot, text=_tr("Visualiser la tuile"),
+    _ctk_button(frm_bot, text=_tr("Visualiser la tuile"),
                command=_visualiser_tuile).grid(row=0, column=0, padx=6,
                                                ipadx=10, ipady=4)
-    ttk.Button(frm_bot, text=_tr("Supprimer patches sélectionnés"),
+    _ctk_button(frm_bot, text=_tr("Supprimer patches sélectionnés"),
                command=_delete_selected).grid(row=0, column=1, padx=6,
                                               ipadx=10, ipady=4)
-    ttk.Button(frm_bot, text=_tr("Fermer"),
+    _ctk_button(frm_bot, text=_tr("Fermer"),
                command=corr.destroy).grid(row=0, column=2, padx=6,
                                           ipadx=10, ipady=4)
 
     # ── Ligne 2 : sélection ──────────────────────────────────────────
-    ttk.Button(frm_bot, text=_tr("Tout cocher"),
+    _ctk_button(frm_bot, text=_tr("Tout cocher"),
                command=_sel_all).grid(row=1, column=0, padx=6, pady=(8, 0),
                                       ipadx=8, ipady=4)
-    ttk.Button(frm_bot, text=_tr("Tout décocher"),
+    _ctk_button(frm_bot, text=_tr("Tout décocher"),
                command=_sel_none).grid(row=1, column=1, padx=6, pady=(8, 0),
                                        ipadx=8, ipady=4)
-    ttk.Button(frm_bot, text=_tr("Suppression dossier Preview"),
+    _ctk_button(frm_bot, text=_tr("Suppression dossier Preview"),
                command=_supprimer_preview).grid(row=1, column=2, padx=6,
                                                 pady=(8, 0), ipadx=8, ipady=4)
 
@@ -1059,10 +1110,10 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
     gimp_lf = tk.LabelFrame(frm_tools, text=_tr("GIMP"),
                             bg=BG, fg=FG, font=FONT)
     gimp_lf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    ttk.Button(gimp_lf, text=_tr("Correction (choisir application)"),
+    _ctk_button(gimp_lf, text=_tr("Correction (choisir application)"),
                command=_choose_editor).pack(fill=tk.X, padx=8, pady=(6, 3),
                                             ipady=3)
-    ttk.Button(gimp_lf, text=_tr("Ouvrir dans l'éditeur"),
+    _ctk_button(gimp_lf, text=_tr("Ouvrir dans l'éditeur"),
                command=_open_in_editor).pack(fill=tk.X, padx=8, pady=(3, 8),
                                              ipady=3)
 
