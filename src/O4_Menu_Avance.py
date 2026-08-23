@@ -496,7 +496,7 @@ def run_menu_avance(parent=None):
         (_L("🗺  Générer un Extent (pays / région)",
             "🗺  Generate an Extent (country / region)"),
          lambda: _ouvrir_extent_generator(parent, status)),
-        (tr("QGIS / Altimétrie"), lambda: _ouvrir_altimetrie(parent, status)),
+        (tr("Altimétrie / DEM / QGIS"), lambda: _ouvrir_altimetrie(parent, status)),
              (_L("📄  Pas à pas — utilisation des modules",
             "📄  Step by step — using the modules"),
          lambda: _ouvrir_tutos(parent, status)),

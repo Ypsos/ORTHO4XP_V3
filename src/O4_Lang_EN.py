@@ -512,12 +512,12 @@ T = {
 
 
     # ── ALTIMÉTRIE / DEM ───────────────────────────────────────────
-    '⛰ Altimétrie / DEM'
-        : '⛰ Elevation / DEM',
-    'Altimétrie / DEM'
-        : 'Elevation / DEM',
-    'Altimétrie / DEM — Ortho4XP V3'
-        : 'Elevation / DEM — Ortho4XP V3',
+    '⛰ Altimétrie / DEM / QGIS'
+        : '⛰ Elevation / DEM / QGIS',
+    'Altimétrie / DEM / QGIS'
+        : 'Elevation / DEM / QGIS',
+    'Altimétrie / DEM / QGIS — Ortho4XP V3'
+        : 'Elevation / DEM / QGIS — Ortho4XP V3',
     'Le module O4_Altimetrie_Utils.py est introuvable dans le dossier src/.'
         : 'Module O4_Altimetrie_Utils.py not found in the src/ folder.',
     'Latitude / longitude invalides.'

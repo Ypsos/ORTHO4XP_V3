@@ -382,7 +382,7 @@ class Ortho4XP_GUI(tk.Tk):
         self.frame_data.columnconfigure(5, weight=1)
 
         self._themed_button(self.frame_data,
-            tr("⛰ Altimétrie / DEM"), self.open_altimetrie_module,
+            tr("⛰ Altimétrie / DEM / QGIS"), self.open_altimetrie_module,
             width=165).grid(row=0, column=0, padx=5, pady=2, sticky=W)
 
         self._themed_button(self.frame_data,
