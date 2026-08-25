@@ -239,6 +239,53 @@ def valeurs_filtres(base_dir):
     return ["none"] + scanner_filtres(base_dir)
 
 
+# ── Affichage vs écriture : suffixes .ext / .flt ──────────────────────────────
+# Principe (validé) : dans les fenêtres, on AFFICHE le suffixe .ext / .flt pour
+# que l'utilisateur distingue d'un coup d'œil un extent d'un filtre (deux
+# fichiers différents peuvent porter le même nom). Dans le fichier .comb écrit,
+# on RETIRE le suffixe : Ortho4XP attend le nom NU et rajoute lui-même .ext /
+# .flt selon la COLONNE (2e = extent, 3e = filtre). Purement cosmétique à
+# l'écran, jamais dans le fichier.
+
+def _aff_ext(nom):
+    """Affichage : garantit le suffixe .ext (nom vide → inchangé)."""
+    nom = (nom or "").strip()
+    if not nom:
+        return nom
+    return nom if nom.lower().endswith(".ext") else nom + ".ext"
+
+
+def _aff_flt(nom):
+    """Affichage : garantit le suffixe .flt (« none » et vide → inchangés)."""
+    nom = (nom or "").strip()
+    if not nom or nom.lower() == "none":
+        return nom
+    return nom if nom.lower().endswith(".flt") else nom + ".flt"
+
+
+def _ecr_ext(nom):
+    """Écriture .comb : retire un .ext final éventuel (Ortho attend le nom nu)."""
+    nom = (nom or "").strip()
+    return nom[:-4] if nom.lower().endswith(".ext") else nom
+
+
+def _ecr_flt(nom):
+    """Écriture .comb : retire un .flt final éventuel. « none » reste « none »."""
+    nom = (nom or "").strip()
+    return nom[:-4] if nom.lower().endswith(".flt") else nom
+
+
+def valeurs_extents_aff(base_dir):
+    """Extents affichés AVEC suffixe .ext, pour la liste déroulante « Extent »."""
+    return [_aff_ext(e) for e in scanner_extents(base_dir)]
+
+
+def valeurs_filtres_aff(base_dir):
+    """Filtres affichés AVEC suffixe .flt (+ « none » en tête sans suffixe),
+    pour la liste déroulante « Filtre »."""
+    return ["none"] + [_aff_flt(f) for f in scanner_filtres(base_dir)]
+
+
 def lire_filtre(base_dir, nom):
     """
     Lit le contenu texte d'un filtre .flt pour l'APERÇU (lecture seule).
@@ -1425,8 +1472,10 @@ def run_comb_creer(parent=None):
 
     # Vue providers + scores (Chapitre 1).
     vue = build_provider_view(base_dir)
-    # Liste des filtres réels (.flt) pour les listes déroulantes « Filtre ».
-    filtres_vals = valeurs_filtres(base_dir)
+    # Listes déroulantes : extents (.ext) et filtres (.flt) affichés AVEC suffixe
+    # (repère visuel). Le suffixe est retiré à l'écriture du .comb.
+    extents_aff = valeurs_extents_aff(base_dir)
+    filtres_vals = valeurs_filtres_aff(base_dir)
 
     # État : une ligne d'IHM par provider (case cochée, zone, priorité).
     lignes = []  # liste de dict {provider, score, var_check, var_zone, var_prio}
@@ -1491,23 +1540,24 @@ def run_comb_creer(parent=None):
                  else ("Segoe UI", 9)).grid(row=i, column=2, sticky="w",
                                             padx=6, pady=1)
         var_zone = tk.StringVar(value="")
-        tk.Entry(inner, textvariable=var_zone, width=18,
-                 bg=ENTRY_BG, fg=ENTRY_FG, relief="solid", bd=1,
-                 highlightthickness=0,
-                 insertbackground=ENTRY_FG).grid(row=i, column=3, sticky="w",
-                                                 padx=6, pady=1)
+        # Extent en liste déroulante (.ext affiché) — liste seule (readonly) :
+        # l'utilisateur choisit un extent réel, pas de saisie à l'aveugle.
+        ttk.Combobox(inner, textvariable=var_zone, values=extents_aff,
+                     state="readonly", width=17,
+                     style="O4Comb.TCombobox").grid(row=i, column=3, sticky="w",
+                                                    padx=6, pady=1)
         var_filtre = tk.StringVar(value="none")
-        # Liste déroulante des filtres .flt (CDC Jasum). state="normal" =
-        # éditable : on garde la saisie libre pour les filtres-patch longs.
+        # Filtre en liste déroulante (.flt affiché) — liste seule (readonly).
         _fcb = ttk.Combobox(inner, textvariable=var_filtre, values=filtres_vals,
-                            state="normal", width=11,
+                            state="readonly", width=11,
                             style="O4Comb.TCombobox")
         _fcb.grid(row=i, column=4, sticky="w", padx=6, pady=1)
         _fcb.bind("<<ComboboxSelected>>",
                   lambda e=None, v=var_filtre: status(
                       _L("Filtre « %s » : %s", "Filter '%s': %s")
                       % (v.get() or "none",
-                         (lire_filtre(base_dir, v.get()).splitlines() or [""])[0])))
+                         (lire_filtre(base_dir, _ecr_flt(v.get())).splitlines()
+                          or [""])[0])))
         var_prio = tk.StringVar(value=_PRIO_AFF["medium"])
         ttk.Combobox(inner, textvariable=var_prio, values=_PRIO_LISTE,
                      state="readonly", width=8,
@@ -1531,8 +1581,10 @@ def run_comb_creer(parent=None):
         for lg in lignes:
             if lg["check"].get():
                 prio = _PRIO_VAL.get(lg["prio"].get(), "medium")
-                filtre = (lg["filtre"].get().strip() or "none")
-                sel.ajouter(lg["provider"], zone=lg["zone"].get().strip(),
+                # On retire les suffixes .ext/.flt : le .comb reçoit le nom NU.
+                zone = _ecr_ext(lg["zone"].get().strip())
+                filtre = _ecr_flt(lg["filtre"].get().strip()) or "none"
+                sel.ajouter(lg["provider"], zone=zone,
                             filtre=filtre, priorite=prio)
         return sel
 
@@ -1825,8 +1877,9 @@ def run_comb_assembler(parent=None):
     prov_dir = _providers_dir(base_dir)
 
     providers_all = scan_providers(base_dir)      # Chapitre 1
-    extents = scanner_extents(base_dir)           # Chapitre 7
-    filtres_vals = valeurs_filtres(base_dir)      # bloc FILTRES (.flt)
+    extents = scanner_extents(base_dir)           # Chapitre 7 (noms nus)
+    extents_aff = valeurs_extents_aff(base_dir)   # extents affichés .ext
+    filtres_vals = valeurs_filtres_aff(base_dir)  # filtres affichés .flt
 
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
     win.title(_tr("Relier mes extents aux providers (.comb)"))
@@ -1881,7 +1934,9 @@ def run_comb_assembler(parent=None):
         }
 
     def _providers_pour(ext):
-        return proposer_providers(ext, providers_all)
+        # ext peut arriver AVEC le suffixe .ext (affichage) → on le retire pour
+        # la logique de correspondance provider↔extent (basée sur le nom nu).
+        return proposer_providers(_ecr_ext(ext), providers_all)
 
     # ── Titre + aide ─────────────────────────────────────────────────────────
     tk.Label(win, text=_tr("Assembler un .comb : relie chaque extent à un provider"),
@@ -1916,7 +1971,7 @@ def run_comb_assembler(parent=None):
         lbl = r.get("_indic")
         if lbl is None:
             return
-        etat = couverture_nom(r["ext"].get(), r["prov"].get())
+        etat = couverture_nom(_ecr_ext(r["ext"].get()), r["prov"].get())
         if etat == "ok":
             lbl.configure(text="✓", fg=OK_C)
         elif etat == "attention":
@@ -1958,7 +2013,7 @@ def run_comb_assembler(parent=None):
             _mini_bouton(nav, "▲", lambda i=i: _monter(i)).pack(side="left", padx=1)
             _mini_bouton(nav, "▼", lambda i=i: _descendre(i)).pack(side="left", padx=1)
 
-            ext_cb = ttk.Combobox(rowf, textvariable=r["ext"], values=extents,
+            ext_cb = ttk.Combobox(rowf, textvariable=r["ext"], values=extents_aff,
                                   state="readonly", width=20,
                                   style="O4Comb.TCombobox")
             ext_cb.grid(row=0, column=1, padx=2)
@@ -1971,14 +2026,14 @@ def run_comb_assembler(parent=None):
             r["_prov_cb"] = prov_cb
 
             _fcb = ttk.Combobox(rowf, textvariable=r["filtre"],
-                                values=filtres_vals, state="normal", width=9,
+                                values=filtres_vals, state="readonly", width=9,
                                 style="O4Comb.TCombobox")
             _fcb.grid(row=0, column=3, padx=2)
             _fcb.bind("<<ComboboxSelected>>",
                       lambda e=None, v=r["filtre"]: status(
                           _L("Filtre « %s » : %s", "Filter '%s': %s")
                           % (v.get() or "none",
-                             (lire_filtre(base_dir, v.get()).splitlines()
+                             (lire_filtre(base_dir, _ecr_flt(v.get())).splitlines()
                               or [""])[0])))
 
             ttk.Combobox(rowf, textvariable=r["prio"], values=_PRIO_LISTE,
@@ -2035,7 +2090,8 @@ def run_comb_assembler(parent=None):
             return
         for e in extents:
             props = _providers_pour(e)
-            rows.append(_new_row(ext=e, prov=(props[0] if props else ""),
+            rows.append(_new_row(ext=_aff_ext(e),
+                                 prov=(props[0] if props else ""),
                                  prio_aff=_PRIO_AFF["medium"]))
         _rebuild()
         status(_tr("%d extent(s) proposé(s). Vérifiez les providers et priorités.")
@@ -2052,8 +2108,10 @@ def run_comb_assembler(parent=None):
                 incompletes += 1
                 continue
             prio = _PRIO_VAL.get(r["prio"].get(), "medium")
-            filtre = r["filtre"].get().strip() or "none"
-            sel.ajouter(prov, zone=ext, filtre=filtre, priorite=prio)
+            # Suffixes .ext/.flt retirés : le .comb reçoit les noms NUS.
+            sel.ajouter(prov, zone=_ecr_ext(ext),
+                        filtre=(_ecr_flt(r["filtre"].get().strip()) or "none"),
+                        priorite=prio)
         return sel, incompletes
 
     def _alertes_couverture():
@@ -2061,7 +2119,7 @@ def run_comb_assembler(parent=None):
         l'extent (garde-fou de nom). Retourne une liste de messages."""
         msgs = []
         for r in rows:
-            ext = r["ext"].get().strip()
+            ext = _ecr_ext(r["ext"].get().strip())
             prov = r["prov"].get().strip()
             if ext and prov and couverture_nom(ext, prov) == "attention":
                 msgs.append("• %s ← %s" % (ext, prov))
@@ -2394,7 +2452,7 @@ def run_comb_corriger(parent=None):
                       lambda e=None, v=r["filtre"]: status(
                           _L("Filtre « %s » : %s", "Filter '%s': %s")
                           % (v.get() or "none",
-                             (lire_filtre(base_dir, v.get()).splitlines()
+                             (lire_filtre(base_dir, _ecr_flt(v.get())).splitlines()
                               or [""])[0])))
             ttk.Combobox(rowf, textvariable=r["prio"], values=_PRIO_LISTE,
                          state="readonly", width=8,
@@ -2491,7 +2549,11 @@ def run_comb_corriger(parent=None):
                 incompletes += 1
                 continue
             prio = _PRIO_VAL.get(r["prio"].get(), "medium")
-            filtre = r["filtre"].get().strip() or "none"
+            # Sécurité : si l'utilisateur a saisi un .ext/.flt à la main, on le
+            # retire (le .comb attend le nom nu). Les noms importés, déjà nus,
+            # restent inchangés — aucune perte.
+            zone = _ecr_ext(zone)
+            filtre = _ecr_flt(r["filtre"].get().strip()) or "none"
             if not sel.ajouter(prov, zone=zone, filtre=filtre, priorite=prio):
                 dups += 1
         return sel, incompletes, dups
