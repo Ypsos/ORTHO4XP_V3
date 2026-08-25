@@ -201,6 +201,66 @@ if __name__ == "__main__":
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  BLOC FILTRES (.flt) — lecture seule (demandé par le CDC Jasum)
+#  Rôle : lister les fichiers .flt réellement présents dans le dossier Filters/,
+#  et lire le contenu d'un filtre pour l'aperçu. N'écrit rien, ne modifie rien.
+#  Sert à alimenter la liste déroulante « Filtre » de l'interface, exactement
+#  comme scan_providers alimente les providers et scanner_extents les extents.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _filtres_dir(base_dir):
+    """Retourne le chemin du dossier Filters/ à partir de la racine Ortho4XP."""
+    return os.path.join(base_dir, "Filters")
+
+
+def scanner_filtres(base_dir):
+    """
+    Scanne Filters/ et retourne la liste triée, sans doublon, des filtres réels
+    de l'utilisateur (nom du fichier .flt sans extension). « none » n'est PAS
+    inclus ici : l'interface l'ajoute en tête (c'est l'option « aucun filtre »).
+    Jamais d'exception : en cas de souci disque, renvoie une liste vide.
+    """
+    fdir = _filtres_dir(base_dir)
+    trouves = set()
+    if not os.path.isdir(fdir):
+        return []
+    try:
+        for f in os.listdir(fdir):
+            if f.lower().endswith(".flt"):
+                trouves.add(f[:-len(".flt")])
+    except Exception:
+        return []
+    return sorted(trouves)
+
+
+def valeurs_filtres(base_dir):
+    """Liste prête pour une liste déroulante : « none » en tête, puis les .flt.
+    « none » = aucun filtre (valeur par défaut d'une ligne .comb)."""
+    return ["none"] + scanner_filtres(base_dir)
+
+
+def lire_filtre(base_dir, nom):
+    """
+    Lit le contenu texte d'un filtre .flt pour l'APERÇU (lecture seule).
+    Retourne le texte du fichier, ou une chaîne d'information si « none »,
+    fichier absent ou illisible. Ne lève jamais d'exception.
+    """
+    nom = (nom or "").strip()
+    if not nom or nom.lower() == "none":
+        return "(aucun filtre)"
+    chemin = os.path.join(_filtres_dir(base_dir), nom + ".flt")
+    if not os.path.isfile(chemin):
+        # Le filtre peut être un patch (ZonePhoto) sans fichier .flt : on le
+        # signale sans erreur, l'aperçu reste vide mais la valeur est conservée.
+        return "(pas de fichier .flt « %s » dans Filters/)" % nom
+    try:
+        with open(chemin, encoding="utf-8") as fp:
+            return fp.read().strip() or "(fichier .flt vide)"
+    except Exception as ex:
+        return "(lecture impossible : %s)" % ex
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  CHAPITRE 2 — SÉLECTION DES PROVIDERS + PRIORITÉS
 #  Rôle : à partir de la vue du Chapitre 1 (providers + scores), permettre de
 #  construire une SÉLECTION : quels providers l'utilisateur retient pour son
@@ -216,7 +276,7 @@ if __name__ == "__main__":
 # Priorités autorisées, du plus faible au plus fort. L'ordre sert à trier et à
 # valider : on n'accepte jamais une valeur hors de cette liste (rien en dur
 # ailleurs, une seule source de vérité).
-PRIORITES_VALIDES = ("low", "medium", "high")
+PRIORITES_VALIDES = ("low", "medium", "high", "mask")
 
 
 class SelectionComb:
@@ -694,7 +754,8 @@ def valider_selection(selection):
                 % (i + 1, e.get("provider", "?")))
         if e.get("priorite") not in PRIORITES_VALIDES:
             problemes.append(
-                "Ligne %d : priorité « %s » invalide (attendu low/medium/high)."
+                "Ligne %d : priorité « %s » invalide "
+                "(attendu low/medium/high/mask)."
                 % (i + 1, e.get("priorite")))
     return (len(problemes) == 0, problemes)
 
@@ -876,7 +937,7 @@ def parser_lignes_comb(texte):
         provider, zone, filtre, priorite = champs
         if priorite not in PRIORITES_VALIDES:
             rapport.append("Ligne %d écartée : priorité « %s » inconnue "
-                           "(attendu low/medium/high)." % (no, priorite))
+                           "(attendu low/medium/high/mask)." % (no, priorite))
             continue
         entrees.append({
             "provider": provider,
@@ -1228,9 +1289,31 @@ def _lighten_hex(hexcol, factor):
 
 
 # On utilise des clés techniques neutres en anglais, et _tr() fait le travail selon la langue active
-_PRIO_AFF = {"high": _tr("high"), "medium": _tr("medium"), "low": _tr("low")}
-_PRIO_VAL = {_tr("high"): "high", _tr("medium"): "medium", _tr("low"): "low"}
-_PRIO_LISTE = (_tr("high"), _tr("medium"), _tr("low"))
+_PRIO_AFF = {"high": _tr("high"), "medium": _tr("medium"),
+             "low": _tr("low"), "mask": _tr("mask")}
+_PRIO_VAL = {_tr("high"): "high", _tr("medium"): "medium",
+             _tr("low"): "low", _tr("mask"): "mask"}
+_PRIO_LISTE = (_tr("high"), _tr("medium"), _tr("low"), _tr("mask"))
+
+
+def _ouvrir_dans_editeur(chemin):
+    """Ouvre 'chemin' dans l'éditeur de texte par défaut du système (demandé par
+    le CDC Jasum, pour les utilisateurs avancés). Multi-plateforme, ne lève
+    jamais d'exception. Retourne (ok, message)."""
+    try:
+        if not chemin or not os.path.exists(chemin):
+            return (False, _L("Fichier introuvable — générez-le d'abord.",
+                              "File not found — generate it first."))
+        import subprocess
+        if _OS_UI == "windows":
+            os.startfile(chemin)  # type: ignore[attr-defined]
+        elif _OS_UI == "mac":
+            subprocess.Popen(["open", chemin])
+        else:
+            subprocess.Popen(["xdg-open", chemin])
+        return (True, _L("Ouvert dans l'éditeur.", "Opened in the editor."))
+    except Exception as ex:
+        return (False, _L("Ouverture impossible : %s", "Cannot open: %s") % ex)
 
 
 def _make_themed_button_c(tk, parent, text, command):
@@ -1342,6 +1425,8 @@ def run_comb_creer(parent=None):
 
     # Vue providers + scores (Chapitre 1).
     vue = build_provider_view(base_dir)
+    # Liste des filtres réels (.flt) pour les listes déroulantes « Filtre ».
+    filtres_vals = valeurs_filtres(base_dir)
 
     # État : une ligne d'IHM par provider (case cochée, zone, priorité).
     lignes = []  # liste de dict {provider, score, var_check, var_zone, var_prio}
@@ -1412,11 +1497,17 @@ def run_comb_creer(parent=None):
                  insertbackground=ENTRY_FG).grid(row=i, column=3, sticky="w",
                                                  padx=6, pady=1)
         var_filtre = tk.StringVar(value="none")
-        tk.Entry(inner, textvariable=var_filtre, width=12,
-                 bg=ENTRY_BG, fg=ENTRY_FG, relief="solid", bd=1,
-                 highlightthickness=0,
-                 insertbackground=ENTRY_FG).grid(row=i, column=4, sticky="w",
-                                                 padx=6, pady=1)
+        # Liste déroulante des filtres .flt (CDC Jasum). state="normal" =
+        # éditable : on garde la saisie libre pour les filtres-patch longs.
+        _fcb = ttk.Combobox(inner, textvariable=var_filtre, values=filtres_vals,
+                            state="normal", width=11,
+                            style="O4Comb.TCombobox")
+        _fcb.grid(row=i, column=4, sticky="w", padx=6, pady=1)
+        _fcb.bind("<<ComboboxSelected>>",
+                  lambda e=None, v=var_filtre: status(
+                      _L("Filtre « %s » : %s", "Filter '%s': %s")
+                      % (v.get() or "none",
+                         (lire_filtre(base_dir, v.get()).splitlines() or [""])[0])))
         var_prio = tk.StringVar(value=_PRIO_AFF["medium"])
         ttk.Combobox(inner, textvariable=var_prio, values=_PRIO_LISTE,
                      state="readonly", width=8,
@@ -1563,6 +1654,19 @@ def run_comb_creer(parent=None):
     b_gen.pack(side="left", padx=4)
     b_ap = _make_themed_button_c(tk, btns, _L("Aperçu", "Preview"), _apercu)
     b_ap.pack(side="left", padx=4)
+
+    # Éditeur texte (CDC Jasum) : ouvre le .comb ciblé dans l'éditeur système.
+    def _ouvrir_editeur_creer():
+        nom = nom_var.get().strip()
+        if nom and not nom.lower().endswith(".comb"):
+            nom += ".comb"
+        _ok_e, _msg_e = _ouvrir_dans_editeur(
+            os.path.join(prov_dir, nom) if nom else "")
+        status(_msg_e)
+    _make_themed_button_c(
+        tk, btns, _L("📝  Éditeur texte", "📝  Text editor"),
+        _ouvrir_editeur_creer).pack(side="left", padx=4)
+
     # Droite : ouvre un AUTRE outil (fabrique un provider manquant .lay).
     b_lay = _make_themed_button_c(
         tk, btns, _L("➕  Créer un provider manquant (.lay)…",
@@ -1722,6 +1826,7 @@ def run_comb_assembler(parent=None):
 
     providers_all = scan_providers(base_dir)      # Chapitre 1
     extents = scanner_extents(base_dir)           # Chapitre 7
+    filtres_vals = valeurs_filtres(base_dir)      # bloc FILTRES (.flt)
 
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
     win.title(_tr("Relier mes extents aux providers (.comb)"))
@@ -1865,9 +1970,16 @@ def run_comb_assembler(parent=None):
             prov_cb.grid(row=0, column=2, padx=2)
             r["_prov_cb"] = prov_cb
 
-            tk.Entry(rowf, textvariable=r["filtre"], width=10, bg=ENTRY_BG,
-                     fg=ENTRY_FG, insertbackground=ENTRY_FG).grid(
-                     row=0, column=3, padx=2)
+            _fcb = ttk.Combobox(rowf, textvariable=r["filtre"],
+                                values=filtres_vals, state="normal", width=9,
+                                style="O4Comb.TCombobox")
+            _fcb.grid(row=0, column=3, padx=2)
+            _fcb.bind("<<ComboboxSelected>>",
+                      lambda e=None, v=r["filtre"]: status(
+                          _L("Filtre « %s » : %s", "Filter '%s': %s")
+                          % (v.get() or "none",
+                             (lire_filtre(base_dir, v.get()).splitlines()
+                              or [""])[0])))
 
             ttk.Combobox(rowf, textvariable=r["prio"], values=_PRIO_LISTE,
                          state="readonly", width=8,
@@ -2046,8 +2158,14 @@ def run_comb_assembler(parent=None):
                      (_tr("Créer un provider (.lay)"), _creer_lay)):
         _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
     # Droite : actions de sortie (aperçu puis génération du fichier).
+    def _ouvrir_editeur_out():
+        _ok_e, _msg_e = _ouvrir_dans_editeur(
+            os.path.join(prov_dir, COMB_OUTPUT_NAME))
+        status(_msg_e)
     for txt, cmd in ((_tr("Générer"), _generer),
-                     (_tr("Aperçu"), _apercu)):
+                     (_tr("Aperçu"), _apercu),
+                     (_L("📝 Éditeur texte", "📝 Text editor"),
+                      _ouvrir_editeur_out)):
         _make_themed_button_c(tk, btns, txt, cmd).pack(side="right", padx=4)
 
     # ── Rappel du fichier de sortie (fixe, non éditable = anti-ZonePhoto) ─────
@@ -2155,6 +2273,7 @@ def run_comb_corriger(parent=None):
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     prov_dir = _providers_dir(base_dir)
+    filtres_vals = valeurs_filtres(base_dir)      # bloc FILTRES (.flt)
 
     win = tk.Toplevel(parent) if parent is not None else tk.Tk()
     win.title(_tr("Corriger un .comb existant"))
@@ -2267,9 +2386,16 @@ def run_comb_corriger(parent=None):
             tk.Entry(rowf, textvariable=r["zone"], width=32, bg=ENTRY_BG,
                      fg=ENTRY_FG, relief="solid", bd=1, highlightthickness=0,
                      insertbackground=ENTRY_FG).grid(row=0, column=2, padx=2)
-            tk.Entry(rowf, textvariable=r["filtre"], width=16, bg=ENTRY_BG,
-                     fg=ENTRY_FG, relief="solid", bd=1, highlightthickness=0,
-                     insertbackground=ENTRY_FG).grid(row=0, column=3, padx=2)
+            _fcb = ttk.Combobox(rowf, textvariable=r["filtre"],
+                                values=filtres_vals, state="normal", width=15,
+                                style="O4Comb.TCombobox")
+            _fcb.grid(row=0, column=3, padx=2)
+            _fcb.bind("<<ComboboxSelected>>",
+                      lambda e=None, v=r["filtre"]: status(
+                          _L("Filtre « %s » : %s", "Filter '%s': %s")
+                          % (v.get() or "none",
+                             (lire_filtre(base_dir, v.get()).splitlines()
+                              or [""])[0])))
             ttk.Combobox(rowf, textvariable=r["prio"], values=_PRIO_LISTE,
                          state="readonly", width=8,
                          style="O4Comb.TCombobox").grid(row=0, column=4, padx=2)
@@ -2425,10 +2551,17 @@ def run_comb_corriger(parent=None):
     # ── Rangée de boutons ────────────────────────────────────────────────────
     btns = tk.Frame(win, bg=BG)
     btns.pack(fill="x", padx=12, pady=(8, 2))
+
+    def _ouvrir_editeur_out():
+        _ok_e, _msg_e = _ouvrir_dans_editeur(
+            os.path.join(prov_dir, COMB_OUTPUT_NAME))
+        status(_msg_e)
     for txt, cmd in ((_tr("Importer un .comb"), _importer),
                      (_tr("Ajouter une ligne"), _ajouter_ligne),
                      (_tr("Aperçu"), _apercu),
-                     (_tr("Générer"), _generer)):
+                     (_tr("Générer"), _generer),
+                     (_L("📝 Éditeur texte", "📝 Text editor"),
+                      _ouvrir_editeur_out)):
         _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
 
     # ── Rappel du fichier de sortie (fixe = anti-ZonePhoto) ───────────────────
