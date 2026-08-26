@@ -59,6 +59,30 @@ _NODATA = -99999.0
 _CRS_REPLI = "EPSG:2154"
 
 _EXT_RASTER = (".tif", ".tiff", ".vrt", ".asc", ".img", ".hgt", ".dt2")
+
+
+def _est_fichier_raster(chemin):
+    """Vrai si le fichier porte une extension raster — OU si c'est un lien
+    symbolique dont la CIBLE réelle porte une extension raster.
+
+    Indispensable : un utilisateur crée souvent un lien vers son gros
+    fichier (plusieurs dizaines de Go) et l'outil macOS nomme parfois ce
+    lien « ....tif symlink » (le nom ne finit donc PAS en .tif). Sans ce
+    contrôle sur la cible, ce lien serait ignoré et le fichier — pourtant
+    valide — ne serait jamais assemblé."""
+    nom = os.path.basename(chemin)
+    if nom.lower().endswith(_EXT_RASTER):
+        return True
+    try:
+        if os.path.islink(chemin):
+            cible = os.path.realpath(chemin)
+            if os.path.basename(cible).lower().endswith(_EXT_RASTER):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 # Plafond de sur-échantillonnage : on autorise une sortie plus fine que la
 # source (ex. Sonny 27 m → 4 m, comme dans QGIS = interpolation, grille
 # uniforme), mais on borne le facteur pour éviter une explosion mémoire sur
@@ -93,10 +117,27 @@ PREFIXE_PAYS_ASSEMBLE = "Assemble "
 
 CFG_RACINE = "dem_root_dir"      # ANCIEN — conservé pour la reprise
 CFG_PAYS = "dem_last_country"    # ANCIEN — conservé pour la reprise
-CFG_STOCK = "dem_stock_dir"      # dossier des sources, choisi par l'utilisateur
-CFG_SORTIE = "dem_output_dir"    # dossier du résultat assemblé
+CFG_STOCK = "dem_stock_dir"      # ANCIEN dossier des sources (reprise)
+CFG_SORTIE = "dem_output_dir"    # ANCIEN dossier du résultat (reprise)
 CFG_QGIS = "qgis_app"            # application QGIS (comme patch_editor_app)
 CFG_PREP_SRC = "dem_prepare_src_dir"  # dernier dossier source ouvert (Préparer)
+
+# ── NOUVELLE STRUCTURE À 4 DOSSIERS (validée avec Roland) ────────────
+#   <racine>/Altimétrie/
+#       ├── Données Sonny/<Pays>/     ← Sonny isolé (licence), va direct à l'assemblage
+#       ├── ASC brut/<Pays>/<Dépt>/   ← brut IGN + étranger, temporaire (vidé à la main)
+#       ├── EPSG réduit/<Pays>/       ← sorties de « Préparer », toutes résolutions
+#       └── Assemblage tuile/<tuile>/ ← tuile finale (+46-003.tif) → custom_dem
+# Chaque dossier a son propre bouton qui pointe droit dessus.
+DOSSIER_SONNY = "Données Sonny"
+DOSSIER_ASC = "ASC brut"
+DOSSIER_EPSG = "EPSG réduit"
+DOSSIER_TUILE = "Assemblage tuile"
+
+CFG_SONNY = "dem_sonny_dir"      # dossier Données Sonny (courant, par pays)
+CFG_ASC = "dem_asc_dir"          # dossier ASC brut (courant, par pays)
+CFG_EPSG = "dem_epsg_dir"        # dossier EPSG réduit (courant, par pays)
+CFG_TILEOUT = "dem_tile_out_dir"  # dossier Assemblage tuile (racine, rangé par tuile)
 
 
 def chemins_structure(racine):
@@ -145,6 +186,104 @@ def lister_pays(racine):
     return sorted(d for d in os.listdir(stock)
                   if not d.startswith(".")
                   and os.path.isdir(os.path.join(stock, d)))
+
+
+# ── NOUVELLE STRUCTURE À 4 DOSSIERS — logique pure, testée headless ──
+#   Ces fonctions ne touchent JAMAIS aux données existantes (création
+#   idempotente uniquement) et sont entièrement simulables sans rasterio.
+
+def chemins_structure4(racine):
+    """Retourne (sonny, asc, epsg, assemblage_tuile) sous <...>/Altimétrie."""
+    return (os.path.join(racine, DOSSIER_SONNY),
+            os.path.join(racine, DOSSIER_ASC),
+            os.path.join(racine, DOSSIER_EPSG),
+            os.path.join(racine, DOSSIER_TUILE))
+
+
+def creer_structure4(base, pays=None):
+    """Crée les 4 dossiers de la structure. Idempotent : ne détruit jamais
+    rien, crée seulement ce qui manque. Si pays est fourni, crée aussi le
+    sous-dossier <pays> dans Données Sonny, ASC brut et EPSG réduit — PAS
+    dans Assemblage tuile (rangé par numéro de tuile, jamais par pays).
+    Retourne (racine, sonny, asc, epsg, assemblage)."""
+    racine = base if os.path.basename(os.path.normpath(base)) == DOSSIER_RACINE \
+        else os.path.join(base, DOSSIER_RACINE)
+    sonny, asc, epsg, assemble = chemins_structure4(racine)
+    for d in (racine, sonny, asc, epsg, assemble):
+        os.makedirs(d, exist_ok=True)
+    if pays:
+        for base_dir in (sonny, asc, epsg):
+            os.makedirs(os.path.join(base_dir, pays), exist_ok=True)
+    return racine, sonny, asc, epsg, assemble
+
+
+def racine_depuis_dossier4(dossier):
+    """Déduit la racine <...>/Altimétrie à partir d'un des 4 sous-dossiers
+    (ou d'un sous-dossier pays à l'intérieur). Retourne la racine si le
+    chemin appartient bien à la structure, sinon None."""
+    if not dossier:
+        return None
+    parts = os.path.normpath(dossier).split(os.sep)
+    for marqueur in (DOSSIER_SONNY, DOSSIER_ASC, DOSSIER_EPSG, DOSSIER_TUILE):
+        if marqueur in parts:
+            i = parts.index(marqueur)
+            racine = os.sep.join(parts[:i]) or os.sep
+            return racine
+    if DOSSIER_RACINE in parts:
+        i = parts.index(DOSSIER_RACINE)
+        return os.sep.join(parts[:i + 1]) or os.sep
+    return None
+
+
+def _norm_nom(s):
+    """Normalise un nom pour comparaison souple : minuscule, sans accents,
+    sans séparateurs (espace, tiret, souligné)."""
+    import unicodedata
+    import re
+    s = unicodedata.normalize("NFKD", s or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return re.sub(r"[\s_\-]+", "", s.lower())
+
+
+def departements_asc(asc_dir):
+    """Liste les sous-dossiers de département présents sous ASC brut, en
+    descendant récursivement (gère ASC brut/<Pays>/<Département>). Un dossier
+    est retenu s'il contient au moins un fichier raster (.asc, .tif…) ; on ne
+    descend pas sous un dossier déjà retenu. Le dossier ASC brut lui-même et
+    les dossiers vides ne sont jamais listés.
+    Retourne une liste de (nom_affiché, chemin_absolu), triée."""
+    res = []
+    if not asc_dir or not os.path.isdir(asc_dir):
+        return res
+    racine_reelle = os.path.realpath(asc_dir)
+    for rep, sous, fichiers in os.walk(asc_dir):
+        if os.path.realpath(rep) == racine_reelle:
+            continue
+        a_du_raster = any(not f.startswith(".")
+                          and f.lower().endswith(_EXT_RASTER)
+                          for f in fichiers)
+        if a_du_raster:
+            res.append((os.path.basename(rep), rep))
+            sous[:] = []  # département feuille : ne pas descendre plus bas
+    return sorted(res, key=lambda t: t[0].lower())
+
+
+def dept_est_reduit(dept_nom, epsg_dir):
+    """Vrai si un fichier réduit correspondant au département existe déjà
+    sous EPSG réduit (recherche récursive, comparaison souple sur le nom).
+    Sert d'indicateur ✅ déjà réduit (sûr à supprimer) / ⚠️ pas encore."""
+    if not epsg_dir or not os.path.isdir(epsg_dir):
+        return False
+    cible = _norm_nom(dept_nom)
+    if not cible:
+        return False
+    for rep, _s, fichiers in os.walk(epsg_dir):
+        for f in fichiers:
+            if f.startswith(".") or not f.lower().endswith((".tif", ".tiff")):
+                continue
+            if cible in _norm_nom(f):
+                return True
+    return False
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -249,7 +388,7 @@ def lister_sources(dossier, sortie_exclue=None):
             continue
         p = os.path.join(dossier, f)
         # os.path.isfile suit les liens symboliques relatifs.
-        if os.path.isfile(p) and f.lower().endswith(_EXT_RASTER):
+        if os.path.isfile(p) and _est_fichier_raster(p):
             res.append(p)
     return res
 
@@ -261,7 +400,7 @@ def sources_depuis_stock(racine, lat, lon, debord=DEBORD_DEFAUT):
     return sources_depuis_dossier(stock, lat, lon, debord)
 
 
-def sources_depuis_dossier(stock, lat, lon, debord=DEBORD_DEFAUT):
+def sources_depuis_dossier(stock, lat, lon, debord=DEBORD_DEFAUT, log=None):
     """Étape B — parcourt le dossier des sources DÉSIGNÉ PAR L'UTILISATEUR
     (sous-dossiers compris) et retourne les fichiers dont l'emprise
     intersecte la tuile élargie. Aucun nom de dossier n'est imposé.
@@ -269,7 +408,16 @@ def sources_depuis_dossier(stock, lat, lon, debord=DEBORD_DEFAUT):
     Nécessite rasterio pour lire les emprises. Les fichiers dont
     l'emprise n'est pas lisible en degrés sont retournés quand même :
     assembler_tuile() refera le test après reprojection.
-    """
+
+    log (optionnel) : si fourni, explique pour CHAQUE fichier raster
+    pourquoi il est gardé ou écarté — indispensable pour diagnostiquer
+    un fichier qui « disparaît » (illisible, CRS, hors emprise…)."""
+    def _l(m):
+        if log:
+            try:
+                log(m)
+            except Exception:
+                pass
     res = []
     if not os.path.isdir(stock):
         return res
@@ -292,9 +440,11 @@ def sources_depuis_dossier(stock, lat, lon, debord=DEBORD_DEFAUT):
             continue
         vus.add(reel)
         for f in sorted(fichiers):
-            if f.startswith(".") or not f.lower().endswith(_EXT_RASTER):
+            if f.startswith("."):
                 continue
             p = os.path.join(rep, f)
+            if not _est_fichier_raster(p):
+                continue
             try:
                 with rasterio.open(p) as ds:
                     b = ds.bounds
@@ -302,11 +452,19 @@ def sources_depuis_dossier(stock, lat, lon, debord=DEBORD_DEFAUT):
                 if crs is not None and crs.to_epsg() == 4326:
                     if not intersecte((b.left, b.bottom, b.right, b.top),
                                       bornes):
+                        _l("      écarté (hors emprise) : %s "
+                           "[fichier %.2f %.2f %.2f %.2f]"
+                           % (f, b.left, b.bottom, b.right, b.top))
                         continue
                 # CRS non 4326 → emprise non comparable ici : on garde,
                 # le test définitif est fait après reprojection.
                 res.append(p)
-            except Exception:
+                _l("      gardé : %s" % f)
+            except Exception as e:
+                # NE PLUS ignorer en silence : c'est exactement ce qui
+                # cachait pourquoi un gros fichier ne remontait pas.
+                _l("      ÉCARTÉ (illisible : %s) : %s" % (e, f))
+                continue
                 continue
     return res
 
@@ -450,6 +608,93 @@ def _reprojeter(src_path, dst_path, log=None):
     return dst_path
 
 
+def _fenetre_pixels(bornes, left, top, px_x, px_y, width, height):
+    """Calcule la fenêtre de pixels (col_off, row_off, ncols, nrows) d'un
+    raster 4326 (nord en haut) correspondant à l'emprise géographique
+    `bornes` = (ouest, sud, est, nord).
+
+    left/top = coin haut-gauche du fichier (degrés) ; px_x/px_y = taille
+    d'un pixel en degrés (valeurs positives) ; width/height = dimensions
+    du fichier en pixels.
+
+    Retourne None si l'emprise ne recouvre pas le fichier. Fonction PURE
+    (aucune dépendance rasterio) : c'est le calcul décisif du découpage,
+    donc il est testé à part avec de vrais chiffres. Une erreur ici lirait
+    les mauvais pixels — d'où le test dédié."""
+    import math
+    w, s, e, n = bornes
+    right = left + width * px_x
+    bottom = top - height * px_y
+    # Intersection géographique fichier ∩ emprise demandée.
+    iw = max(w, left)
+    ie = min(e, right)
+    isn = max(s, bottom)
+    inn = min(n, top)
+    if ie <= iw or inn <= isn:
+        return None
+    col_off = int((iw - left) / px_x)
+    row_off = int((top - inn) / px_y)
+    col_end = int(math.ceil((ie - left) / px_x))
+    row_end = int(math.ceil((top - isn) / px_y))
+    col_off = max(0, min(col_off, width))
+    row_off = max(0, min(row_off, height))
+    col_end = max(0, min(col_end, width))
+    row_end = max(0, min(row_end, height))
+    ncols = col_end - col_off
+    nrows = row_end - row_off
+    if ncols <= 0 or nrows <= 0:
+        return None
+    return (col_off, row_off, ncols, nrows)
+
+
+def _decouper_fenetre_4326(src_path, dst_path, bornes, log=None):
+    """Découpe un fichier DÉJÀ en EPSG:4326 (nord en haut) à l'emprise
+    `bornes`, en ne lisant QUE la fenêtre de pixels correspondante, par
+    blocs de lignes (mémoire constante). AUCUNE reprojection : le fichier
+    est déjà en 4326.
+
+    Indispensable pour les très gros fichiers pays (plusieurs dizaines de
+    Go, ex. Allemagne/Suisse Sonny) : on ne peut pas les charger en entier.
+    Reproduit le `gdalwarp -te` de la procédure QGIS. Les valeurs aberrantes
+    sont neutralisées au passage (comme à la reprojection). Retourne
+    dst_path, ou None si aucun recouvrement."""
+    rasterio = _import_rasterio()[0]
+    from rasterio.windows import Window
+    with rasterio.open(src_path) as src:
+        t = src.transform
+        left, top = t.c, t.f
+        px_x, px_y = abs(t.a), abs(t.e)
+        fen = _fenetre_pixels(bornes, left, top, px_x, px_y,
+                              src.width, src.height)
+        if fen is None:
+            return None
+        col_off, row_off, ncols, nrows = fen
+        window = Window(col_off, row_off, ncols, nrows)
+        win_transform = src.window_transform(window)
+        profil = src.profile.copy()
+        profil.update(driver="GTiff", height=nrows, width=ncols,
+                      transform=win_transform, count=1, dtype="float32",
+                      nodata=_NODATA, compress="DEFLATE")
+        profil.pop("blockxsize", None)
+        profil.pop("blockysize", None)
+        profil["tiled"] = (ncols >= 256 and nrows >= 256)
+        src_nodata = src.nodata
+        with rasterio.open(dst_path, "w", **profil) as dst:
+            # Lecture/écriture par blocs de lignes : la mémoire reste
+            # constante quelle que soit la taille du fichier source.
+            r = 0
+            while r < nrows:
+                h = min(_BANDE_LIGNES, nrows - r)
+                sub = Window(col_off, row_off + r, ncols, h)
+                arr = src.read(1, window=sub)
+                arr, _n = assainir_altitudes(arr, src_nodata)
+                dst.write(arr, 1, window=Window(0, r, ncols, h))
+                r += h
+    if log:
+        log("      découpe fenêtre 4326 : %d x %d px" % (ncols, nrows))
+    return dst_path
+
+
 def assembler_tuile(lat, lon, dossier_tuile, debord=DEBORD_DEFAUT,
                     log=None, sources=None):
     """Assemble le DEM de la tuile. Retourne le chemin du .tif produit.
@@ -514,24 +759,41 @@ def assembler_tuile(lat, lon, dossier_tuile, debord=DEBORD_DEFAUT,
                 continue
 
             dst = os.path.join(tmp, "r%03d.tif" % i)
-            # Valeurs de remplissage non déclarées (-32767, -3.4e38, NaN)
-            # neutralisées AVANT la reprojection : sinon elles sont
-            # moyennées avec le relief réel et aplatissent le mesh sans
-            # qu'aucune erreur ne soit signalée.
-            src_reel, a_effacer = _source_assainie(s, tmp, "a%03d" % i,
-                                                   log=_log)
-            try:
-                _reprojeter(src_reel, dst, log=_log)
-            except Exception as e:
-                ignorees.append((nom, "reprojection : %s" % e))
-                _log("      IGNORÉ (reprojection) : %s" % nom)
-                continue
-            finally:
-                if a_effacer:
-                    try:
-                        os.remove(a_effacer)
-                    except Exception:
-                        pass
+            if emprise is not None:
+                # Source DÉJÀ en 4326 (Sonny, gros fichiers pays…) : on
+                # DÉCOUPE seulement la fenêtre de la tuile, sans reprojeter
+                # ni lire le fichier entier. Indispensable pour les fichiers
+                # de dizaines de Go. Le découpage neutralise aussi les
+                # valeurs aberrantes, donc pas de _source_assainie ici
+                # (qui lirait tout le fichier).
+                try:
+                    res = _decouper_fenetre_4326(s, dst, bornes, log=_log)
+                except Exception as e:
+                    ignorees.append((nom, "découpe : %s" % e))
+                    _log("      IGNORÉ (découpe) : %s" % nom)
+                    continue
+                if res is None:
+                    ignorees.append((nom, "hors emprise (découpe)"))
+                    _log("      IGNORÉ (hors emprise) : %s" % nom)
+                    continue
+            else:
+                # Source NON 4326 (IGN .asc en Lambert-93…) : assainissement
+                # complet + reprojection, comme avant (fichiers de taille
+                # raisonnable, un département).
+                src_reel, a_effacer = _source_assainie(s, tmp, "a%03d" % i,
+                                                       log=_log)
+                try:
+                    _reprojeter(src_reel, dst, log=_log)
+                except Exception as e:
+                    ignorees.append((nom, "reprojection : %s" % e))
+                    _log("      IGNORÉ (reprojection) : %s" % nom)
+                    continue
+                finally:
+                    if a_effacer:
+                        try:
+                            os.remove(a_effacer)
+                        except Exception:
+                            pass
 
             # Second test après reprojection (cas emprise inconnue).
             with rasterio.open(dst) as ds:
@@ -1007,6 +1269,29 @@ def open_altimetrie_window(gui):
         def _tr(k):
             return k
 
+    # ── Bilingue FR/EN résolu ICI (recette maison identique à
+    #    O4_Menu_Avance.py / O4_Extent_Generator.py). Sert aux libellés
+    #    des NOUVEAUX dossiers et boutons. Toute langue autre que FR
+    #    retombe volontairement sur EN. Français = repli garanti :
+    #    si O4_Lang est absent, on affiche le français. Aucun fichier
+    #    O4_Lang_* n'est touché.
+    try:
+        from O4_Lang import current_lang as _current_lang
+    except Exception:
+        def _current_lang():
+            return "FR"
+
+    def _lang_code():
+        try:
+            code = (_current_lang() or "FR").upper()
+        except Exception:
+            code = "FR"
+        return "EN" if code == "EN" else "FR"
+
+    def _L(fr, en):
+        """Libellé bilingue : EN si langue active = anglais, FR sinon."""
+        return en if _lang_code() == "EN" else fr
+
     import O4_File_Names as FNAMES
 
     def _app_cfg():
@@ -1231,36 +1516,392 @@ def open_altimetrie_window(gui):
         _pomper()
         win.after(400, lambda: _animer(message))
 
-    # ── Les deux seuls chemins du module ─────────────────────────────
-    # AUCUN nom de dossier n'est imposé : l'utilisateur désigne son
-    # dossier de sources et son dossier de sortie, tels qu'ils existent
-    # chez lui. Les deux sont mémorisés dans Ortho4XP.cfg.
-    _stock = [_cfg_get(CFG_STOCK)]
-    _sortie = [_cfg_get(CFG_SORTIE)]
+    # ── STRUCTURE À 4 DOSSIERS ───────────────────────────────────────
+    # Chaque dossier a sa variable et son bouton. Tous mémorisés dans
+    # Ortho4XP.cfg. Aucun nom n'est imposé : l'utilisateur peut pointer
+    # ses propres dossiers, mais les boutons créent/ouvrent par défaut la
+    # structure Altimétrie/ standard.
+    #   _sonny  = Données Sonny/<Pays>   (Sonny isolé, va direct à l'assemblage)
+    #   _asc    = ASC brut/<Pays>        (brut IGN + étranger, temporaire)
+    #   _epsg   = EPSG réduit/<Pays>     (sorties de « Préparer »)
+    #   _sortie = Assemblage tuile       (sortie de « Assembler », rangée par tuile)
+    _sonny = [_cfg_get(CFG_SONNY)]
+    _asc = [_cfg_get(CFG_ASC)]
+    _epsg = [_cfg_get(CFG_EPSG)]
+    _sortie = [_cfg_get(CFG_TILEOUT) or _cfg_get(CFG_SORTIE)]
+    # _stock conservé UNIQUEMENT pour compatibilité interne (repli) : il
+    # pointe sur EPSG réduit, le dossier des sources préparées.
+    _stock = [_epsg[0]]
     _dossier_tuile = [""]
     _src_var = tk.StringVar()
     _out_var = tk.StringVar()
+    _sonny_var = tk.StringVar()
+    _asc_var = tk.StringVar()
 
     def _maj_bandeaux():
-        """Rappel permanent des deux dossiers, en bas de la fenêtre."""
-        _src_var.set(_stock[0] or _tr("(non configuré)"))
+        """Rappel permanent des dossiers, en bas de la fenêtre."""
+        _sonny_var.set(_sonny[0] or _L("(non configuré)", "(not set)"))
+        _asc_var.set(_asc[0] or _L("(non configuré)", "(not set)"))
+        _src_var.set(_epsg[0] or _L("(non configuré)", "(not set)"))
         _out_var.set(os.path.join(_sortie[0], cle) if _sortie[0]
-                     else _tr("(non configurée)"))
+                     else _L("(non configurée)", "(not set)"))
+        _stock[0] = _epsg[0]  # garde le repli interne synchronisé
 
-    # Reprise d'une configuration faite avec l'ancienne structure
-    # imposée : on retrouve les dossiers réels sans rien redemander.
-    if not _stock[0]:
+    # Reprise d'une ancienne configuration (2 dossiers) : on ne perd rien.
+    # L'ancien « stock » devient EPSG réduit, l'ancienne « sortie » devient
+    # Assemblage tuile. L'utilisateur pourra repointer proprement ensuite.
+    if not _epsg[0] and _cfg_get(CFG_STOCK):
+        _epsg[0] = _cfg_get(CFG_STOCK)
+        _stock[0] = _epsg[0]
+    if not _sortie[0]:
         _anc_r = _cfg_get(CFG_RACINE)
         _anc_p = _cfg_get(CFG_PAYS)
         if _anc_r and os.path.isdir(_anc_r):
             _s_anc, _a_anc = chemins_structure(_anc_r)
-            _cand_s = os.path.join(_s_anc, _anc_p) if _anc_p else _s_anc
             _cand_a = os.path.join(_a_anc, PREFIXE_PAYS_ASSEMBLE + _anc_p) \
                 if _anc_p else _a_anc
-            _stock[0] = _cand_s if os.path.isdir(_cand_s) else _s_anc
             _sortie[0] = _cand_a if os.path.isdir(_cand_a) else _a_anc
-            _cfg_set(CFG_STOCK, _stock[0])
-            _cfg_set(CFG_SORTIE, _sortie[0])
+            _cfg_set(CFG_TILEOUT, _sortie[0])
+
+    # ════════════════════════════════════════════════════════════════
+    #  NOUVELLE STRUCTURE À 4 DOSSIERS — fonctions des boutons
+    # ════════════════════════════════════════════════════════════════
+
+    def _racine4():
+        """Déduit la racine <...>/Altimétrie à partir de n'importe lequel
+        des 4 dossiers déjà connus. Retourne la racine ou None."""
+        for v in (_epsg[0], _asc[0], _sonny[0], _sortie[0]):
+            r = racine_depuis_dossier4(v)
+            if r and os.path.isdir(os.path.join(r, DOSSIER_RACINE)) \
+                    or (r and os.path.basename(os.path.normpath(r))
+                        == DOSSIER_RACINE):
+                return r
+            if r:
+                return r
+        return None
+
+    def _appliquer_pays(racine, pays):
+        """Pointe _sonny/_asc/_epsg sur <racine>/<dossier>/<pays> et _sortie
+        sur <racine>/Assemblage tuile. Mémorise dans le cfg."""
+        sonny, asc, epsg, assemble = chemins_structure4(racine)
+        _sonny[0] = os.path.join(sonny, pays) if pays else sonny
+        _asc[0] = os.path.join(asc, pays) if pays else asc
+        _epsg[0] = os.path.join(epsg, pays) if pays else epsg
+        _sortie[0] = assemble
+        _cfg_set(CFG_SONNY, _sonny[0])
+        _cfg_set(CFG_ASC, _asc[0])
+        _cfg_set(CFG_EPSG, _epsg[0])
+        _cfg_set(CFG_TILEOUT, _sortie[0])
+        _maj_bandeaux()
+
+    def _creer_structure4_gui():
+        """Bouton « Créer la structure » : crée les 4 dossiers Altimétrie/
+        sur le disque choisi, avec un premier pays, et pointe tout dessus."""
+        messagebox.showinfo(
+            _tr("Altimétrie / DEM"),
+            _L("Choisissez le disque ou le dossier où créer votre "
+               "organisation Altimétrie (un disque externe convient).",
+               "Choose the disk or folder where your Altimetry structure "
+               "will be created (an external disk is fine)."), parent=win)
+        _remonter()
+        base = filedialog.askdirectory(
+            parent=win,
+            title=_L("Où créer l'organisation Altimétrie",
+                     "Where to create the Altimetry structure"))
+        _remonter()
+        if not base:
+            return False
+        # Éviter d'empiler deux racines : si on est déjà dedans, remonter.
+        _parts = os.path.normpath(base).split(os.sep)
+        if DOSSIER_RACINE in _parts:
+            base = os.sep.join(_parts[:_parts.index(DOSSIER_RACINE)]) or os.sep
+        pays = _saisie(
+            _tr("Altimétrie / DEM"),
+            _L("Nom du pays (ex. : France, Suisse, Allemagne) :",
+               "Country name (e.g. France, Switzerland, Germany):"),
+            parent=win, initialvalue="France")
+        _remonter()
+        if not pays:
+            return False
+        pays = pays.strip().replace("/", "-").replace("\\", "-")
+        if not pays:
+            return False
+        _etat(_L("Création de la structure…", "Creating structure…"), FG)
+        try:
+            racine, sonny, asc, epsg, assemble = creer_structure4(base, pays)
+        except Exception as e:
+            _etat("")
+            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            _remonter()
+            return False
+        _appliquer_pays(racine, pays)
+        _etat(_L("Structure créée.", "Structure created."), FG)
+        txt.delete("1.0", tk.END)
+        _log(_L("Structure Altimétrie créée :", "Altimetry structure created:"))
+        _log("   " + racine)
+        _log()
+        _log("   • " + DOSSIER_SONNY + "/" + pays + "   "
+             + _L("(déposez ici vos .hgt Sonny)", "(put your Sonny .hgt here)"))
+        _log("   • " + DOSSIER_ASC + "/" + pays + "   "
+             + _L("(déposez ici vos .asc bruts IGN)", "(put your raw IGN .asc here)"))
+        _log("   • " + DOSSIER_EPSG + "/" + pays + "   "
+             + _L("(fichiers réduits, générés par « Préparer »)",
+                  "(reduced files, produced by « Prepare »)"))
+        _log("   • " + DOSSIER_TUILE + "/<" + _L("tuile", "tile") + ">   "
+             + _L("(tuile finale → custom_dem)", "(final tile → custom_dem)"))
+        _remonter()
+        return True
+
+    def _ajouter_pays4():
+        """Bouton « Ajouter un pays » : crée <pays> dans Données Sonny,
+        ASC brut et EPSG réduit (jamais dans Assemblage tuile), et pointe
+        les 3 dossiers courants dessus."""
+        racine = _racine4()
+        if not racine:
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _L("Créez d'abord la structure (bouton « Créer la structure »).",
+                   "Create the structure first (« Create structure » button)."),
+                parent=win)
+            _remonter()
+            return False
+        pays = _saisie(
+            _tr("Altimétrie / DEM"),
+            _L("Nom du pays (ex. : France, Suisse, Allemagne) :",
+               "Country name (e.g. France, Switzerland, Germany):"),
+            parent=win, initialvalue="")
+        _remonter()
+        if not pays:
+            return False
+        pays = pays.strip().replace("/", "-").replace("\\", "-")
+        if not pays:
+            return False
+        try:
+            creer_structure4(racine, pays)
+        except Exception as e:
+            messagebox.showerror(_tr("Altimétrie / DEM"), str(e), parent=win)
+            _remonter()
+            return False
+        _appliquer_pays(racine, pays)
+        _etat(_L("Pays ajouté : ", "Country added: ") + pays, FG)
+        _log(_L("Pays ajouté : ", "Country added: ") + pays)
+        _remonter()
+        return True
+
+    def _pointer_dossier(kind):
+        """Boutons-dossiers : OUVRE le dossier concerné DANS la structure
+        existante et le mémorise. kind ∈ {'sonny','asc','epsg','tuile'}.
+        NE CRÉE JAMAIS l'arborescence : seul « Créer la structure » le fait.
+        Si aucune structure n'existe encore, renvoie vers ce bouton."""
+        racine = _racine4()
+        if not racine or not os.path.isdir(racine):
+            # Pas de structure Altimétrie réellement présente sur le disque :
+            # on ne crée rien ici (seul « Créer la structure » le fait).
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _L("Aucune structure « Altimétrie » n'existe encore.\n\n"
+                   "Cliquez d'abord sur « Créer la structure » : elle crée "
+                   "les 4 dossiers d'un coup. Ce bouton sert seulement à "
+                   "OUVRIR un dossier déjà créé, jamais à en créer un.",
+                   "No « Altimetry » structure exists yet.\n\n"
+                   "Click « Create structure » first: it creates the 4 "
+                   "folders at once. This button only OPENS an existing "
+                   "folder, it never creates one."),
+                parent=win)
+            _remonter()
+            return False
+        sonny, asc, epsg, assemble = chemins_structure4(racine)
+        depart = {"sonny": sonny, "asc": asc, "epsg": epsg,
+                  "tuile": assemble}.get(kind, "")
+        # Le dossier de la structure existe déjà (créé par « Créer la
+        # structure ») : on l'ouvre, sans jamais en fabriquer un ailleurs.
+        if not os.path.isdir(depart):
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _L("Ce dossier de la structure est manquant. Relancez "
+                   "« Créer la structure » pour compléter l'arborescence.",
+                   "This structure folder is missing. Run « Create "
+                   "structure » again to complete the tree."),
+                parent=win)
+            _remonter()
+            return False
+        cur = {"sonny": _sonny[0], "asc": _asc[0], "epsg": _epsg[0],
+               "tuile": _sortie[0]}.get(kind, "")
+        titre = {
+            "sonny": _L("Dossier Données Sonny", "Sonny data folder"),
+            "asc": _L("Dossier ASC brut", "Raw ASC folder"),
+            "epsg": _L("Dossier EPSG réduit", "Reduced EPSG folder"),
+            "tuile": _L("Dossier Assemblage tuile", "Tile assembly folder"),
+        }.get(kind, "")
+        d = filedialog.askdirectory(
+            parent=win, title=titre,
+            initialdir=(cur if cur and os.path.isdir(cur) else depart))
+        _remonter()
+        if not d:
+            return False
+        if kind == "sonny":
+            _sonny[0] = d
+            _cfg_set(CFG_SONNY, d)
+        elif kind == "asc":
+            _asc[0] = d
+            _cfg_set(CFG_ASC, d)
+        elif kind == "epsg":
+            _epsg[0] = d
+            _cfg_set(CFG_EPSG, d)
+        else:
+            _sortie[0] = d
+            _cfg_set(CFG_TILEOUT, d)
+        _maj_bandeaux()
+        _etat(_L("Dossier enregistré.", "Folder saved."), FG)
+        return True
+
+    def _vider_asc():
+        """Bouton « Vider ASC brut » : liste à cocher des départements
+        présents dans ASC brut, avec indicateur ✅ déjà réduit / ⚠️ pas
+        encore. Suppression UNIQUEMENT des départements cochés, après
+        confirmation. Jamais automatique, jamais en bloc."""
+        import shutil
+        asc_dir = _asc[0]
+        if not asc_dir or not os.path.isdir(asc_dir):
+            # repli : proposer la racine ASC brut de la structure
+            racine = _racine4()
+            if racine:
+                asc_dir = chemins_structure4(racine)[1]
+        if not asc_dir or not os.path.isdir(asc_dir):
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _L("Aucun dossier ASC brut configuré.",
+                   "No raw ASC folder configured."), parent=win)
+            _remonter()
+            return
+        deps = departements_asc(asc_dir)
+        if not deps:
+            messagebox.showinfo(
+                _tr("Altimétrie / DEM"),
+                _L("Aucun département à vider dans ASC brut.",
+                   "No department to clear in raw ASC."), parent=win)
+            _remonter()
+            return
+
+        dlg = tk.Toplevel(win)
+        dlg.title(_L("Vider ASC brut", "Clear raw ASC"))
+        dlg.configure(bg=BG)
+        try:
+            dlg.transient(win)
+        except Exception:
+            pass
+        dlg.columnconfigure(0, weight=1)
+        dlg.rowconfigure(1, weight=1)
+
+        tk.Label(dlg,
+                 text=_L("Cochez les départements à SUPPRIMER de ASC brut.\n"
+                         "✅ = déjà réduit (sûr).   ⚠️ = pas encore réduit "
+                         "(à garder).",
+                         "Tick the departments to DELETE from raw ASC.\n"
+                         "✅ = already reduced (safe).   ⚠️ = not reduced yet "
+                         "(keep)."),
+                 bg=BG, fg=FG, font=FONT, justify="left", anchor="w",
+                 wraplength=560).grid(row=0, column=0, padx=14,
+                                      pady=(14, 6), sticky="w")
+
+        cadre = tk.Frame(dlg, bg=PREV_BG, highlightthickness=1,
+                         highlightbackground=FG)
+        cadre.grid(row=1, column=0, padx=14, pady=(0, 8), sticky="nsew")
+        cvs = tk.Canvas(cadre, bg=PREV_BG, highlightthickness=0, height=260)
+        sbv = tk.Scrollbar(cadre, orient="vertical", command=cvs.yview)
+        inner = tk.Frame(cvs, bg=PREV_BG)
+        inner.bind("<Configure>",
+                   lambda e: cvs.configure(scrollregion=cvs.bbox("all")))
+        cvs.create_window((0, 0), window=inner, anchor="nw")
+        cvs.configure(yscrollcommand=sbv.set)
+        cvs.pack(side="left", fill="both", expand=True)
+        sbv.pack(side="right", fill="y")
+
+        etats = []  # (BooleanVar, nom, chemin, deja_reduit)
+        for nom, chemin in deps:
+            deja = dept_est_reduit(nom, _epsg[0])
+            var = tk.BooleanVar(value=False)
+            ligne = tk.Frame(inner, bg=PREV_BG)
+            ligne.pack(fill="x", padx=6, pady=1)
+            tk.Checkbutton(ligne, variable=var, bg=PREV_BG,
+                           activebackground=PREV_BG,
+                           selectcolor=PREV_BG).pack(side="left")
+            tag = ("✅ " + _L("déjà réduit", "already reduced")) if deja \
+                else ("⚠️ " + _L("pas encore réduit", "not reduced yet"))
+            coul = FG2 if deja else "#ffaa00"
+            tk.Label(ligne, text=nom, bg=PREV_BG, fg=FG,
+                     font=("TkFixedFont", 11), anchor="w", width=28,
+                     justify="left").pack(side="left")
+            tk.Label(ligne, text=tag, bg=PREV_BG, fg=coul,
+                     font=("TkFixedFont", 10), anchor="w").pack(side="left")
+            etats.append((var, nom, chemin, deja))
+
+        bar = tk.Frame(dlg, bg=BG)
+        bar.grid(row=2, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        def _fermer():
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+            _remonter()
+
+        def _supprimer():
+            choisis = [(n, c, d) for (v, n, c, d) in etats if v.get()]
+            if not choisis:
+                messagebox.showinfo(
+                    _tr("Altimétrie / DEM"),
+                    _L("Aucun département coché.", "No department ticked."),
+                    parent=dlg)
+                return
+            # Double alerte si un département NON réduit est coché.
+            non_reduits = [n for (n, c, d) in choisis if not d]
+            if non_reduits:
+                if not messagebox.askyesno(
+                        _L("Attention", "Warning"),
+                        _L("Ces départements ne sont PAS encore réduits :\n\n"
+                           "{d}\n\nLes supprimer vous obligera à les "
+                           "retélécharger. Continuer quand même ?",
+                           "These departments are NOT reduced yet:\n\n{d}\n\n"
+                           "Deleting them will force you to download them "
+                           "again. Continue anyway?").format(
+                               d=", ".join(non_reduits)), parent=dlg):
+                    return
+            if not messagebox.askyesno(
+                    _L("Confirmer la suppression", "Confirm deletion"),
+                    _L("Supprimer définitivement {n} dossier(s) ?",
+                       "Permanently delete {n} folder(s)?").format(
+                           n=len(choisis)), parent=dlg):
+                return
+            n_ok = 0
+            for (nom, chemin, _d) in choisis:
+                try:
+                    shutil.rmtree(chemin)
+                    n_ok += 1
+                    _log(_L("Supprimé : ", "Deleted: ") + nom)
+                except Exception as e:
+                    _log(_L("Échec suppression ", "Delete failed ")
+                         + nom + " : " + str(e))
+            _fermer()
+            _etat(_L("{n} dossier(s) supprimé(s).",
+                     "{n} folder(s) deleted.").format(n=n_ok), FG)
+
+        _ctk_button(bar, text=_L("Supprimer la sélection", "Delete selection"),
+                    command=_supprimer).pack(side="left")
+        _ctk_button(bar, text=_tr("Annuler"),
+                    command=_fermer).pack(side="right")
+
+        dlg.bind("<Escape>", lambda e: _fermer())
+        dlg.protocol("WM_DELETE_WINDOW", _fermer)
+        try:
+            dlg.update_idletasks()
+            _x = win.winfo_rootx() + max(
+                0, (win.winfo_width() - dlg.winfo_reqwidth()) // 2)
+            _y = win.winfo_rooty() + 100
+            dlg.geometry("+%d+%d" % (_x, _y))
+            dlg.grab_set()
+        except Exception:
+            pass
 
     # ── Assistant : désignation des deux dossiers ────────────────────
     def _choisir_stock():
@@ -1608,50 +2249,41 @@ def open_altimetrie_window(gui):
         return True
 
     def _assistant(force=False):
-        """Première utilisation : demande les deux dossiers, sans jamais
-        imposer de nom ni créer d'arborescence. L'organisation existante
-        de l'utilisateur est reprise telle quelle."""
-        if _stock[0] and os.path.isdir(_stock[0]) and _sortie[0] \
-                and not force:
+        """Première utilisation : propose de créer la structure à 4
+        dossiers. Si l'utilisateur refuse, il pourra pointer ses propres
+        dossiers avec les 4 boutons-dossiers."""
+        if _un_dossier_source_pret() and _sortie[0] and not force:
             return True
-        # Deux profils d'utilisateurs : celui qui a déjà ses dossiers et
-        # celui qui part de zéro. On lui demande lequel il est plutôt que
-        # d'imposer une organisation à tout le monde.
         _neuf = messagebox.askyesno(
             _tr("Altimétrie / DEM"),
-            _tr("Deux dossiers sont nécessaires :\n\n"
-                "1) celui où se trouvent vos altimétries sources ;\n"
-                "2) celui où écrire les altimétries assemblées.\n\n"
-                "Voulez-vous qu'Ortho4XP crée cette organisation pour "
-                "vous ?\n\n"
-                "OUI  →  la structure est créée automatiquement.\n"
-                "NON  →  vous désignez vos propres dossiers, qui sont "
-                "utilisés tels quels."), parent=win)
+            _L("Ortho4XP peut créer pour vous une organisation "
+               "« Altimétrie » à 4 dossiers :\n\n"
+               "• Données Sonny   (relief Sonny, par pays)\n"
+               "• ASC brut        (données IGN/étranger à préparer)\n"
+               "• EPSG réduit     (fichiers préparés)\n"
+               "• Assemblage tuile (tuiles finales)\n\n"
+               "OUI  →  la structure est créée automatiquement.\n"
+               "NON  →  vous pointerez vos propres dossiers avec les "
+               "boutons.",
+               "Ortho4XP can create an « Altimetry » structure with 4 "
+               "folders for you:\n\n"
+               "• Sonny data     (Sonny relief, per country)\n"
+               "• Raw ASC        (IGN/foreign data to prepare)\n"
+               "• Reduced EPSG   (prepared files)\n"
+               "• Tile assembly  (final tiles)\n\n"
+               "YES  →  the structure is created automatically.\n"
+               "NO   →  point your own folders with the buttons."),
+            parent=win)
         _remonter()
         if _neuf:
-            return _creer_structure()
-        if not _choisir_stock():
-            return False
-        if not _choisir_sortie():
-            return False
-        txt.delete("1.0", tk.END)
-        _etat(_tr("Dossiers enregistrés."), FG)
-        _log(_tr("Dossier des sources :"))
-        _log("   " + _stock[0])
-        _log(_tr("Dossier de sortie :"))
-        _log("   " + _sortie[0])
-        _log()
-        _log(_tr("Les sources doivent être en EPSG:4326 — X-Plane ne lit"))
-        _log(_tr("aucune autre projection. Ortho4XP convertira au besoin,"))
-        _log(_tr("mais préparez-les de préférence en 4326."))
-        _log()
-        _log(_tr("Le résultat assemblé sera écrit dans :"))
-        _log("   " + os.path.join(_sortie[0], cle, cle + ".tif"))
+            return _creer_structure4_gui()
+        # Refus : l'utilisateur pointe au moins un dossier source + la sortie.
         messagebox.showinfo(
             _tr("Altimétrie / DEM"),
-            _tr("Dossiers enregistrés.\n\nSources :\n{s}\n\n"
-                "Sortie :\n{d}").format(s=_stock[0], d=_sortie[0]),
-            parent=win)
+            _L("Utilisez les 4 boutons-dossiers pour pointer vos dossiers "
+               "(Données Sonny, ASC brut, EPSG réduit, Assemblage tuile).",
+               "Use the 4 folder buttons to point your folders (Sonny data, "
+               "Raw ASC, Reduced EPSG, Tile assembly)."), parent=win)
         _remonter()
         return True
 
@@ -1718,59 +2350,102 @@ def open_altimetrie_window(gui):
         return DEBORD_DEFAUT
 
     def _sources():
-        """Sources retenues, avec repli sur le dossier de la tuile.
-        1) stock imposé (aucun lien à créer)
-        2) sinon dossier de sortie s'il contient déjà des fichiers
-           (compatibilité avec les tuiles préparées à la main)"""
+        """Sources de l'ASSEMBLAGE : tous les fichiers déjà convertis qui
+        recouvrent la tuile. On balaie la STRUCTURE entière — tout le
+        dossier « EPSG réduit » (tous les pays) ET tout le dossier
+        « Données Sonny » (tous les pays) — puis on ne garde que ce qui
+        recouvre la tuile élargie. Ainsi une tuile frontalière (Alsace =
+        France + Allemagne + Suisse) prend automatiquement les bons
+        fichiers, sans dépendre du « pays courant » pointé. Repli : les
+        dossiers pointés à la main, puis le dossier de sortie de la tuile."""
+        dossiers = []
+        racine = _racine4()
+        if racine and os.path.isdir(racine):
+            _sy, _ac, _ep, _asm = chemins_structure4(racine)
+            # EPSG réduit + Données Sonny, à leur RACINE (tous pays) :
+            # sources_depuis_dossier descend récursivement dans les
+            # sous-dossiers pays et filtre par emprise.
+            dossiers = [_ep, _sy]
+        else:
+            # Pas de structure : on retombe sur les dossiers pointés.
+            dossiers = [_epsg[0], _sonny[0]]
         srcs = []
-        origine = ""
-        if _stock[0] and os.path.isdir(_stock[0]):
-            srcs = sources_depuis_dossier(_stock[0], lat, lon, _debord())
-            origine = _tr("dossier des sources")
+        for dossier in dossiers:
+            if dossier and os.path.isdir(dossier):
+                srcs += sources_depuis_dossier(dossier, lat, lon, _debord(),
+                                               log=_log)
+        # Dédoublonnage (un même fichier accessible par deux chemins).
+        vus, uniq = set(), []
+        for s in srcs:
+            rp = os.path.realpath(s)
+            if rp not in vus:
+                vus.add(rp)
+                uniq.append(s)
+        srcs = uniq
+        origine = _L("EPSG réduit + Données Sonny (toute la structure)",
+                     "Reduced EPSG + Sonny data (whole structure)")
         if not srcs:
             d = _dossier_sortie()
             srcs = lister_sources(d, sortie_exclue=cle + ".tif")
-            origine = _tr("dossier de la tuile")
+            origine = _L("dossier de la tuile", "tile folder")
         return srcs, origine
+
+    def _un_dossier_source_pret():
+        """Vrai si des sources d'assemblage sont disponibles : soit la
+        structure existe (EPSG réduit / Données Sonny), soit un dossier
+        a été pointé à la main."""
+        racine = _racine4()
+        if racine and os.path.isdir(racine):
+            _sy, _ac, _ep, _asm = chemins_structure4(racine)
+            if os.path.isdir(_ep) or os.path.isdir(_sy):
+                return True
+        return bool((_epsg[0] and os.path.isdir(_epsg[0]))
+                    or (_sonny[0] and os.path.isdir(_sonny[0])))
 
     def _rafraichir():
         txt.delete("1.0", tk.END)
         _maj_bandeaux()
-        if not _stock[0] or not os.path.isdir(_stock[0]):
-            _etat(_tr("Dossiers non configurés."), "#ffaa00")
-            _log(_tr("Aucun dossier d'altimétries n'est configuré."))
-            _log(_tr("Cliquez sur « Dossier des sources »."))
-            if _stock[0]:
-                _log()
-                _log(_tr("Chemin mémorisé introuvable :"))
-                _log("   " + _stock[0])
-                _log(_tr("Si vos altimétries sont sur un disque externe,"))
-                _log(_tr("vérifiez qu'il est branché."))
+        if not _un_dossier_source_pret():
+            _etat(_L("Dossiers non configurés.", "Folders not configured."),
+                  "#ffaa00")
+            _log(_L("Aucun dossier de données n'est configuré.",
+                    "No data folder is configured."))
+            _log(_L("Cliquez sur « Créer la structure » pour démarrer.",
+                    "Click « Create structure » to begin."))
             return
         b = tile_bounds(lat, lon, _debord())
-        _log(_tr("Tuile") + " %s — %s %.3f %.3f %.3f %.3f"
-             % (cle, _tr("emprise"), b[0], b[1], b[2], b[3]))
-        _log(_tr("Sources :") + " " + _stock[0])
-        _log(_tr("Sortie :") + " "
-             + (_sortie[0] or _tr("(non configurée)")))
+        _log(_L("Tuile", "Tile") + " %s — %s %.3f %.3f %.3f %.3f"
+             % (cle, _L("emprise", "extent"), b[0], b[1], b[2], b[3]))
+        _log(DOSSIER_SONNY + " : " + (_sonny[0] or _L("(non configuré)",
+                                                      "(not set)")))
+        _log(DOSSIER_EPSG + " : " + (_epsg[0] or _L("(non configuré)",
+                                                    "(not set)")))
+        _log(DOSSIER_TUILE + " : " + (_sortie[0] or _L("(non configurée)",
+                                                       "(not set)")))
         _log()
-        _etat(_tr("Recherche des sources…"), FG)
+        _etat(_L("Recherche des sources…", "Searching sources…"), FG)
         srcs, origine = _sources()
         _etat("")
         if not srcs:
-            _etat(_tr("Aucune source pour cette tuile."), "#ffaa00")
-            _log(_tr("Aucun fichier altimétrique ne recouvre cette tuile."))
-            _log(_tr("Déposez vos données dans le dossier des sources, "
-                     "en EPSG:4326."))
+            _etat(_L("Aucune source pour cette tuile.",
+                     "No source for this tile."), "#ffaa00")
+            _log(_L("Aucun fichier ne recouvre cette tuile.",
+                    "No file covers this tile."))
+            _log(_L("Préparez vos départements, ou déposez du Sonny, en "
+                    "EPSG:4326.",
+                    "Prepare your departments, or add Sonny data, in "
+                    "EPSG:4326."))
             return
-        _log(_tr("{n} source(s) trouvée(s) — origine : {o}").format(
-            n=len(srcs), o=origine))
+        _log(_L("{n} source(s) trouvée(s) — origine : {o}",
+                "{n} source(s) found — from: {o}").format(
+                    n=len(srcs), o=origine))
         for s in srcs:
             marque = " (lien)" if os.path.islink(s) else ""
             _log("   • " + os.path.basename(s) + marque)
         _log()
-        _log(_tr("Cliquer sur « Assembler » pour lancer."))
-        _etat(_tr("Prêt."), FG)
+        _log(_L("Cliquer sur « Assembler » pour lancer.",
+                "Click « Assemble » to run."))
+        _etat(_L("Prêt.", "Ready."), FG)
 
     # ── Actions ──────────────────────────────────────────────────────
     def _assembler():
@@ -1970,19 +2645,15 @@ def open_altimetrie_window(gui):
                     "d'Ortho4XP."), parent=win)
             _remonter()
             return
-        if not _stock[0] or not os.path.isdir(_stock[0]):
-            messagebox.showinfo(_tr("Altimétrie / DEM"),
-                                _tr("Dossiers non configurés."), parent=win)
-            _remonter()
-            return
-        # Mémorise le dernier dossier ouvert : évite de renaviguer depuis la
-        # racine du disque à chaque fois.
-        _memo_src = _cfg_get(CFG_PREP_SRC) or _stock[0] or ""
+        # « Préparer » lit dans ASC brut. On ouvre directement ce dossier.
+        _memo_src = _cfg_get(CFG_PREP_SRC) or _asc[0] or ""
+        if not (_memo_src and os.path.isdir(_memo_src)):
+            _memo_src = _asc[0] if (_asc[0] and os.path.isdir(_asc[0])) else ""
         src = filedialog.askdirectory(
             parent=win,
-            title=_tr("Dossier des données brutes (.asc, .tif…)"),
-            initialdir=(_memo_src if _memo_src and os.path.isdir(_memo_src)
-                        else ""))
+            title=_L("Dossier ASC brut à préparer (.asc, .tif…)",
+                     "Raw ASC folder to prepare (.asc, .tif…)"),
+            initialdir=_memo_src)
         _remonter()
         if not src:
             return
@@ -2053,29 +2724,33 @@ def open_altimetrie_window(gui):
         suffixe = "%dM" % int(round(res_finale)) if res_finale >= 1 else "1M"
         nom_def = "%s-%s-reduit.tif" % (os.path.basename(
             os.path.normpath(src)), suffixe)
-        nom = _saisie(
-            _tr("Altimétrie / DEM"),
-            _tr("Nom du fichier produit :"),
-            parent=win, initialvalue=nom_def)
-        _remonter()
-        if not nom:
-            return
-        if not nom.lower().endswith(".tif"):
-            nom += ".tif"
 
-        # Le fichier réduit est écrit DANS le dossier source choisi par
-        # l'utilisateur (ex. …/France/), et NON à la racine du stock : c'est
-        # là qu'il l'attend. Le stock étant scanné récursivement, le fichier
-        # reste utilisé automatiquement pour les tuiles qu'il recouvre.
-        dest = os.path.join(src, nom)
-        if os.path.isfile(dest):
-            if not messagebox.askyesno(
-                    _tr("Altimétrie / DEM"),
-                    _tr("{f} existe déjà. Le remplacer ?").format(f=nom),
-                    parent=win):
-                _remonter()
-                return
-            _remonter()
+        # « ENREGISTRER SOUS » — l'utilisateur choisit LUI-MÊME le dossier ET
+        # le nom du fichier réduit, exactement comme l'« Exporter → Enregistrer
+        # sous » de QGIS. Le dossier proposé par défaut est le dossier de
+        # SORTIE configuré (_sortie[0]), plus le dossier source : le fichier
+        # réduit ne se retrouve donc plus posé à côté de l'original, ce qui
+        # pouvait les faire se mélanger au moment du build. asksaveasfilename
+        # gère lui-même la confirmation d'écrasement du système : inutile de la
+        # redemander.
+        # Sortie de « Préparer » = EPSG réduit (et non Assemblage tuile).
+        _dossier_def = _epsg[0] if (_epsg[0]
+                                    and os.path.isdir(_epsg[0])) else src
+        dest = filedialog.asksaveasfilename(
+            parent=win,
+            title=_L("Enregistrer le fichier réduit dans EPSG réduit…",
+                     "Save the reduced file into Reduced EPSG…"),
+            initialdir=_dossier_def,
+            initialfile=nom_def,
+            defaultextension=".tif",
+            filetypes=[("GeoTIFF", "*.tif"),
+                       (_tr("Tous les fichiers"), "*")])
+        _remonter()
+        if not dest:
+            return
+        if not dest.lower().endswith(".tif"):
+            dest += ".tif"
+        nom = os.path.basename(dest)
 
         txt.delete("1.0", tk.END)
         _log(_tr("Préparation :") + " " + src)
@@ -2193,17 +2868,28 @@ def open_altimetrie_window(gui):
         except Exception as _e:
             _log(_tr("Import Sonny : modules absents (%s).") % _e)
             return
-        # Emplacement défini + existant ? (protection anti-multiples)
-        _memo = _cfg_get("relief_sonny_dir")
-        _etatdep, _hgtdir = _DEP.emplacement_verrouille(_memo, log=_log)
-        if _etatdep != "ok" or not _hgtdir:
-            messagebox.showinfo(
-                _tr("Import du relief"),
-                _tr("Aucun emplacement de relief valide.\n\n"
-                    "Cliquez d'abord « Relief Sonny automatique » pour définir "
-                    "le disque de stockage."),
-                parent=win)
-            return
+        # Emplacement de rangement du .hgt : PRIORITÉ à « Données Sonny » de
+        # la structure Altimétrie (cohérent avec « Créer la structure » et le
+        # bouton « Données Sonny »). Repli sur l'ancien système UNIQUEMENT si
+        # aucune structure n'existe encore.
+        _rac_imp = _racine4()
+        if _rac_imp:
+            _hgtdir = chemins_structure4(_rac_imp)[0]   # Données Sonny
+        else:
+            _memo = _cfg_get("relief_sonny_dir")
+            _etatdep, _hgtdir = _DEP.emplacement_verrouille(_memo, log=_log)
+            if _etatdep != "ok" or not _hgtdir:
+                messagebox.showinfo(
+                    _tr("Import du relief"),
+                    _L("Créez d'abord votre structure (bouton « Créer la "
+                       "structure ») ou cliquez « Données Sonny » : le relief "
+                       "y sera rangé.",
+                       "First create your structure (« Create structure ») or "
+                       "click « Sonny data »: the relief will be stored "
+                       "there."),
+                    parent=win)
+                _remonter()
+                return
         try:
             _lat = int(gui.lat.get() or 0)
             _lon = int(gui.lon.get() or 0)
@@ -2213,7 +2899,16 @@ def open_altimetrie_window(gui):
 
         _nom = _RS.nom_hgt(_lat, _lon)                 # ex. N46W003
         _pays = _PA.pays_pour_tuile(_lat, _lon)        # ex. France
-        _dossier_pays = os.path.join(_hgtdir, _pays)
+        # NOUVEAU : le .hgt Sonny est rangé dans « Données Sonny/<Pays> » de
+        # la structure Altimétrie (Sonny isolé pour respecter sa licence).
+        # Repli sur l'ancien emplacement du dépôt si la structure n'existe
+        # pas encore.
+        _rac4 = _racine4()
+        if _rac4:
+            _sonny_root = chemins_structure4(_rac4)[0]
+            _dossier_pays = os.path.join(_sonny_root, _pays)
+        else:
+            _dossier_pays = os.path.join(_hgtdir, _pays)
         try:
             os.makedirs(_dossier_pays, exist_ok=True)
         except Exception as _e:
@@ -2256,6 +2951,26 @@ def open_altimetrie_window(gui):
             else:
                 _log(_tr("Aucun .hgt en place après décompression."))
                 return
+
+        # 3bis) Le .hgt est vérifié en place → proposer de supprimer le ZIP.
+        #       JAMAIS automatique : on demande, et seulement après avoir
+        #       confirmé que le .hgt existe bien (sinon on garderait le ZIP
+        #       pour permettre une nouvelle tentative).
+        try:
+            if _zip and os.path.isfile(_zip) and os.path.isfile(_hgt_final):
+                if messagebox.askyesno(
+                        _L("Supprimer le ZIP ?", "Delete the ZIP?"),
+                        _L("Le relief est en place et vérifié :\n%s\n\n"
+                           "Supprimer le fichier ZIP téléchargé ?\n%s",
+                           "The relief is in place and verified:\n%s\n\n"
+                           "Delete the downloaded ZIP file?\n%s")
+                        % (_hgt_final, _zip), parent=win):
+                    os.remove(_zip)
+                    _log(_L("ZIP supprimé : ", "ZIP deleted: ") + _zip)
+                else:
+                    _log(_L("ZIP conservé.", "ZIP kept."))
+        except Exception as _e:
+            _log(_L("ZIP non supprimé : ", "ZIP not deleted: ") + str(_e))
 
         # 4) Renseigner custom_dem dans le cfg de la tuile (mécanisme identique
         #    à Assembler : même calcul de tile_cfg avec repli Ortho4XP.cfg).
@@ -2338,12 +3053,20 @@ def open_altimetrie_window(gui):
         try:
             import O4_Relief_Depot_Utils as _DEP0
             import O4_Pays_Utils as _PA0
+            _nom0 = _RS.nom_hgt(_lat, _lon)
+            _pays0 = _PA0.pays_pour_tuile(_lat, _lon)
+            # Cherche le .hgt d'abord dans « Données Sonny/<Pays> » de la
+            # structure (nouvel emplacement), puis dans l'ancien dépôt.
+            _candidats = []
+            _rac0 = _racine4()
+            if _rac0:
+                _candidats.append(os.path.join(
+                    chemins_structure4(_rac0)[0], _pays0, _nom0 + ".hgt"))
             _memo0 = _cfg_get("relief_sonny_dir")
             _et0, _hgt0 = _DEP0.emplacement_verrouille(_memo0)
             if _et0 == "ok" and _hgt0:
-                _nom0 = _RS.nom_hgt(_lat, _lon)
-                _pays0 = _PA0.pays_pour_tuile(_lat, _lon)
-                _deja = os.path.join(_hgt0, _pays0, _nom0 + ".hgt")
+                _candidats.append(os.path.join(_hgt0, _pays0, _nom0 + ".hgt"))
+            for _deja in _candidats:
                 if os.path.isfile(_deja):
                     _log(_tr("Relief Sonny déjà installé pour cette tuile : %s")
                          % _deja)
@@ -2360,7 +3083,14 @@ def open_altimetrie_window(gui):
         except Exception:
             _cfg = None
 
-        _dossier = _RS.emplacement_gere(getattr(FNAMES, "Ortho4XP_dir", "."))
+        # Où Sonny cherche/range les .hgt : « Données Sonny » de la structure
+        # Altimétrie si elle existe (passé en chemin_choisi à emplacement_gere),
+        # sinon l'emplacement par défaut. Cohérent avec « Créer la structure »
+        # et le bouton « Données Sonny ».
+        _rac_auto = _racine4()
+        _sonny_root = chemins_structure4(_rac_auto)[0] if _rac_auto else None
+        _dossier = _RS.emplacement_gere(getattr(FNAMES, "Ortho4XP_dir", "."),
+                                        chemin_choisi=_sonny_root)
         _tuiledir = _sortie[0] or _dossier
 
         _res = _ORCH.generer_relief_tuile(
@@ -2390,77 +3120,44 @@ def open_altimetrie_window(gui):
             if not _rep:
                 _log(_tr("Relief standard conservé."))
             else:
-                try:
-                    import O4_Relief_Depot_Utils as _DEP
-                except Exception as _e:
-                    _log(_tr("Dépôt Sonny indisponible (%s).") % _e)
-                    return
-                # PROTECTION : emplacement déjà défini ? On ne recrée pas.
-                _memo = _cfg_get("relief_sonny_dir")
-                _etatdep, _hgtok = _DEP.emplacement_verrouille(_memo, log=_log)
-                if _etatdep == "ok":
-                    _hgtdir = _hgtok
-                    _log(_tr("Emplacement relief déjà défini : %s") % _hgtdir)
-                elif _etatdep == "introuvable":
-                    if not messagebox.askyesno(
-                            _tr("Emplacement introuvable"),
-                            _tr("L'emplacement du relief défini précédemment est "
-                                "introuvable (disque débranché ou déplacé ?).\n\n"
-                                "Voulez-vous en définir un nouveau ?"),
-                            parent=win):
-                        _log(_tr("Installation annulée."))
-                        return
-                    _hgtdir = None
-                else:
-                    _hgtdir = None
-                # Première définition (ou redéfinition acceptée).
-                if not _hgtdir:
+                # NOUVEAU : le relief Sonny se range dans « Données Sonny » de
+                # la structure Altimétrie. Plus AUCUN disque séparé à définir,
+                # plus de clé relief_sonny_dir : on vérifie juste que la
+                # structure existe, puis on ouvre le site de téléchargement.
+                _rac_inst = _racine4()
+                if not _rac_inst:
                     messagebox.showinfo(
-                        _tr("Étape 1 sur 2 — Emplacement de stockage"),
-                        _tr("Vous n'avez encore RIEN à télécharger.\n\n"
-                            "Indiquez le disque où Ortho4XP rangera vos reliefs "
-                            "(prévoyez plusieurs Go d'espace libre).\n\n"
-                            "Ortho créera tout seul un dossier dédié et ses "
-                            "sous-dossiers par pays. Vous n'y toucherez plus.\n\n"
-                            "Cliquez OK, puis choisissez le disque."),
+                        _tr("Altimétrie / DEM"),
+                        _L("Créez d'abord votre structure (bouton « Créer la "
+                           "structure ») : le relief Sonny sera rangé dans "
+                           "« Données Sonny ».",
+                           "First create your structure (« Create structure » "
+                           "button): Sonny relief will be stored in "
+                           "« Sonny data »."),
                         parent=win)
-                    _disque = filedialog.askdirectory(
-                        parent=win,
-                        title=_tr("Disque où STOCKER le relief (rien à chercher "
-                                  "ici)"),
-                        initialdir=os.path.expanduser("~"))
-                    if not _disque:
-                        _log(_tr("Installation annulée."))
-                        return
-                    _ok, _libre = _DEP.assez_d_espace(_disque)
-                    if not _ok:
-                        if not messagebox.askyesno(
-                                _tr("Espace disque limité"),
-                                _tr("Ce disque ne dispose que de %.1f Go "
-                                    "libres.\nContinuer quand même ?") % _libre,
-                                parent=win):
-                            _log(_tr("Installation annulée (espace)."))
-                            return
-                    _hgtdir = _DEP.creer_structure(_disque, log=_log)
-                    if not _hgtdir:
-                        _log(_tr("Impossible de créer la structure."))
-                        return
-                    _cfg_set("relief_sonny_dir", _hgtdir)
-                # Étape 2 : quel fichier prendre (nom exact).
+                    _remonter()
+                    return
                 messagebox.showinfo(
-                    _tr("Étape 2 sur 2 — Téléchargement"),
-                    _tr("Le site Sonny va s'ouvrir.\n\n"
-                        "Sélectionnez votre pays, puis téléchargez le fichier :\n\n"
-                        "        %s\n\n"
-                        "Une fois téléchargé, cliquez « Importer le relief "
-                        "téléchargé ».") % _zipnom,
+                    _L("Téléchargement", "Download"),
+                    _L("Le site Sonny va s'ouvrir.\n\n"
+                       "Sélectionnez votre pays puis téléchargez le fichier :"
+                       "\n\n        %s\n\n"
+                       "Une fois téléchargé, cliquez « Installer le ZIP "
+                       "téléchargé » : il sera rangé dans « Données Sonny ».",
+                       "The Sonny site will open.\n\n"
+                       "Select your country then download the file:\n\n"
+                       "        %s\n\n"
+                       "Once downloaded, click « Install downloaded ZIP »: it "
+                       "will be stored in « Sonny data ».") % _zipnom,
                     parent=win)
+                _remonter()
                 try:
                     import webbrowser
                     webbrowser.open("https://sonny.4lima.de")
                 except Exception:
                     pass
-                _log(_tr("Téléchargez %s puis « Importer le relief téléchargé ».")
+                _log(_L("Téléchargez %s puis « Installer le ZIP téléchargé ».",
+                        "Download %s then « Install downloaded ZIP ».")
                      % _zipnom)
         elif _statut == _ORCH.HORS_ZONE:
             _log(_tr("Hors zone Sonny : relief standard."))
@@ -2471,28 +3168,45 @@ def open_altimetrie_window(gui):
     #   structure  →  préparation des données  →  assemblage de la tuile
     # Ligne 1 : les trois étapes, dans l'ordre.
     # Ligne 2 : outils et configuration.
+    # Grille de boutons — organisée par lignes de travail :
+    #  Ligne 0 : les 3 étapes, dans l'ordre  (Préparer → Assembler)
+    #  Ligne 1 : les 4 dossiers de la structure (un bouton = un dossier)
+    #  Ligne 2 : gestion (structure, pays, vider ASC, rafraîchir)
+    #  Ligne 3 : Sonny + QGIS + outils
+    #  Ligne 4 : fermer
     _defs = [
-        (_tr("Créer la structure"),
-         lambda: (_creer_structure(), _rafraichir()), 0, 0),
-        (_tr("Préparer les données (EPSG → réduit)"), _preparer, 0, 1),
-        (_tr("Assembler"), _assembler, 0, 2),
-        (_tr("Rafraîchir"), _rafraichir, 0, 3),
-        (_tr("Dossier des sources"),
-         lambda: (_choisir_stock(), _rafraichir()), 1, 0),
-        (_tr("Vérifier (auto-test)"), _auto_test, 1, 1),
-        (_tr("Choisir QGIS"), _choisir_qgis, 1, 2),
-        (_tr("Ouvrir dans QGIS"), _ouvrir_qgis, 1, 3),
-        (_tr("Dossier de sortie"),
-         lambda: (_choisir_sortie(), _rafraichir()), 2, 0),
-        (_tr("Ajouter un pays"),
-         lambda: (_ajouter_pays(), _rafraichir()), 2, 1),
-        (_tr("Emplacement TIFF / assemble"),
-         lambda: (_choisir_dans_structure(), _rafraichir()), 2, 2),
-         (_tr("Relief Sonny automatique"),
+        # Ligne 0 — étapes principales
+        (_L("Préparer les données", "Prepare data"), _preparer, 0, 0),
+        (_L("Assembler la tuile", "Assemble tile"), _assembler, 0, 1),
+        (_L("Vider ASC brut", "Clear raw ASC"),
+         lambda: (_vider_asc(), _rafraichir()), 0, 2),
+        (_L("Rafraîchir", "Refresh"), _rafraichir, 0, 3),
+        # Ligne 1 — les 4 dossiers (même nom que le dossier)
+        (DOSSIER_SONNY,
+         lambda: (_pointer_dossier("sonny"), _rafraichir()), 1, 0),
+        (DOSSIER_ASC,
+         lambda: (_pointer_dossier("asc"), _rafraichir()), 1, 1),
+        # Libellé plus parlant que le nom brut du dossier : il dit ce que
+        # le dossier CONTIENT (un DEM/altitudes, réduit à la résolution
+        # choisie). Le dossier réel sur le disque reste « EPSG réduit ».
+        ("EPSG 4326 · DEM-Alt (4/6/10 m)",
+         lambda: (_pointer_dossier("epsg"), _rafraichir()), 1, 2),
+        (DOSSIER_TUILE,
+         lambda: (_pointer_dossier("tuile"), _rafraichir()), 1, 3),
+        # Ligne 2 — gestion de la structure
+        (_L("Créer la structure", "Create structure"),
+         lambda: (_creer_structure4_gui(), _rafraichir()), 2, 0),
+        (_L("Ajouter un pays", "Add a country"),
+         lambda: (_ajouter_pays4(), _rafraichir()), 2, 1),
+        (_L("Vérifier (auto-test)", "Check (self-test)"), _auto_test, 2, 2),
+        (_L("Fermer", "Close"), win.destroy, 2, 3),
+        # Ligne 3 — Sonny + QGIS
+        (_L("Relief Sonny automatique", "Automatic Sonny relief"),
          lambda: _relief_sonny_auto(), 3, 0),
-        (_tr("Installer le ZIP téléchargé"),
+        (_L("Installer le ZIP téléchargé", "Install downloaded ZIP"),
          lambda: _importer_relief_sonny(), 3, 1),
-         (_tr("Fermer"), win.destroy, 2, 3),
+        (_L("Choisir QGIS", "Choose QGIS"), _choisir_qgis, 3, 2),
+        (_L("Ouvrir dans QGIS", "Open in QGIS"), _ouvrir_qgis, 3, 3),
     ]
     for _txt, _cmd, _r, _c in _defs:
         _b = _ctk_button(frm_bot, text=_txt, command=_cmd)
@@ -2502,7 +3216,7 @@ def open_altimetrie_window(gui):
         if _cmd is not win.destroy:
             _boutons.append(_b)
 
-    if not _stock[0] or not _sortie[0]:
+    if not _un_dossier_source_pret() or not _sortie[0]:
         win.after(150, lambda: (_assistant(), _rafraichir()))
     else:
         _rafraichir()
