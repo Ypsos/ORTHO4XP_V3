@@ -130,7 +130,7 @@ CFG_PREP_SRC = "dem_prepare_src_dir"  # dernier dossier source ouvert (Préparer
 #       └── Assemblage tuile/<tuile>/ ← tuile finale (+46-003.tif) → custom_dem
 # Chaque dossier a son propre bouton qui pointe droit dessus.
 DOSSIER_SONNY = "Données Sonny"
-DOSSIER_ASC = "ASC brut"
+DOSSIER_ASC = "Altimétrie Sources"
 DOSSIER_EPSG = "EPSG réduit"
 DOSSIER_TUILE = "Assemblage tuile"
 
@@ -138,6 +138,66 @@ CFG_SONNY = "dem_sonny_dir"      # dossier Données Sonny (courant, par pays)
 CFG_ASC = "dem_asc_dir"          # dossier ASC brut (courant, par pays)
 CFG_EPSG = "dem_epsg_dir"        # dossier EPSG réduit (courant, par pays)
 CFG_TILEOUT = "dem_tile_out_dir"  # dossier Assemblage tuile (racine, rangé par tuile)
+
+# ── BILINGUE AU NIVEAU MODULE (dossiers ET boutons) ─────────────────
+# Recette « maison » identique à _L() de la fenêtre. Les noms RÉELS des
+# dossiers suivent la langue active À LA CRÉATION ; à la LECTURE, on
+# reconnaît les DEUX orthographes (FR et EN) — un dossier « Altimétrie
+# Sources » créé en français reste trouvé même si l'app passe en anglais.
+# Aucune perte de données possible.
+def _lang_mod():
+    """Langue active, lue DYNAMIQUEMENT à chaque appel (import paresseux de
+    O4_Lang). Indispensable : un import figé au chargement du module peut
+    rester bloqué sur FR si O4_Lang n'est pas encore prêt à ce moment-là
+    (ordre d'import). En important au moment de l'appel, on lit exactement
+    la même langue que le reste de l'application (les boutons)."""
+    try:
+        from O4_Lang import current_lang
+        code = (current_lang() or "FR").upper()
+        return "EN" if code == "EN" else "FR"
+    except Exception:
+        return "FR"
+
+
+def _Lm(fr, en):
+    """Nom bilingue au niveau module : EN si langue active = anglais,
+    FR sinon (français = repli garanti)."""
+    return en if _lang_mod() == "EN" else fr
+
+
+# Noms bilingues des dossiers : (FR, EN). Le FR reste le nom historique.
+NOMS_RACINE = ("Altimétrie", "Altimetry")
+NOMS_SONNY = ("Données Sonny", "Sonny data")
+NOMS_ASC = ("Altimétrie Sources", "Source elevation")
+NOMS_EPSG = ("EPSG réduit", "Reduced EPSG")
+NOMS_TUILE = ("Assemblage tuile", "Tile assembly")
+
+
+def _resoudre_sous(racine, noms):
+    """Chemin d'un sous-dossier de la structure : la variante (FR ou EN)
+    DÉJÀ présente sur le disque si elle existe, sinon le nom dans la langue
+    active (pour la création). Garantit qu'on ne perd jamais un dossier
+    existant en changeant de langue."""
+    for n in noms:
+        p = os.path.join(racine, n)
+        if os.path.isdir(p):
+            return p
+    return os.path.join(racine, _Lm(*noms))
+
+
+def _base_hors_racine(base):
+    """Retourne (racine, is_existante). Si `base` EST déjà une racine
+    (Altimétrie/Altimetry) → on la réutilise. Si une racine existe DÉJÀ
+    dans `base` (FR ou EN) → on la réutilise. Sinon → nouvelle racine dans
+    la langue active."""
+    b = os.path.basename(os.path.normpath(base))
+    if b in NOMS_RACINE:
+        return base, True
+    for n in NOMS_RACINE:
+        p = os.path.join(base, n)
+        if os.path.isdir(p):
+            return p, True
+    return os.path.join(base, _Lm(*NOMS_RACINE)), False
 
 
 def chemins_structure(racine):
@@ -193,21 +253,23 @@ def lister_pays(racine):
 #   idempotente uniquement) et sont entièrement simulables sans rasterio.
 
 def chemins_structure4(racine):
-    """Retourne (sonny, asc, epsg, assemblage_tuile) sous <...>/Altimétrie."""
-    return (os.path.join(racine, DOSSIER_SONNY),
-            os.path.join(racine, DOSSIER_ASC),
-            os.path.join(racine, DOSSIER_EPSG),
-            os.path.join(racine, DOSSIER_TUILE))
+    """Retourne (sonny, asc, epsg, assemblage_tuile) sous <...>/Altimétrie.
+    Pour chaque dossier : la variante (FR ou EN) déjà présente sur le
+    disque si elle existe, sinon le nom dans la langue active."""
+    return (_resoudre_sous(racine, NOMS_SONNY),
+            _resoudre_sous(racine, NOMS_ASC),
+            _resoudre_sous(racine, NOMS_EPSG),
+            _resoudre_sous(racine, NOMS_TUILE))
 
 
 def creer_structure4(base, pays=None):
     """Crée les 4 dossiers de la structure. Idempotent : ne détruit jamais
-    rien, crée seulement ce qui manque. Si pays est fourni, crée aussi le
-    sous-dossier <pays> dans Données Sonny, ASC brut et EPSG réduit — PAS
-    dans Assemblage tuile (rangé par numéro de tuile, jamais par pays).
+    rien, crée seulement ce qui manque. Réutilise une racine existante
+    (FR ou EN) si elle est présente ; sinon crée la racine dans la langue
+    active. Si pays est fourni, crée aussi le sous-dossier <pays> dans les
+    3 premiers dossiers — PAS dans Assemblage tuile (rangé par tuile).
     Retourne (racine, sonny, asc, epsg, assemblage)."""
-    racine = base if os.path.basename(os.path.normpath(base)) == DOSSIER_RACINE \
-        else os.path.join(base, DOSSIER_RACINE)
+    racine, _existante = _base_hors_racine(base)
     sonny, asc, epsg, assemble = chemins_structure4(racine)
     for d in (racine, sonny, asc, epsg, assemble):
         os.makedirs(d, exist_ok=True)
@@ -219,19 +281,19 @@ def creer_structure4(base, pays=None):
 
 def racine_depuis_dossier4(dossier):
     """Déduit la racine <...>/Altimétrie à partir d'un des 4 sous-dossiers
-    (ou d'un sous-dossier pays à l'intérieur). Retourne la racine si le
-    chemin appartient bien à la structure, sinon None."""
+    (ou d'un sous-dossier pays à l'intérieur). Reconnaît les noms FR ET EN
+    des dossiers et de la racine. Retourne la racine, sinon None."""
     if not dossier:
         return None
     parts = os.path.normpath(dossier).split(os.sep)
-    for marqueur in (DOSSIER_SONNY, DOSSIER_ASC, DOSSIER_EPSG, DOSSIER_TUILE):
-        if marqueur in parts:
-            i = parts.index(marqueur)
-            racine = os.sep.join(parts[:i]) or os.sep
-            return racine
-    if DOSSIER_RACINE in parts:
-        i = parts.index(DOSSIER_RACINE)
-        return os.sep.join(parts[:i + 1]) or os.sep
+    marqueurs = (set(NOMS_SONNY) | set(NOMS_ASC)
+                 | set(NOMS_EPSG) | set(NOMS_TUILE))
+    for i, part in enumerate(parts):
+        if part in marqueurs:
+            return os.sep.join(parts[:i]) or os.sep
+    for i, part in enumerate(parts):
+        if part in NOMS_RACINE:
+            return os.sep.join(parts[:i + 1]) or os.sep
     return None
 
 
@@ -878,8 +940,32 @@ def resolution_metres(src_path):
         return (rx + ry) / 2.0
 
 
+def _est_deja_pret(src_path, cible_m, tolerance=0.10):
+    """Vrai si le fichier est DÉJÀ prêt pour l'assemblage : déjà en
+    EPSG:4326 ET déjà à la résolution voulue (à `tolerance` près — 10 %
+    par défaut). Un tel fichier ne doit PAS passer par « Préparer » :
+    le retraiter ne changerait rien et, sur un très gros fichier (des
+    dizaines de Go), saturerait le disque temporaire (« Write failed »).
+    Les fichiers plus FINS (à réduire) ou plus GROSSIERS (à affiner pour
+    harmoniser la grille) ne sont PAS concernés : eux doivent bien être
+    préparés."""
+    try:
+        rasterio = _import_rasterio()[0]
+        with rasterio.open(src_path) as ds:
+            epsg = ds.crs.to_epsg() if ds.crs is not None else None
+        if epsg != 4326 or not cible_m:
+            return False
+        res = resolution_metres(src_path)
+        if not res:
+            return False
+        return (cible_m * (1.0 - tolerance)) <= res <= (cible_m
+                                                        * (1.0 + tolerance))
+    except Exception:
+        return False
+
+
 def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
-                  crs_repli=_CRS_REPLI, log=None, stop=None):
+                  crs_repli=_CRS_REPLI, log=None, stop=None, cible_m=None):
     """Chaîne A — prépare le fichier réduit d'un département / pays.
 
     Équivaut à la procédure Terminal :
@@ -926,6 +1012,7 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
     tmp = tempfile.mkdtemp(prefix="o4_prep_")
     reduits = []
     ignorees = []
+    deja_prets = []
     try:
         dst_crs = CRS.from_epsg(4326)
         for i, src_path in enumerate(sources):
@@ -933,6 +1020,18 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
                 raise RuntimeError("Préparation interrompue par "
                                    "l'utilisateur.")
             nom = os.path.basename(src_path)
+            # SÉCURITÉ : fichier déjà prêt (4326 + résolution voulue) ?
+            # On l'IGNORE au lieu de le retraiter inutilement (ce qui, sur
+            # un gros fichier, saturerait le disque temporaire).
+            if cible_m and _est_deja_pret(src_path, cible_m):
+                deja_prets.append(nom)
+                try:
+                    _rm = resolution_metres(src_path) or 0.0
+                except Exception:
+                    _rm = 0.0
+                _log("      déjà préparé (EPSG:4326, ~%.1f m) — ignoré, à "
+                     "utiliser directement à l'assemblage : %s" % (_rm, nom))
+                continue
             # Même garde-fou qu'à l'assemblage : une dalle qui contient
             # une valeur de remplissage non déclarée contaminerait, via
             # le rééchantillonnage « average », tous les pixels réduits
@@ -990,6 +1089,15 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
                 _log("      %d / %d traité(s)" % (i + 1, len(sources)))
 
         if not reduits:
+            if deja_prets and not ignorees:
+                # Tous les fichiers étaient déjà prêts : ce n'est PAS une
+                # erreur. Message reconnaissable → l'interface l'affiche
+                # comme une info, pas comme un échec.
+                raise RuntimeError(
+                    "DEJA_PRETS::%d fichier(s) sont déjà prêts "
+                    "(EPSG:4326 et bonne résolution) : aucune préparation "
+                    "n'est nécessaire.\n\nUtilisez-les directement à "
+                    "l'assemblage." % len(deja_prets))
             detail = "\n".join("   • %s : %s" % (n, r) for n, r in ignorees)
             raise RuntimeError("Aucun fichier exploitable.\n%s" % detail)
 
@@ -1569,13 +1677,10 @@ def open_altimetrie_window(gui):
 
     def _racine4():
         """Déduit la racine <...>/Altimétrie à partir de n'importe lequel
-        des 4 dossiers déjà connus. Retourne la racine ou None."""
+        des 4 dossiers déjà connus (reconnaît FR et EN). Retourne la racine
+        ou None."""
         for v in (_epsg[0], _asc[0], _sonny[0], _sortie[0]):
             r = racine_depuis_dossier4(v)
-            if r and os.path.isdir(os.path.join(r, DOSSIER_RACINE)) \
-                    or (r and os.path.basename(os.path.normpath(r))
-                        == DOSSIER_RACINE):
-                return r
             if r:
                 return r
         return None
@@ -1611,10 +1716,9 @@ def open_altimetrie_window(gui):
         _remonter()
         if not base:
             return False
-        # Éviter d'empiler deux racines : si on est déjà dedans, remonter.
-        _parts = os.path.normpath(base).split(os.sep)
-        if DOSSIER_RACINE in _parts:
-            base = os.sep.join(_parts[:_parts.index(DOSSIER_RACINE)]) or os.sep
+        # creer_structure4 gère lui-même la racine (réutilise Altimétrie/
+        # Altimetry existante, ou la crée dans la langue active) : rien à
+        # pré-traiter ici.
         pays = _saisie(
             _tr("Altimétrie / DEM"),
             _L("Nom du pays (ex. : France, Suisse, Allemagne) :",
@@ -1640,14 +1744,17 @@ def open_altimetrie_window(gui):
         _log(_L("Structure Altimétrie créée :", "Altimetry structure created:"))
         _log("   " + racine)
         _log()
-        _log("   • " + DOSSIER_SONNY + "/" + pays + "   "
+        _sy_n, _ac_n, _ep_n, _tu_n = [os.path.basename(p)
+                                      for p in chemins_structure4(racine)]
+        _log("   • " + _sy_n + "/" + pays + "   "
              + _L("(déposez ici vos .hgt Sonny)", "(put your Sonny .hgt here)"))
-        _log("   • " + DOSSIER_ASC + "/" + pays + "   "
-             + _L("(déposez ici vos .asc bruts IGN)", "(put your raw IGN .asc here)"))
-        _log("   • " + DOSSIER_EPSG + "/" + pays + "   "
+        _log("   • " + _ac_n + "/" + pays + "   "
+             + _L("(déposez ici vos données brutes provider : .asc, .tif…)",
+                  "(put your raw provider data here: .asc, .tif…)"))
+        _log("   • " + _ep_n + "/" + pays + "   "
              + _L("(fichiers réduits, générés par « Préparer »)",
                   "(reduced files, produced by « Prepare »)"))
-        _log("   • " + DOSSIER_TUILE + "/<" + _L("tuile", "tile") + ">   "
+        _log("   • " + _tu_n + "/<" + _L("tuile", "tile") + ">   "
              + _L("(tuile finale → custom_dem)", "(final tile → custom_dem)"))
         _remonter()
         return True
@@ -1729,7 +1836,7 @@ def open_altimetrie_window(gui):
                "tuile": _sortie[0]}.get(kind, "")
         titre = {
             "sonny": _L("Dossier Données Sonny", "Sonny data folder"),
-            "asc": _L("Dossier ASC brut", "Raw ASC folder"),
+            "asc": _L("Dossier Altimétrie Sources", "Source elevation folder"),
             "epsg": _L("Dossier EPSG réduit", "Reduced EPSG folder"),
             "tuile": _L("Dossier Assemblage tuile", "Tile assembly folder"),
         }.get(kind, "")
@@ -1770,21 +1877,21 @@ def open_altimetrie_window(gui):
         if not asc_dir or not os.path.isdir(asc_dir):
             messagebox.showinfo(
                 _tr("Altimétrie / DEM"),
-                _L("Aucun dossier ASC brut configuré.",
-                   "No raw ASC folder configured."), parent=win)
+                _L("Aucun dossier Altimétrie Sources configuré.",
+                   "No Source elevation folder configured."), parent=win)
             _remonter()
             return
         deps = departements_asc(asc_dir)
         if not deps:
             messagebox.showinfo(
                 _tr("Altimétrie / DEM"),
-                _L("Aucun département à vider dans ASC brut.",
-                   "No department to clear in raw ASC."), parent=win)
+                _L("Aucun département à vider dans Altimétrie Sources.",
+                   "No department to clear in Source elevation."), parent=win)
             _remonter()
             return
 
         dlg = tk.Toplevel(win)
-        dlg.title(_L("Vider ASC brut", "Clear raw ASC"))
+        dlg.title(_L("Vider Altimétrie Sources", "Clear Source elevation"))
         dlg.configure(bg=BG)
         try:
             dlg.transient(win)
@@ -1794,10 +1901,12 @@ def open_altimetrie_window(gui):
         dlg.rowconfigure(1, weight=1)
 
         tk.Label(dlg,
-                 text=_L("Cochez les départements à SUPPRIMER de ASC brut.\n"
+                 text=_L("Cochez les départements à SUPPRIMER de "
+                         "Altimétrie Sources.\n"
                          "✅ = déjà réduit (sûr).   ⚠️ = pas encore réduit "
                          "(à garder).",
-                         "Tick the departments to DELETE from raw ASC.\n"
+                         "Tick the departments to DELETE from "
+                         "Source elevation.\n"
                          "✅ = already reduced (safe).   ⚠️ = not reduced yet "
                          "(keep)."),
                  bg=BG, fg=FG, font=FONT, justify="left", anchor="w",
@@ -1952,8 +2061,10 @@ def open_altimetrie_window(gui):
         # existante, on remonte à sa racine au lieu d'en empiler une
         # seconde (c'est ce qui produisait des chemins en doublon).
         _parts = os.path.normpath(base).split(os.sep)
-        if DOSSIER_RACINE in _parts:
-            base = os.sep.join(_parts[:_parts.index(DOSSIER_RACINE)]) or os.sep
+        for _rn in NOMS_RACINE:
+            if _rn in _parts:
+                base = os.sep.join(_parts[:_parts.index(_rn)]) or os.sep
+                break
         pays = _saisie(
             _tr("Altimétrie / DEM"),
             _tr("Nom du pays (ex. : France, Suisse, Allemagne) :"),
@@ -2259,7 +2370,7 @@ def open_altimetrie_window(gui):
             _L("Ortho4XP peut créer pour vous une organisation "
                "« Altimétrie » à 4 dossiers :\n\n"
                "• Données Sonny   (relief Sonny, par pays)\n"
-               "• ASC brut        (données IGN/étranger à préparer)\n"
+               "• Altimétrie Sources (données IGN/provider à préparer)\n"
                "• EPSG réduit     (fichiers préparés)\n"
                "• Assemblage tuile (tuiles finales)\n\n"
                "OUI  →  la structure est créée automatiquement.\n"
@@ -2268,7 +2379,7 @@ def open_altimetrie_window(gui):
                "Ortho4XP can create an « Altimetry » structure with 4 "
                "folders for you:\n\n"
                "• Sonny data     (Sonny relief, per country)\n"
-               "• Raw ASC        (IGN/foreign data to prepare)\n"
+               "• Source elevation (IGN/provider data to prepare)\n"
                "• Reduced EPSG   (prepared files)\n"
                "• Tile assembly  (final tiles)\n\n"
                "YES  →  the structure is created automatically.\n"
@@ -2281,9 +2392,10 @@ def open_altimetrie_window(gui):
         messagebox.showinfo(
             _tr("Altimétrie / DEM"),
             _L("Utilisez les 4 boutons-dossiers pour pointer vos dossiers "
-               "(Données Sonny, ASC brut, EPSG réduit, Assemblage tuile).",
+               "(Données Sonny, Altimétrie Sources, EPSG réduit, "
+               "Assemblage tuile).",
                "Use the 4 folder buttons to point your folders (Sonny data, "
-               "Raw ASC, Reduced EPSG, Tile assembly)."), parent=win)
+               "Source elevation, Reduced EPSG, Tile assembly)."), parent=win)
         _remonter()
         return True
 
@@ -2416,12 +2528,12 @@ def open_altimetrie_window(gui):
         b = tile_bounds(lat, lon, _debord())
         _log(_L("Tuile", "Tile") + " %s — %s %.3f %.3f %.3f %.3f"
              % (cle, _L("emprise", "extent"), b[0], b[1], b[2], b[3]))
-        _log(DOSSIER_SONNY + " : " + (_sonny[0] or _L("(non configuré)",
-                                                      "(not set)")))
-        _log(DOSSIER_EPSG + " : " + (_epsg[0] or _L("(non configuré)",
-                                                    "(not set)")))
-        _log(DOSSIER_TUILE + " : " + (_sortie[0] or _L("(non configurée)",
+        _log(_Lm(*NOMS_SONNY) + " : " + (_sonny[0] or _L("(non configuré)",
+                                                         "(not set)")))
+        _log(_Lm(*NOMS_EPSG) + " : " + (_epsg[0] or _L("(non configuré)",
                                                        "(not set)")))
+        _log(_Lm(*NOMS_TUILE) + " : " + (_sortie[0] or _L("(non configurée)",
+                                                          "(not set)")))
         _log()
         _etat(_L("Recherche des sources…", "Searching sources…"), FG)
         srcs, origine = _sources()
@@ -2476,18 +2588,11 @@ def open_altimetrie_window(gui):
             _remonter()
             return
         sortie = os.path.join(dest, cle + ".tif")
-        # Confirmation de la DESTINATION avant de travailler : un dossier
-        # de sortie mémorisé mais devenu faux ferait écrire le fichier
-        # ailleurs, et on ne s'en apercevrait qu'à la fin.
-        if not messagebox.askyesno(
-                _tr("Altimétrie / DEM"),
-                _tr("Le fichier assemblé sera écrit ici :\n\n{f}\n\n"
-                    "Est-ce le bon emplacement ?\n\n"
-                    "NON  →  utilisez le bouton « Dossier de sortie ».")
-                .format(f=sortie), parent=win):
-            _remonter()
-            return
-        _remonter()
+        # La destination est désormais AUTOMATIQUE : Assemblage tuile/<tuile>.
+        # Plus de bouton « Dossier de sortie », donc plus de confirmation
+        # d'emplacement à demander — on écrit directement au bon endroit.
+        _log(_L("Le fichier sera écrit dans : ",
+                "The file will be written to: ") + sortie)
         if os.path.isfile(sortie):
             if not messagebox.askyesno(
                     _tr("Altimétrie / DEM"),
@@ -2651,8 +2756,8 @@ def open_altimetrie_window(gui):
             _memo_src = _asc[0] if (_asc[0] and os.path.isdir(_asc[0])) else ""
         src = filedialog.askdirectory(
             parent=win,
-            title=_L("Dossier ASC brut à préparer (.asc, .tif…)",
-                     "Raw ASC folder to prepare (.asc, .tif…)"),
+            title=_L("Dossier Altimétrie Sources à préparer (.asc, .tif…)",
+                     "Source elevation folder to prepare (.asc, .tif…)"),
             initialdir=_memo_src)
         _remonter()
         if not src:
@@ -2716,6 +2821,23 @@ def open_altimetrie_window(gui):
                                  _tr("Valeur invalide."), parent=win)
             _remonter()
             return
+        # GARDE-FOU RÉSOLUTION : Ortho4XP / X-Plane 12 n'acceptent pas les
+        # résolutions inférieures à 2 m (le 1 m est refusé). En dessous de
+        # 2 m, on bloque. Le 2 m est autorisé mais lourd → on suggère 4 m.
+        if cible_m < 2.0:
+            messagebox.showwarning(
+                _L("Résolution trop fine", "Resolution too fine"),
+                _L("Ortho4XP / X-Plane 12 n'acceptent pas les résolutions "
+                   "sous 2 m (le 1 m est refusé).\n\n"
+                   "Choisissez au minimum 2 m — en pratique 4 m est "
+                   "recommandé (le 2 m est très lourd).",
+                   "Ortho4XP / X-Plane 12 do not accept resolutions below "
+                   "2 m (1 m is rejected).\n\n"
+                   "Choose at least 2 m — 4 m is recommended in practice "
+                   "(2 m is very heavy)."),
+                parent=win)
+            _remonter()
+            return
         # ratio = source / voulue. Peut être > 1 (sur-échantillonnage) ; borné
         # par _RATIO_MAX pour la mémoire.
         ratio = max(0.01, min(_RATIO_MAX, res_m / cible_m))
@@ -2773,7 +2895,8 @@ def open_altimetrie_window(gui):
 
         def _tache():
             try:
-                _res["ok"] = preparer_pays(src, dest, ratio=ratio, log=_log)
+                _res["ok"] = preparer_pays(src, dest, ratio=ratio,
+                                           cible_m=cible_m, log=_log)
             except Exception as _e:
                 _res["err"] = str(_e)
 
@@ -2793,10 +2916,22 @@ def open_altimetrie_window(gui):
                 except Exception:
                     pass
             if "err" in _res:
+                _err = _res["err"]
+                if _err.startswith("DEJA_PRETS::"):
+                    _msg = _err[len("DEJA_PRETS::"):]
+                    _etat(_L("Déjà prêt.", "Already ready."), FG)
+                    _log()
+                    _log(_msg.replace("\n\n", " "))
+                    messagebox.showinfo(
+                        _L("Fichier déjà prêt", "File already ready"),
+                        _msg, parent=win)
+                    _remonter()
+                    _rafraichir()
+                    return
                 _etat(_tr("Échec."), "#ff4444")
                 _log()
-                _log(_tr("ÉCHEC :") + " " + _res["err"])
-                messagebox.showerror(_tr("Altimétrie / DEM"), _res["err"],
+                _log(_tr("ÉCHEC :") + " " + _err)
+                messagebox.showerror(_tr("Altimétrie / DEM"), _err,
                                      parent=win)
                 _remonter()
                 return
@@ -3178,20 +3313,20 @@ def open_altimetrie_window(gui):
         # Ligne 0 — étapes principales
         (_L("Préparer les données", "Prepare data"), _preparer, 0, 0),
         (_L("Assembler la tuile", "Assemble tile"), _assembler, 0, 1),
-        (_L("Vider ASC brut", "Clear raw ASC"),
+        (_L("Vider Altimétrie Sources", "Clear Source elevation"),
          lambda: (_vider_asc(), _rafraichir()), 0, 2),
         (_L("Rafraîchir", "Refresh"), _rafraichir, 0, 3),
-        # Ligne 1 — les 4 dossiers (même nom que le dossier)
-        (DOSSIER_SONNY,
+        # Ligne 1 — les 4 dossiers (libellé bilingue, même nom que le dossier)
+        (_L(*NOMS_SONNY),
          lambda: (_pointer_dossier("sonny"), _rafraichir()), 1, 0),
-        (DOSSIER_ASC,
+        (_L(*NOMS_ASC),
          lambda: (_pointer_dossier("asc"), _rafraichir()), 1, 1),
         # Libellé plus parlant que le nom brut du dossier : il dit ce que
         # le dossier CONTIENT (un DEM/altitudes, réduit à la résolution
-        # choisie). Le dossier réel sur le disque reste « EPSG réduit ».
+        # choisie). Identique FR/EN. Le dossier réel garde son nom.
         ("EPSG 4326 · DEM-Alt (4/6/10 m)",
          lambda: (_pointer_dossier("epsg"), _rafraichir()), 1, 2),
-        (DOSSIER_TUILE,
+        (_L(*NOMS_TUILE),
          lambda: (_pointer_dossier("tuile"), _rafraichir()), 1, 3),
         # Ligne 2 — gestion de la structure
         (_L("Créer la structure", "Create structure"),
