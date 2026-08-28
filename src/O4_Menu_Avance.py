@@ -398,6 +398,25 @@ def _ouvrir_altimetrie(parent, status):
         status("Point d'entrée Altimétrie manquant.")
 
 
+def _ouvrir_bathymetrie(parent, status):
+    """Ouvre la fenêtre Bathymétrie (module O4_Bathymetrie_Utils).
+    Import local au clic : la fenêtre Avancé s'ouvre même si le module
+    est absent. Miroir de _ouvrir_altimetrie."""
+    try:
+        import O4_Bathymetrie_Utils as BATHY
+    except Exception as ex:
+        status(_L("Module Bathymétrie introuvable : %s",
+                  "Bathymetry module not found: %s") % ex)
+        return
+    fn = getattr(BATHY, "open_bathymetrie_window", None)
+    if callable(fn):
+        fn(parent)
+        status(_L("Bathymétrie ouverte.", "Bathymetry opened."))
+    else:
+        status(_L("Point d'entrée Bathymétrie manquant.",
+                  "Bathymetry entry point missing."))
+
+
 def _ouvrir_extent_generator(parent, status):
     """Ouvre le Générateur d'Extents (module O4_Extent_Generator).
     Import local au clic : la fenêtre Avancé s'ouvre même si le module
@@ -497,6 +516,8 @@ def run_menu_avance(parent=None):
             "🗺  Generate an Extent (country / region)"),
          lambda: _ouvrir_extent_generator(parent, status)),
         (tr("Altimétrie / DEM / QGIS"), lambda: _ouvrir_altimetrie(parent, status)),
+        (_L("Bathymétrie / QGIS", "Bathymetry / QGIS"),
+         lambda: _ouvrir_bathymetrie(parent, status)),
              (_L("📄  Pas à pas — utilisation des modules",
             "📄  Step by step — using the modules"),
          lambda: _ouvrir_tutos(parent, status)),
