@@ -1699,9 +1699,88 @@ def open_altimetrie_window(gui):
         _cfg_set(CFG_TILEOUT, _sortie[0])
         _maj_bandeaux()
 
+    def _confirmer_structure_existante(racine):
+        """Garde de sécurité : une structure Altimétrie existe déjà.
+        Demande quoi faire et retourne "utiliser", "creer" ou None
+        (annulation). Même style que _choix_tiff_assemble (CTk macOS-safe)."""
+        res = {"v": None}
+        dlg = tk.Toplevel(win)
+        dlg.title(_tr("Altimétrie / DEM"))
+        dlg.configure(bg=BG)
+        try:
+            dlg.transient(win)
+        except Exception:
+            pass
+        dlg.resizable(False, False)
+        dlg.columnconfigure(0, weight=1)
+        dlg.columnconfigure(1, weight=1)
+
+        tk.Label(dlg,
+                 text=_L("Une structure Altimétrie existe déjà. "
+                         "Que voulez-vous faire ?",
+                         "An Altimetry structure already exists. "
+                         "What do you want to do?"),
+                 bg=BG, fg=FG, font=FONT, justify="left",
+                 anchor="w", wraplength=520).grid(
+            row=0, column=0, columnspan=2, padx=14, pady=(14, 2), sticky="w")
+        tk.Label(dlg, text=_L("Emplacement :", "Location:") + " " + racine,
+                 bg=BG, fg=FG2, font=("TkFixedFont", 10), justify="left",
+                 anchor="w", wraplength=520).grid(
+            row=1, column=0, columnspan=2, padx=14, pady=(0, 12), sticky="w")
+
+        def _pick(val):
+            res["v"] = val
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+
+        _ctk_button(dlg, text=_L("Utiliser celle-ci", "Use this one"),
+                   command=lambda: _pick("utiliser")).grid(
+            row=2, column=0, padx=(14, 7), pady=(0, 6), sticky="ew", ipady=4)
+        _ctk_button(dlg, text=_L("Créer ailleurs", "Create elsewhere"),
+                   command=lambda: _pick("creer")).grid(
+            row=2, column=1, padx=(7, 14), pady=(0, 6), sticky="ew", ipady=4)
+        _ctk_button(dlg, text=_tr("Annuler"),
+                   command=lambda: _pick(None)).grid(
+            row=3, column=0, columnspan=2, padx=14, pady=(0, 14))
+
+        dlg.bind("<Escape>", lambda e: _pick(None))
+        dlg.protocol("WM_DELETE_WINDOW", lambda: _pick(None))
+        try:
+            dlg.update_idletasks()
+            _x = win.winfo_rootx() + max(
+                0, (win.winfo_width() - dlg.winfo_reqwidth()) // 2)
+            _y = win.winfo_rooty() + 120
+            dlg.geometry("+%d+%d" % (_x, _y))
+        except Exception:
+            pass
+        try:
+            dlg.grab_set()
+        except Exception:
+            pass
+        dlg.wait_window()
+        return res["v"]
+
     def _creer_structure4_gui():
         """Bouton « Créer la structure » : crée les 4 dossiers Altimétrie/
         sur le disque choisi, avec un premier pays, et pointe tout dessus."""
+        _rac_exist = _racine4()
+        if _rac_exist:
+            _rep = _confirmer_structure_existante(_rac_exist)
+            if not _rep:                       # None → Annuler
+                _remonter()
+                return False
+            if _rep == "utiliser":             # garder la structure existante
+                _etat(_L("Structure déjà présente — réutilisée.",
+                         "Structure already present — reused."), FG)
+                _log(_L("Structure Altimétrie déjà présente :",
+                        "Altimetry structure already present:"))
+                _log("   " + _rac_exist)
+                _remonter()
+                return True
+            # _rep == "creer" → l'utilisateur veut EXPLICITEMENT une autre
+            # structure ailleurs : on poursuit le flux normal ci-dessous.
         messagebox.showinfo(
             _tr("Altimétrie / DEM"),
             _L("Choisissez le disque ou le dossier où créer votre "

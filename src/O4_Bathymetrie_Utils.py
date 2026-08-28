@@ -74,6 +74,102 @@ CFG_SORTIE = "bathy_output_dir"    # dossier du résultat assemblé
 CFG_QGIS = "qgis_app"              # application QGIS (partagée avec Altimétrie)
 
 
+# ── Modèle à 4 dossiers (calqué sur l'altimétrie) ────────────────────
+#   <racine>/Bathymétrie/
+#       ├── Données EMODnet/<Pays>/    ← déjà EPSG:4326, lu directement
+#       ├── Bathymétrie Sources/<Pays>/← à convertir (Litto3D Lambert-93…)
+#       ├── EPSG réduit/<Pays>/        ← résultats convertis en 4326
+#       └── Assemblage tuile/<tuile>/  ← <tuile>.tif final
+# Noms BILINGUES : la variante FR ou EN déjà présente sur le disque est
+# réutilisée (jamais de doublon en changeant de langue) ; sinon création
+# dans la langue active. Ce sont les MÊMES conventions que l'altimétrie.
+NOMS_RACINE = ("Bathymétrie", "Bathymetry")
+NOMS_EMODNET = ("Données EMODnet", "EMODnet data")
+NOMS_SOURCES = ("Bathymétrie Sources", "Bathymetry sources")
+NOMS_EPSG = ("EPSG réduit", "Reduced EPSG")
+NOMS_TUILE = ("Assemblage tuile", "Tile assembly")
+
+
+def _Lm(fr, en):
+    """Libellé bilingue au niveau MODULE (les dossiers sont créés hors de
+    la fenêtre). EN si langue active anglaise, FR sinon (repli garanti)."""
+    try:
+        from O4_Lang import current_lang
+        return en if (current_lang() or "FR").upper() == "EN" else fr
+    except Exception:
+        return fr
+
+
+def _resoudre_sous_b(racine, noms):
+    """Chemin d'un sous-dossier : la variante (FR ou EN) DÉJÀ présente sur
+    le disque si elle existe, sinon le nom dans la langue active (pour la
+    création). Garantit qu'on ne perd jamais un dossier en changeant de
+    langue. Identique au mécanisme _resoudre_sous de l'altimétrie."""
+    for n in noms:
+        p = os.path.join(racine, n)
+        if os.path.isdir(p):
+            return p
+    return os.path.join(racine, _Lm(*noms))
+
+
+def chemins_structure4(racine):
+    """Retourne (emodnet, sources, epsg, assemblage) sous <...>/Bathymétrie,
+    en réutilisant la variante FR/EN déjà présente pour chaque dossier."""
+    return (_resoudre_sous_b(racine, NOMS_EMODNET),
+            _resoudre_sous_b(racine, NOMS_SOURCES),
+            _resoudre_sous_b(racine, NOMS_EPSG),
+            _resoudre_sous_b(racine, NOMS_TUILE))
+
+
+def _racine_hors_base4(base):
+    """Retourne la racine <...>/Bathymétrie : réutilise `base` si c'est déjà
+    une racine (FR ou EN), réutilise une racine présente DANS `base`, sinon
+    en crée une dans la langue active."""
+    b = os.path.basename(os.path.normpath(base))
+    if b in NOMS_RACINE:
+        return base
+    for n in NOMS_RACINE:
+        p = os.path.join(base, n)
+        if os.path.isdir(p):
+            return p
+    return os.path.join(base, _Lm(*NOMS_RACINE))
+
+
+def creer_structure4(base, pays=None):
+    """Crée les 4 dossiers de la structure bathymétrie. Idempotent : ne
+    détruit jamais rien, ne crée que ce qui manque. Si `pays` est fourni,
+    crée aussi le sous-dossier <pays> dans les 3 premiers dossiers (PAS
+    dans Assemblage tuile, rangé par tuile). Retourne
+    (racine, emodnet, sources, epsg, assemblage)."""
+    racine = _racine_hors_base4(base)
+    emodnet, sources, epsg, assemblage = chemins_structure4(racine)
+    for d in (racine, emodnet, sources, epsg, assemblage):
+        os.makedirs(d, exist_ok=True)
+    if pays:
+        for base_dir in (emodnet, sources, epsg):
+            os.makedirs(os.path.join(base_dir, pays), exist_ok=True)
+    return racine, emodnet, sources, epsg, assemblage
+
+
+def racine_depuis_dossier4(dossier):
+    """Déduit la racine <...>/Bathymétrie à partir d'un des 4 sous-dossiers
+    (ou d'un sous-dossier pays). Reconnaît les noms FR ET EN. Sinon None."""
+    if not dossier:
+        return None
+    tous = (list(NOMS_EMODNET) + list(NOMS_SOURCES)
+            + list(NOMS_EPSG) + list(NOMS_TUILE))
+    parts = os.path.normpath(dossier).split(os.sep)
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] in tous:
+            r = os.sep.join(parts[:i]) or os.sep
+            if os.path.basename(os.path.normpath(r)) in NOMS_RACINE:
+                return r
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] in NOMS_RACINE:
+            return os.sep.join(parts[:i + 1]) or os.sep
+    return None
+
+
 def chemins_structure(racine):
     """Retourne (stock, assemble) pour une racine <...>/Bathymétrie."""
     return (os.path.join(racine, DOSSIER_STOCK),
@@ -145,6 +241,38 @@ def ecrire_custom_bathy_dem(cfg_path, chemin_tif):
     lignes = maj_cfg_lignes(lignes, chemin_tif)
     with open(cfg_path, "w", encoding="utf-8") as f:
         f.writelines(lignes)
+
+
+def ecrire_bathy_max_depth(cfg_path, profondeur):
+    """Écrit bathy_max_depth dans le cfg de la tuile : la PROFONDEUR de
+    référence, en mètres SOUS l'eau (valeur positive = mètres sous le
+    niveau de la mer). Plafonnée à 100, minimum 1. Aucune autre clé n'est
+    touchée. Le moteur du mesh (O4_Bathymetry.py) s'en sert pour normaliser
+    les profondeurs (profondeur/bathy_max_depth → couleur de l'eau).
+    Retourne la valeur réellement écrite."""
+    try:
+        v = int(round(float(str(profondeur).replace(",", ".").replace(
+            "m", "").strip())))
+    except Exception:
+        v = 100
+    v = max(1, min(100, v))          # jamais au-dessus de 100
+    lignes = []
+    if os.path.isfile(cfg_path):
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            lignes = f.readlines()
+    out = []
+    trouve = False
+    for l in lignes:
+        if l.startswith("bathy_max_depth="):
+            out.append("bathy_max_depth=%d\n" % v)
+            trouve = True
+        else:
+            out.append(l)
+    if not trouve:
+        out.append("bathy_max_depth=%d\n" % v)
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        f.writelines(out)
+    return v
 
 
 def open_bathymetrie_window(gui):
@@ -238,6 +366,28 @@ def open_bathymetrie_window(gui):
     except Exception:
         def _tr(k):
             return k
+
+    # ── Bilingue FR/EN résolu ICI (recette maison identique à
+    #    O4_Altimetrie_Utils.py). Sert aux libellés des NOUVEAUX messages.
+    #    Toute langue autre que FR retombe volontairement sur EN. Français =
+    #    repli garanti : si O4_Lang est absent, on affiche le français.
+    #    Aucun fichier O4_Lang_* n'est touché.
+    try:
+        from O4_Lang import current_lang as _current_lang
+    except Exception:
+        def _current_lang():
+            return "FR"
+
+    def _lang_code():
+        try:
+            code = (_current_lang() or "FR").upper()
+        except Exception:
+            code = "FR"
+        return "EN" if code == "EN" else "FR"
+
+    def _L(fr, en):
+        """Libellé bilingue : EN si langue active = anglais, FR sinon."""
+        return en if _lang_code() == "EN" else fr
 
     import O4_File_Names as FNAMES
 
@@ -522,11 +672,90 @@ def open_bathymetrie_window(gui):
         _maj_bandeaux()
         return True
 
+    def _confirmer_structure_existante(racine):
+        """Garde de sécurité : une structure Bathymétrie existe déjà.
+        Demande quoi faire et retourne "utiliser", "creer" ou None
+        (annulation). Même style que _choix_tiff_assemble (CTk macOS-safe)."""
+        res = {"v": None}
+        dlg = tk.Toplevel(win)
+        dlg.title(_tr("Bathymétrie"))
+        dlg.configure(bg=BG)
+        try:
+            dlg.transient(win)
+        except Exception:
+            pass
+        dlg.resizable(False, False)
+        dlg.columnconfigure(0, weight=1)
+        dlg.columnconfigure(1, weight=1)
+
+        tk.Label(dlg,
+                 text=_L("Une structure Bathymétrie existe déjà. "
+                         "Que voulez-vous faire ?",
+                         "A Bathymetry structure already exists. "
+                         "What do you want to do?"),
+                 bg=BG, fg=FG, font=FONT, justify="left",
+                 anchor="w", wraplength=520).grid(
+            row=0, column=0, columnspan=2, padx=14, pady=(14, 2), sticky="w")
+        tk.Label(dlg, text=_L("Emplacement :", "Location:") + " " + racine,
+                 bg=BG, fg=FG2, font=("TkFixedFont", 10), justify="left",
+                 anchor="w", wraplength=520).grid(
+            row=1, column=0, columnspan=2, padx=14, pady=(0, 12), sticky="w")
+
+        def _pick(val):
+            res["v"] = val
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+
+        _ctk_button(dlg, text=_L("Utiliser celle-ci", "Use this one"),
+                   command=lambda: _pick("utiliser")).grid(
+            row=2, column=0, padx=(14, 7), pady=(0, 6), sticky="ew", ipady=4)
+        _ctk_button(dlg, text=_L("Créer ailleurs", "Create elsewhere"),
+                   command=lambda: _pick("creer")).grid(
+            row=2, column=1, padx=(7, 14), pady=(0, 6), sticky="ew", ipady=4)
+        _ctk_button(dlg, text=_tr("Annuler"),
+                   command=lambda: _pick(None)).grid(
+            row=3, column=0, columnspan=2, padx=14, pady=(0, 14))
+
+        dlg.bind("<Escape>", lambda e: _pick(None))
+        dlg.protocol("WM_DELETE_WINDOW", lambda: _pick(None))
+        try:
+            dlg.update_idletasks()
+            _x = win.winfo_rootx() + max(
+                0, (win.winfo_width() - dlg.winfo_reqwidth()) // 2)
+            _y = win.winfo_rooty() + 120
+            dlg.geometry("+%d+%d" % (_x, _y))
+        except Exception:
+            pass
+        try:
+            dlg.grab_set()
+        except Exception:
+            pass
+        dlg.wait_window()
+        return res["v"]
+
     def _creer_structure():
         """Premier usage sans organisation existante : crée l'arborescence
         par défaut et renseigne les deux dossiers. Personne n'est obligé
         de s'en servir : ceux qui ont déjà leurs dossiers utilisent les
         boutons « Dossier des sources » et « Dossier de sortie »."""
+        _rac_exist = _racine_structure()
+        if _rac_exist:
+            _rep = _confirmer_structure_existante(_rac_exist)
+            if not _rep:                       # None → Annuler
+                _remonter()
+                return False
+            if _rep == "utiliser":             # garder la structure existante
+                _etat(_L("Structure déjà présente — réutilisée.",
+                         "Structure already present — reused."), FG)
+                _log(_L("Structure Bathymétrie déjà présente :",
+                        "Bathymetry structure already present:"))
+                _log("   " + _rac_exist)
+                _remonter()
+                return True
+            # _rep == "creer" → l'utilisateur veut EXPLICITEMENT une autre
+            # structure ailleurs : on poursuit le flux normal ci-dessous.
         messagebox.showinfo(
             _tr("Bathymétrie"),
             _tr("Choisissez le disque ou le dossier où créer votre "
@@ -557,37 +786,52 @@ def open_bathymetrie_window(gui):
             return False
         _etat(_tr("Création de la structure…"), FG)
         try:
-            racine, stock_pays, assemble_pays = creer_structure(base, pays)
+            racine, emodnet, sources, epsg, assemblage = \
+                creer_structure4(base, pays)
         except Exception as e:
             _etat("")
             messagebox.showerror(_tr("Bathymétrie"), str(e), parent=win)
             _remonter()
             return False
+        stock_pays = os.path.join(emodnet, pays)
         _stock[0] = stock_pays
-        _sortie[0] = assemble_pays
+        _sortie[0] = assemblage
         _cfg_set(CFG_STOCK, stock_pays)
-        _cfg_set(CFG_SORTIE, assemble_pays)
+        _cfg_set(CFG_SORTIE, assemblage)
         _maj_bandeaux()
         _etat(_tr("Structure créée."), FG)
         txt.delete("1.0", tk.END)
         _log(_tr("Structure créée :"))
         _log("   " + racine)
         _log()
-        _log(_tr("Dossier des sources :"))
-        _log("   " + stock_pays)
-        _log(_tr("Dossier de sortie :"))
-        _log("   " + assemble_pays)
+        _log(_L("Dossiers créés :", "Folders created:"))
+        _log("   " + os.path.join(emodnet, pays) + "   "
+             + _L("(déposez ici les GeoTIFF EMODnet, déjà 4326)",
+                  "(put EMODnet GeoTIFF here, already 4326)"))
+        _log("   " + os.path.join(sources, pays) + "   "
+             + _L("(sources à convertir : Litto3D en Lambert-93…)",
+                  "(sources to convert: Litto3D in Lambert-93…)"))
+        _log("   " + os.path.join(epsg, pays) + "   "
+             + _L("(résultats convertis en 4326)",
+                  "(results converted to 4326)"))
+        _log("   " + assemblage + "   "
+             + _L("(tuile finale : +tuile.tif)", "(final tile: +tile.tif)"))
         _log()
-        _log(_tr("Les sources doivent être en EPSG:4326 — X-Plane ne lit"))
-        _log(_tr("aucune autre projection. Ortho4XP convertira au besoin,"))
-        _log(_tr("mais préparez-les de préférence en 4326."))
-        _log()
-        _log(_tr("Le résultat assemblé sera écrit dans :"))
-        _log("   " + os.path.join(assemble_pays, cle, cle + ".tif"))
+        _log(_L("Le résultat assemblé sera écrit dans :",
+                "The assembled result will be written to:"))
+        _log("   " + os.path.join(assemblage, cle, cle + ".tif"))
         messagebox.showinfo(
             _tr("Bathymétrie"),
-            _tr("Structure créée.\n\nDéposez vos bathymétries dans :\n{d}"
-                "\n\nFormat requis : EPSG:4326.").format(d=stock_pays),
+            _L("Structure créée (4 dossiers).\n\n"
+               "• EMODnet (déjà 4326) → « Données EMODnet »\n"
+               "• À convertir (Litto3D…) → « Bathymétrie Sources »\n\n"
+               "Déposez vos bathymétries dans le bon dossier, puis "
+               "« Préparer · EPSG 4326 » et « Assembler ».",
+               "Structure created (4 folders).\n\n"
+               "• EMODnet (already 4326) → « EMODnet data »\n"
+               "• To convert (Litto3D…) → « Bathymetry sources »\n\n"
+               "Put your bathymetry in the right folder, then "
+               "« Prepare · EPSG 4326 » and « Assemble »."),
             parent=win)
         _remonter()
         return True
@@ -601,6 +845,12 @@ def open_bathymetrie_window(gui):
         s = _stock[0]
         if not s:
             return None
+        # Nouveau modèle 4 dossiers (Données EMODnet / Bathymétrie Sources /
+        # EPSG réduit / Assemblage tuile), noms FR ou EN reconnus.
+        r = racine_depuis_dossier4(s)
+        if r and os.path.isdir(r):
+            return r
+        # Ancien modèle 2 dossiers (reprise d'une structure existante).
         parts = os.path.normpath(s).split(os.sep)
         if DOSSIER_STOCK in parts:
             i = parts.index(DOSSIER_STOCK)
@@ -657,17 +907,13 @@ def open_bathymetrie_window(gui):
         racine = _resoudre_racine()
         if not racine:
             return False
-        # 1) Choix du dossier de destination : TIFF (sources) ou assemble.
-        choix = _choix_tiff_assemble(racine)
-        _remonter()
-        if not choix:
-            return False
-        cible_txt = DOSSIER_STOCK if choix == "stock" else DOSSIER_ASSEMBLE
-        # 2) Saisie du nom du pays.
+        # Saisie du nom du pays. Modèle 4 dossiers : le sous-dossier <pays>
+        # sera créé d'un coup dans « Données EMODnet », « Bathymétrie
+        # Sources » et « EPSG réduit » (pas dans « Assemblage tuile »).
         pays = _saisie(
             _tr("Bathymétrie"),
-            _tr("Nom du pays (ex. : France, Suisse, Allemagne) :")
-            + "\n→ " + cible_txt,
+            _L("Nom du pays (ex. : France, Belgique, Espagne) :",
+               "Country name (e.g.: France, Belgium, Spain):"),
             parent=win, initialvalue="")
         _remonter()
         if not pays:
@@ -675,33 +921,30 @@ def open_bathymetrie_window(gui):
         pays = pays.strip().replace("/", "-").replace("\\", "-")
         if not pays:
             return False
-        # 3) Création dans le SEUL dossier choisi.
+        # Création du <pays> dans les 3 dossiers sources (idempotent).
         _etat(_tr("Création de la structure…"), FG)
         try:
-            pays_dir = creer_pays_dans(racine, pays, choix)
+            _r, emodnet, sources, epsg, assemblage = \
+                creer_structure4(racine, pays)
         except Exception as e:
             _etat("")
             messagebox.showerror(_tr("Bathymétrie"), str(e), parent=win)
             _remonter()
             return False
-        # 4) Le dossier créé devient le dossier courant correspondant ;
-        #    l'AUTRE chemin reste inchangé.
-        if choix == "stock":
-            _stock[0] = pays_dir
-            _cfg_set(CFG_STOCK, pays_dir)
-        else:
-            _sortie[0] = pays_dir
-            _cfg_set(CFG_SORTIE, pays_dir)
+        _stock[0] = os.path.join(emodnet, pays)
+        _sortie[0] = assemblage
+        _cfg_set(CFG_STOCK, _stock[0])
+        _cfg_set(CFG_SORTIE, assemblage)
         _maj_bandeaux()
         _etat(_tr("Structure créée."), FG)
         txt.delete("1.0", tk.END)
-        _log(_tr("Pays ajouté :") + " " + pays)
+        _log(_L("Pays ajouté :", "Country added:") + " " + pays)
         _log()
-        if choix == "stock":
-            _log(_tr("Dossier des sources :"))
-        else:
-            _log(_tr("Dossier de sortie :"))
-        _log("   " + pays_dir)
+        _log(_L("Sous-dossiers <pays> créés dans :",
+                "<country> subfolders created in:"))
+        _log("   " + os.path.join(emodnet, pays))
+        _log("   " + os.path.join(sources, pays))
+        _log("   " + os.path.join(epsg, pays))
         _remonter()
         return True
 
@@ -950,15 +1193,33 @@ def open_bathymetrie_window(gui):
         return DEBORD_DEFAUT
 
     def _sources():
-        """Sources retenues, avec repli sur le dossier de la tuile.
-        1) stock imposé (aucun lien à créer)
-        2) sinon dossier de sortie s'il contient déjà des fichiers
-           (compatibilité avec les tuiles préparées à la main)"""
+        """Modèle 4 dossiers : balaie « Données EMODnet » ET « EPSG réduit »
+        (toutes deux déjà en EPSG:4326), tous pays confondus — d'où
+        l'assemblage d'une tuile à cheval (France + Belgique). Repli :
+        dossier des sources courant (hors structure), puis dossier tuile."""
         srcs = []
         origine = ""
-        if _stock[0] and os.path.isdir(_stock[0]):
-            srcs = sources_depuis_dossier(_stock[0], lat, lon, _debord())
-            origine = _tr("dossier des sources")
+        dossiers = []
+        _rac = _racine_structure()
+        if _rac:
+            _emod, _srcdir, _epsgdir, _asm = chemins_structure4(_rac)
+            for _d in (_emod, _epsgdir):
+                if os.path.isdir(_d):
+                    dossiers.append(_d)
+        if not dossiers and _stock[0] and os.path.isdir(_stock[0]):
+            dossiers.append(_stock[0])
+        vus = set()
+        for _d in dossiers:
+            try:
+                for _f in sources_depuis_dossier(_d, lat, lon, _debord()):
+                    if _f not in vus:
+                        vus.add(_f)
+                        srcs.append(_f)
+            except Exception:
+                pass
+        if srcs:
+            origine = _L("Données EMODnet + EPSG réduit",
+                         "EMODnet data + Reduced EPSG")
         if not srcs:
             d = _dossier_sortie()
             srcs = lister_sources(d, sortie_exclue=cle + ".tif")
@@ -971,7 +1232,7 @@ def open_bathymetrie_window(gui):
         if not _stock[0] or not os.path.isdir(_stock[0]):
             _etat(_tr("Dossiers non configurés."), "#ffaa00")
             _log(_tr("Aucun dossier de bathymétries n'est configuré."))
-            _log(_tr("Cliquez sur « Dossier des sources »."))
+            _log(_tr("Cliquez sur « Créer la structure »."))
             if _stock[0]:
                 _log()
                 _log(_tr("Chemin mémorisé introuvable :"))
@@ -1040,7 +1301,7 @@ def open_bathymetrie_window(gui):
                 _tr("Bathymétrie"),
                 _tr("Le fichier assemblé sera écrit ici :\n\n{f}\n\n"
                     "Est-ce le bon emplacement ?\n\n"
-                    "NON  →  utilisez le bouton « Dossier de sortie ».")
+                    "NON  →  recréez-la via « Créer la structure ».")
                 .format(f=sortie), parent=win):
             _remonter()
             return
@@ -1104,6 +1365,16 @@ def open_bathymetrie_window(gui):
                     _log()
                     _log(_tr("custom_bathy_dem renseigné dans le cfg de la tuile."))
                     _log(tile_cfg)
+                    try:
+                        _prof = ecrire_bathy_max_depth(tile_cfg,
+                                                       _prof_var.get())
+                        _log(_L("Profondeur de référence "
+                                "(bathy_max_depth) :",
+                                "Reference depth (bathy_max_depth):")
+                             + " %d m " % _prof
+                             + _L("(sous l'eau)", "(below sea level)"))
+                    except Exception:
+                        pass
                 except Exception as _e:
                     _log(_tr("custom_bathy_dem non écrit :") + " " + str(_e))
             # Le fichier ne suffit pas : si la fenêtre de configuration est
@@ -1207,9 +1478,22 @@ def open_bathymetrie_window(gui):
                                 _tr("Dossiers non configurés."), parent=win)
             _remonter()
             return
+        # Modèle 4 dossiers : par défaut on prépare « Bathymétrie Sources »
+        # (les données À CONVERTIR : Litto3D en Lambert-93, etc.).
+        _src_defaut = ""
+        _rac = _racine_structure()
+        if _rac:
+            _emod, _srcdir, _epsgdir, _asm = chemins_structure4(_rac)
+            _pays = os.path.basename(_stock[0]) if _stock[0] else ""
+            _cand = os.path.join(_srcdir, _pays) if _pays else _srcdir
+            _src_defaut = _cand if os.path.isdir(_cand) else _srcdir
         src = filedialog.askdirectory(
             parent=win,
-            title=_tr("Dossier des données brutes (.asc, .tif…)"))
+            initialdir=_src_defaut or os.path.expanduser("~"),
+            title=_L("Dossier « Bathymétrie Sources » à convertir "
+                     "(.asc, .tif…)",
+                     "« Bathymetry sources » folder to convert "
+                     "(.asc, .tif…)"))
         _remonter()
         if not src:
             return
@@ -1235,38 +1519,13 @@ def open_bathymetrie_window(gui):
             _remonter()
             return
 
-        # Ratio proposé : 25 % pour du 1 m (procédure IGN), 100 % si la
-        # source est déjà grossière.
-        defaut = "25" if res_m <= 2.0 else "100"
-        rep_ratio = _saisie(
-            _tr("Bathymétrie"),
-            _tr("Résolution source détectée : {r} m\n\n"
-                "Ratio de réduction en % (25 = diviser par 4) :\n"
-                "100 = aucune réduction.").format(r=("%.1f" % res_m)),
-            parent=win, initialvalue=defaut)
-        _remonter()
-        if not rep_ratio:
-            return
-        try:
-            ratio = float(rep_ratio.replace(",", ".").replace("%", "")) / 100.0
-        except Exception:
-            messagebox.showerror(_tr("Bathymétrie"),
-                                 _tr("Ratio invalide."), parent=win)
-            _remonter()
-            return
-        ratio = max(0.01, min(1.0, ratio))
-        res_finale = res_m / ratio
-        if ratio < 1.0 and res_m > 5.0:
-            if not messagebox.askyesno(
-                    _tr("Bathymétrie"),
-                    _tr("La source est déjà à {a} m. Réduire encore "
-                        "donnerait {b} m et ferait perdre du relief.\n\n"
-                        "Continuer quand même ?").format(
-                            a=("%.1f" % res_m), b=("%.1f" % res_finale)),
-                    parent=win):
-                _remonter()
-                return
-            _remonter()
+        # BATHYMÉTRIE : PAS de réduction de résolution (contrairement à
+        # l'altimétrie). Les fonds marins sont déjà à basse résolution
+        # (EMODnet ~96 m) et chaque détail compte — on REPROJETTE seulement
+        # en EPSG:4326, sans jamais alléger. Le ratio « 25 % » de
+        # l'altimétrie ne s'applique donc PAS ici.
+        ratio = 1.0
+        res_finale = res_m
 
         suffixe = "%dM" % int(round(res_finale)) if res_finale >= 1 else "1M"
         nom_def = "%s-%s-reduit.tif" % (os.path.basename(
@@ -1281,9 +1540,20 @@ def open_bathymetrie_window(gui):
         if not nom.lower().endswith(".tif"):
             nom += ".tif"
 
-        # Le fichier réduit est écrit dans le dossier des sources choisi
-        # par l'utilisateur : aucun sous-dossier n'est créé.
-        dest = os.path.join(_stock[0], nom)
+        # Modèle 4 dossiers : le fichier converti/réduit (EPSG:4326) est
+        # écrit dans « EPSG réduit »/<pays>, JAMAIS dans les sources
+        # (sinon « Préparer » le reprendrait comme une source).
+        _dest_dir = _stock[0] or ""
+        _rac2 = _racine_structure()
+        if _rac2:
+            _e2, _s2, _epsg2, _a2 = chemins_structure4(_rac2)
+            _pays2 = os.path.basename(_stock[0]) if _stock[0] else ""
+            _dest_dir = os.path.join(_epsg2, _pays2) if _pays2 else _epsg2
+            try:
+                os.makedirs(_dest_dir, exist_ok=True)
+            except Exception:
+                pass
+        dest = os.path.join(_dest_dir, nom)
         if os.path.isfile(dest):
             if not messagebox.askyesno(
                     _tr("Bathymétrie"),
@@ -1352,6 +1622,304 @@ def open_bathymetrie_window(gui):
 
         win.after(150, _fin)
 
+    def _bathy_libre_auto():
+        """Bouton « Bathymétrie libre (EMODnet) » : ouvre le portail EMODnet
+        Bathymetry (données libres, licence ouverte) dans le navigateur, avec
+        les consignes pour la tuile courante. L'utilisateur télécharge la
+        dalle DTM au format GeoTIFF, la dépose dans le dossier des sources,
+        puis « Préparer » et « Assembler ». N'effectue AUCUN téléchargement
+        réseau dans le code (même principe que le bouton Sonny de
+        l'altimétrie)."""
+        _coords = "%s : %d° / %d° (E-O), %d° / %d° (N-S)" % (
+            cle, lon, lon + 1, lat, lat + 1)
+        messagebox.showinfo(
+            _L("Bathymétrie libre — EMODnet", "Free bathymetry — EMODnet"),
+            _L("Le portail EMODnet Bathymetry va s'ouvrir "
+               "(données libres, licence ouverte).\n\n"
+               "Zone à récupérer — " + _coords + "\n\n"
+               "1. Sélectionnez la dalle DTM qui couvre cette zone.\n"
+               "2. Téléchargez-la au format GeoTIFF, en EPSG:4326 "
+               "(WGS84).\n"
+               "3. Déposez le fichier dans le dossier des sources de la "
+               "structure (créée via « Créer la structure »).\n"
+               "4. Cliquez « Préparer · EPSG 4326 » puis « Assembler ».\n\n"
+               "En mer, les profondeurs doivent rester négatives (ex. -50) ; "
+               "vous pouvez le vérifier avec « Ouvrir dans QGIS ».",
+               "The EMODnet Bathymetry portal will open "
+               "(open, free data).\n\n"
+               "Area to fetch — " + _coords + "\n\n"
+               "1. Select the DTM tile covering this area.\n"
+               "2. Download it as GeoTIFF, in EPSG:4326 (WGS84).\n"
+               "3. Put the file in the structure's sources folder "
+               "(created via « Create structure »).\n"
+               "4. Click « Prepare · EPSG 4326 » then « Assemble ».\n\n"
+               "At sea, depths must stay negative (e.g. -50); you can check "
+               "with « Open in QGIS »."),
+            parent=win)
+        _remonter()
+        try:
+            import webbrowser
+            webbrowser.open("https://emodnet.ec.europa.eu/geoviewer/")
+        except Exception:
+            pass
+        _log(_L("Portail EMODnet ouvert — téléchargez la dalle GeoTIFF, "
+                "déposez-la dans le dossier des sources, puis « Préparer » "
+                "et « Assembler ».",
+                "EMODnet portal opened — download the GeoTIFF tile, put it in "
+                "the sources folder, then « Prepare » and « Assemble »."))
+
+    def _ouvrir_dossier_os(chemin):
+        """Ouvre un dossier dans le gestionnaire de fichiers du système
+        (Finder / Explorer / xdg-open). Multi-plateforme, aucun réseau."""
+        try:
+            import sys
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", chemin])
+            elif os.name == "nt":
+                os.startfile(chemin)  # type: ignore[attr-defined]
+            else:
+                subprocess.Popen(["xdg-open", chemin])
+        except Exception:
+            pass
+
+    def _msg_pas_de_structure():
+        messagebox.showinfo(
+            _tr("Bathymétrie"),
+            _L("Ce dossier de la structure n'existe pas encore.\n\n"
+               "Cliquez d'abord sur « Créer la structure ».",
+               "This structure folder does not exist yet.\n\n"
+               "Click « Create structure » first."),
+            parent=win)
+        _remonter()
+
+    def _ouvrir_bathy_tiff():
+        """Bouton-dossier « Bathymétrie TIFF » : ouvre le dossier des
+        sources (là où l'on dépose les rasters téléchargés)."""
+        d = _stock[0]
+        if not d or not os.path.isdir(d):
+            _msg_pas_de_structure()
+            return
+        _ouvrir_dossier_os(d)
+
+    def _ouvrir_bathy_assemble():
+        """Bouton-dossier « Bathymétrie assemble » : ouvre le dossier de
+        sortie (là où atterrit le fichier +tuile.tif final)."""
+        d = _sortie[0]
+        if not d or not os.path.isdir(d):
+            _msg_pas_de_structure()
+            return
+        _ouvrir_dossier_os(d)
+
+    def _ouvrir_dossier_structure(idx):
+        """Bouton-dossier du modèle 4 dossiers.
+        idx : 0=Données EMODnet, 1=Bathymétrie Sources, 2=EPSG réduit,
+        3=Assemblage tuile. Ouvre le dossier dans le gestionnaire de
+        fichiers ; renvoie vers « Créer la structure » s'il est absent."""
+        racine = _racine_structure()
+        if not racine or not os.path.isdir(racine):
+            _msg_pas_de_structure()
+            return
+        d = chemins_structure4(racine)[idx]
+        if not os.path.isdir(d):
+            _msg_pas_de_structure()
+            return
+        _ouvrir_dossier_os(d)
+
+    def _importer_emodnet():
+        """Bouton « Installer le fichier EMODnet » : l'utilisateur choisit le
+        fichier téléchargé (ZIP ou GeoTIFF). S'il est compressé, on le
+        décompresse, puis on place le(s) raster(s) directement dans
+        « Données EMODnet »/<pays>. Aucun réseau (même principe que l'import
+        Sonny de l'altimétrie)."""
+        dest = _stock[0]
+        rac = _racine_structure()
+        if rac:
+            emodnet = chemins_structure4(rac)[0]
+            pays = os.path.basename(_stock[0]) if _stock[0] else ""
+            dest = os.path.join(emodnet, pays) if pays else emodnet
+        if not dest:
+            _msg_pas_de_structure()
+            return
+        f = filedialog.askopenfilename(
+            parent=win,
+            title=_L("Fichier EMODnet téléchargé (ZIP ou GeoTIFF)",
+                     "Downloaded EMODnet file (ZIP or GeoTIFF)"),
+            filetypes=[("EMODnet", "*.zip *.tif *.tiff *.asc"),
+                       (_L("Tous les fichiers", "All files"), "*.*")])
+        _remonter()
+        if not f:
+            return
+        try:
+            os.makedirs(dest, exist_ok=True)
+        except Exception as _e:
+            messagebox.showerror(_tr("Bathymétrie"), str(_e), parent=win)
+            _remonter()
+            return
+        places = []
+        try:
+            if f.lower().endswith(".zip"):
+                import zipfile
+                with zipfile.ZipFile(f) as _z:
+                    for _m in _z.namelist():
+                        if _m.endswith("/"):
+                            continue
+                        if _m.lower().endswith((".tif", ".tiff", ".asc")):
+                            _base = os.path.basename(_m)
+                            if not _base:
+                                continue
+                            _cible = os.path.join(dest, _base)
+                            with _z.open(_m) as _s, open(_cible, "wb") as _o:
+                                _o.write(_s.read())
+                            places.append(_cible)
+            else:
+                import shutil
+                _cible = os.path.join(dest, os.path.basename(f))
+                shutil.copy2(f, _cible)
+                places.append(_cible)
+        except Exception as _e:
+            messagebox.showerror(_tr("Bathymétrie"), str(_e), parent=win)
+            _remonter()
+            return
+        txt.delete("1.0", tk.END)
+        if places:
+            _log(_L("Fichier(s) EMODnet installé(s) dans "
+                    "« Données EMODnet » :",
+                    "EMODnet file(s) installed in « EMODnet data »:"))
+            for _p in places:
+                _log("   " + _p)
+            _log()
+            _log(_L("Vous pouvez maintenant cliquer « Assembler ».",
+                    "You can now click « Assemble »."))
+            _etat(_L("Fichier EMODnet installé.",
+                     "EMODnet file installed."), FG)
+        else:
+            _log(_L("Aucun raster (.tif/.asc) trouvé dans le fichier choisi.",
+                    "No raster (.tif/.asc) found in the selected file."))
+            _etat(_L("Rien à installer.", "Nothing to install."), "#ffaa00")
+        _maj_bandeaux()
+        _remonter()
+
+    def _vider_sources():
+        """Bouton « Vider Bathymétrie Sources » : liste à cocher des fichiers
+        présents dans « Bathymétrie Sources ». Suppression UNIQUEMENT des
+        fichiers cochés, après confirmation. Jamais automatique, jamais en
+        bloc. Miroir de « Vider Altimétrie Sources »."""
+        rac = _racine_structure()
+        if not rac:
+            messagebox.showinfo(
+                _tr("Bathymétrie"),
+                _L("Aucune structure configurée.",
+                   "No structure configured."), parent=win)
+            _remonter()
+            return
+        _e, src_root, epsg_root, _a = chemins_structure4(rac)
+        if not os.path.isdir(src_root):
+            messagebox.showinfo(
+                _tr("Bathymétrie"),
+                _L("Aucun dossier « Bathymétrie Sources » configuré.",
+                   "No « Bathymetry sources » folder configured."),
+                parent=win)
+            _remonter()
+            return
+        noms_epsg = set()
+        if os.path.isdir(epsg_root):
+            for _rep, _d, _fs in os.walk(epsg_root, followlinks=True):
+                for _f in _fs:
+                    noms_epsg.add(_f.lower())
+        fichiers = []
+        for _rep, _d, _fs in os.walk(src_root, followlinks=True):
+            for _f in sorted(_fs):
+                if _f.startswith("."):
+                    continue
+                if _f.lower().endswith((".tif", ".tiff", ".asc", ".hgt")):
+                    fichiers.append(os.path.join(_rep, _f))
+        if not fichiers:
+            messagebox.showinfo(
+                _tr("Bathymétrie"),
+                _L("Aucun fichier à vider dans « Bathymétrie Sources ».",
+                   "No file to clear in « Bathymetry sources »."),
+                parent=win)
+            _remonter()
+            return
+
+        dlg = tk.Toplevel(win)
+        dlg.title(_L("Vider Bathymétrie Sources", "Clear Bathymetry sources"))
+        dlg.configure(bg=BG)
+        try:
+            dlg.transient(win)
+        except Exception:
+            pass
+        dlg.columnconfigure(0, weight=1)
+        dlg.rowconfigure(1, weight=1)
+        tk.Label(dlg,
+                 text=_L("Cochez les fichiers à SUPPRIMER de "
+                         "« Bathymétrie Sources ».\n"
+                         "✅ = déjà converti (même nom présent dans "
+                         "« EPSG réduit »).   ⚠️ = pas encore.",
+                         "Tick the files to DELETE from "
+                         "« Bathymetry sources ».\n"
+                         "✅ = already converted (same name in "
+                         "« Reduced EPSG »).   ⚠️ = not yet."),
+                 bg=BG, fg=FG, font=FONT, justify="left", anchor="w").grid(
+            row=0, column=0, padx=14, pady=(14, 6), sticky="w")
+        cadre = tk.Frame(dlg, bg=BG)
+        cadre.grid(row=1, column=0, padx=14, sticky="nsew")
+        _vars = []
+        for _ch in fichiers:
+            _base = os.path.basename(_ch)
+            _deja = "✅ " if _base.lower() in noms_epsg else "⚠️ "
+            _v = tk.IntVar(value=0)
+            tk.Checkbutton(
+                cadre, text=_deja + _base, variable=_v,
+                bg=BG, fg=FG, selectcolor=BG, activebackground=BG,
+                activeforeground=FG, anchor="w", justify="left").pack(
+                fill=tk.X, anchor="w")
+            _vars.append((_v, _ch))
+
+        def _supprimer():
+            choisis = [c for (v, c) in _vars if v.get()]
+            if not choisis:
+                dlg.destroy()
+                _remonter()
+                return
+            if not messagebox.askyesno(
+                    _L("Vider Bathymétrie Sources",
+                       "Clear Bathymetry sources"),
+                    _L("Supprimer définitivement %d fichier(s) ?",
+                       "Permanently delete %d file(s)?") % len(choisis),
+                    parent=dlg):
+                return
+            n = 0
+            for _c in choisis:
+                try:
+                    os.remove(_c)
+                    n += 1
+                except Exception:
+                    pass
+            dlg.destroy()
+            txt.delete("1.0", tk.END)
+            _log(_L("Fichiers supprimés de « Bathymétrie Sources » :",
+                    "Files deleted from « Bathymetry sources »:") + " %d" % n)
+            _etat(_L("Sources vidées.", "Sources cleared."), FG)
+            _remonter()
+
+        barre = tk.Frame(dlg, bg=BG)
+        barre.grid(row=2, column=0, padx=14, pady=12, sticky="ew")
+        barre.columnconfigure(0, weight=1)
+        barre.columnconfigure(1, weight=1)
+        _ctk_button(barre, text=_L("Supprimer les cochés", "Delete ticked"),
+                   command=_supprimer).grid(
+            row=0, column=0, padx=(0, 6), sticky="ew", ipady=4)
+        _ctk_button(barre, text=_tr("Annuler"),
+                   command=lambda: (dlg.destroy(), _remonter())).grid(
+            row=0, column=1, padx=(6, 0), sticky="ew", ipady=4)
+        dlg.bind("<Escape>", lambda e: (dlg.destroy(), _remonter()))
+        try:
+            dlg.grab_set()
+        except Exception:
+            pass
+        dlg.wait_window()
+
     # ── Barre du bas ─────────────────────────────────────────────────
     frm_deb = tk.Frame(win, bg=BG)
     frm_deb.pack(fill=tk.X, padx=14, pady=(0, 4))
@@ -1361,6 +1929,15 @@ def open_bathymetrie_window(gui):
     tk.Entry(frm_deb, textvariable=_deb_var, width=8, bg=PREV_BG, fg=FG2,
              insertbackground=FG).pack(side=tk.LEFT, padx=(8, 0))
     tk.Label(frm_deb, text=_tr("(0.1 = 10 % de la tuile sur les 4 côtés)"),
+             font=FONT, bg=BG, fg="#888888").pack(side=tk.LEFT, padx=(8, 0))
+    tk.Label(frm_deb,
+             text=_L("   ·   Profondeur de réf. (m sous l'eau) :",
+                     "   ·   Reference depth (m below sea level):"),
+             font=FONT, bg=BG, fg=FG).pack(side=tk.LEFT, padx=(12, 0))
+    _prof_var = tk.StringVar(value="100")
+    tk.Entry(frm_deb, textvariable=_prof_var, width=6, bg=PREV_BG, fg=FG2,
+             insertbackground=FG).pack(side=tk.LEFT, padx=(8, 0))
+    tk.Label(frm_deb, text=_L("(max 100)", "(max 100)"),
              font=FONT, bg=BG, fg="#888888").pack(side=tk.LEFT, padx=(8, 0))
 
     _qgis_var = tk.StringVar(value=_cfg_get(CFG_QGIS))
@@ -1401,23 +1978,31 @@ def open_bathymetrie_window(gui):
     # Ligne 1 : les trois étapes, dans l'ordre.
     # Ligne 2 : outils et configuration.
     _defs = [
-        (_tr("Créer la structure"),
-         lambda: (_creer_structure(), _rafraichir()), 0, 0),
-        (_tr("Préparer les données (EPSG → réduit)"), _preparer, 0, 1),
-        (_tr("Assembler"), _assembler, 0, 2),
-        (_tr("Rafraîchir"), _rafraichir, 0, 3),
-        (_tr("Dossier des sources"),
-         lambda: (_choisir_stock(), _rafraichir()), 1, 0),
-        (_tr("Vérifier (auto-test)"), _auto_test, 1, 1),
-        (_tr("Choisir QGIS"), _choisir_qgis, 1, 2),
-        (_tr("Ouvrir dans QGIS"), _ouvrir_qgis, 1, 3),
-        (_tr("Dossier de sortie"),
-         lambda: (_choisir_sortie(), _rafraichir()), 2, 0),
-        (_tr("Ajouter un pays"),
+        # Ligne 0 — étapes principales (miroir de l'altimétrie)
+        (_L("Préparer · EPSG 4326", "Prepare · EPSG 4326"), _preparer, 0, 0),
+        (_L("Assembler", "Assemble tile"), _assembler, 0, 1),
+        (_L("Vider Bathymétrie Sources", "Clear Bathymetry sources"),
+         lambda: (_vider_sources(), _rafraichir()), 0, 2),
+        (_L("Rafraîchir", "Refresh"), _rafraichir, 0, 3),
+        # Ligne 1 — les 4 dossiers (bilingues)
+        (_L(*NOMS_EMODNET), lambda: _ouvrir_dossier_structure(0), 1, 0),
+        (_L(*NOMS_SOURCES), lambda: _ouvrir_dossier_structure(1), 1, 1),
+        (_L(*NOMS_EPSG), lambda: _ouvrir_dossier_structure(2), 1, 2),
+        (_L(*NOMS_TUILE), lambda: _ouvrir_dossier_structure(3), 1, 3),
+        # Ligne 2 — gestion de la structure
+        (_L("Créer la structure", "Create structure"),
+         lambda: (_creer_structure(), _rafraichir()), 2, 0),
+        (_L("Ajouter un pays", "Add a country"),
          lambda: (_ajouter_pays(), _rafraichir()), 2, 1),
-        (_tr("Emplacement TIFF / assemble"),
-         lambda: (_choisir_dans_structure(), _rafraichir()), 2, 2),
-        (_tr("Fermer"), win.destroy, 2, 3),
+        (_L("Vérifier (auto-test)", "Check (self-test)"), _auto_test, 2, 2),
+        (_L("Fermer", "Close"), win.destroy, 2, 3),
+        # Ligne 3 — EMODnet + QGIS (miroir de Sonny + QGIS)
+        (_L("Bathymétrie libre (EMODnet)", "Free bathymetry (EMODnet)"),
+         _bathy_libre_auto, 3, 0),
+        (_L("Installer le fichier EMODnet",
+            "Install the EMODnet file"), _importer_emodnet, 3, 1),
+        (_L("Choisir QGIS", "Choose QGIS"), _choisir_qgis, 3, 2),
+        (_L("Ouvrir dans QGIS", "Open in QGIS"), _ouvrir_qgis, 3, 3),
     ]
     for _txt, _cmd, _r, _c in _defs:
         _b = _ctk_button(frm_bot, text=_txt, command=_cmd)
