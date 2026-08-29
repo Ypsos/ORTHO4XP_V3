@@ -1,9 +1,26 @@
 import os
 import sys
 import time
+import pathlib as _pathlib
 from O4_Lang import tr
 
 Ortho4XP_dir = ".." if getattr(sys, "frozen", False) else "."
+
+# Racine ABSOLUE du projet, calculée comme dans O4_File_Names.py (à partir de
+# l'emplacement réel de ce fichier, src/ → racine). Sert UNIQUEMENT à écrire
+# Ortho4XP.log toujours à la racine, quel que soit le dossier de travail
+# courant. L'ancien Ortho4XP_dir="." (relatif) suivait le dossier courant : le
+# log partait alors dans le dossier de travail (ex. dossier d'un extent).
+# On ne modifie PAS Ortho4XP_dir (lu ailleurs) : on ajoute juste cette racine
+# dédiée au log, avec repli sûr sur l'ancien comportement en cas d'imprévu.
+try:
+    _LOG_ROOT = (
+        str(_pathlib.Path(sys.executable).resolve().parent.parent)
+        if getattr(sys, "frozen", False)
+        else str(_pathlib.Path(__file__).resolve().parent.parent)
+    )
+except Exception:
+    _LOG_ROOT = Ortho4XP_dir
 verbosity = 1
 red_flag = False
 is_working = False
@@ -26,7 +43,7 @@ def vprint(min_verbosity, *args):
 ################################################################################
 def logprint(*args):
     try:
-        f = open(os.path.join(Ortho4XP_dir, "Ortho4XP.log"), "a")
+        f = open(os.path.join(_LOG_ROOT, "Ortho4XP.log"), "a")
         f.write(
             time.strftime("%c")
             + " | "
