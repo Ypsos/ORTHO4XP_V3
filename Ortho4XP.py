@@ -116,6 +116,17 @@ def main():
             else:
                 O4_Lang._load_lang("EN")
             app = GUI.Ortho4XP_GUI()
+            # ── Journal unifié (ADDITIF) ────────────────────────────────────
+            # Active le collecteur de logs APRÈS que la fenêtre a pris la main
+            # sur l'affichage (sys.stdout), pour qu'il se place par-dessus et
+            # capte tous les messages → un seul Ortho4XP.log à la racine.
+            # Automatique à chaque lancement (aucun bouton à activer). Import
+            # protégé : si le module est absent, Ortho démarre normalement.
+            try:
+                import O4_Log_Collector as _LOGCOL
+                _LOGCOL.activate()
+            except Exception:
+                pass
             app.mainloop()
             print("Ortho4XP fermé. Bon vol !")
         except Exception as e:

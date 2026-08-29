@@ -1168,6 +1168,15 @@ def run_extent_generator(parent=None):
     console.pack(fill="both", expand=True, padx=14, pady=(6, 4))
 
     def log(msg):
+        # Envoie aussi le message au journal unifié (Ortho4XP.log). Cette
+        # fenêtre écrit dans son propre cadre (console.insert), donc le
+        # collecteur ne la verrait pas sans cette copie. Additif et protégé :
+        # si le collecteur est absent, l'affichage fonctionne comme avant.
+        try:
+            import O4_Log_Collector as _LOGCOL
+            _LOGCOL.collect(msg)
+        except Exception:
+            pass
         try:
             console.insert("end", msg + "\n")
             console.see("end")
