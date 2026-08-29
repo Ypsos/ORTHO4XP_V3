@@ -87,7 +87,7 @@ Ortho4XP est un outil puissant, longtemps réservé à ceux qui acceptaient le t
 | **Altimétrie / DEM** | Configuration manuelle | ✅ Module dédié — structure de dossiers auto, préparation des fichiers |
 | **Bathymétrie** | Absent | ✅ Module dédié — intégration des données de profondeur / relief sous-marin |
 | **Édition OSM (JOSM)** | Manipulation manuelle des fichiers | ✅ Module **Avancé** — JOSM lancé automatiquement, fichiers protégés |
-| **Emprises / Extents** | Écriture manuelle des `.ext` | ✅ Dessin dans JOSM → publication auto en `.ext` + archive OSM |
+| **Emprises / Extents** | Écriture manuelle des `.ext` | ✅ Dessin dans JOSM → publication auto en `.ext` + archive OSM ; génération par pays (noms FR/EN, relance auto si serveur occupé) |
 | **Nivellement / Aéroports** | Patches à écrire à la main | ✅ Modèles générés auto, code OACI lu dans les données de la tuile |
 | **Altimétrie : procédure QGIS** | 41 étapes manuelles + tableur `.ods` | ✅ Un seul bouton — reprojection, découpe, fusion et `custom_dem` auto |
 | **QGIS** | — | ✅ Intégré au module Altimétrie — mémorisé et ouvert sur le résultat |
@@ -334,6 +334,10 @@ Merci en particulier à **Jojo**, référence technique sur Ortho4XP, QGIS et JO
 
 Merci à **domisilasol (Dominique)** pour la **correction du triangulateur `triangle.exe` sous Windows** : recompilation pour Windows 64 bits d'un bug qui empêchait la génération des fichiers de maillage (`.1.node` / `.1.ele`) lors de la création d'emprises. Source et binaire fournis, conformément à la licence de Triangle (Jonathan R. Shewchuk).
 
+Merci à **Len0y** pour avoir proposé et contribué à **séparer le « provider scoring » en une étape 4 dédiée**, distincte de la génération DSF (étape 3) — permettant de lancer la notation des providers séparément, une fois tous les réglages vérifiés.
+
+Merci à **Jasum** pour la **proposition et le cahier des charges de l'assistant graphique de fichiers `.comb`** (`O4_comb_generator.py`).
+
 Merci également à tous ceux qui remontent leurs retours sur les forums.
 
 ---
@@ -448,7 +452,7 @@ Ortho4XP is a powerful tool, but for a long time it was only within reach of tho
 | **Elevation / DEM** | Manual configuration | ✅ Dedicated module — folder structure created automatically, file preparation |
 | **Bathymetry** | Absent | ✅ Dedicated module — integration of depth data / underwater relief |
 | **OSM editing (JOSM)** | Manual file handling | ✅ **Advanced** module — JOSM detected and launched automatically, files protected |
-| **Extents** | `.ext` files written by hand | ✅ Draw the extent in JOSM → automatic publication as `.ext` + OSM archive |
+| **Extents** | `.ext` files written by hand | ✅ Draw the extent in JOSM → automatic publication as `.ext` + OSM archive; by-country generation (FR/EN names, auto-retry if the server is busy) |
 | **Flattening / Airports** | Patches written by hand | ✅ Templates generated automatically, ICAO code read from the tile data |
 | **Elevation: QGIS procedure** | 41 manual steps in QGIS + `.ods` spreadsheet | ✅ A single button — reprojection, clipping, merging and `custom_dem` filled in automatically |
 | **QGIS** | — | ✅ Built into the Elevation module — remembered and opened on the result |
@@ -694,6 +698,10 @@ Modified file: `src/O4_Menu_Avance.py` (no language file impacted).
 Special thanks to **Jojo**, the technical reference on Ortho4XP, QGIS and JOSM; and to **Cricri**, for testing and validating on Windows and Linux.
 
 Thanks to **domisilasol (Dominique)** for the **fix of the `triangle.exe` mesh generator on Windows**: recompiled for 64-bit Windows to solve a bug that prevented the mesh files (`.1.node` / `.1.ele`) from being generated during extent creation. Source and binary provided, in accordance with the Triangle license (Jonathan R. Shewchuk).
+
+Thanks to **Len0y** for proposing and contributing the **separation of "provider scoring" into a dedicated step 4**, distinct from the DSF build (step 3) — allowing provider scoring to be run separately, once all settings have been checked.
+
+Thanks to **Jasum** for the **proposal and specification of the graphical `.comb` file assistant** (`O4_comb_generator.py`).
 
 Thanks as well to everyone posting feedback on the forums.
 
