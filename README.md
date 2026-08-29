@@ -85,6 +85,7 @@ Ortho4XP est un outil puissant, longtemps réservé à ceux qui acceptaient le t
 | **Color Check** | Absent | ✅ Interface de vérification et correction des couleurs |
 | **Correction d'imagerie** | Aucune | ✅ Module dédié — visualisation DDS, retouche externe, retéléchargement ciblé |
 | **Altimétrie / DEM** | Configuration manuelle | ✅ Module dédié — structure de dossiers auto, préparation des fichiers |
+| **Bathymétrie** | Absent | ✅ Module dédié — intégration des données de profondeur / relief sous-marin |
 | **Édition OSM (JOSM)** | Manipulation manuelle des fichiers | ✅ Module **Avancé** — JOSM lancé automatiquement, fichiers protégés |
 | **Emprises / Extents** | Écriture manuelle des `.ext` | ✅ Dessin dans JOSM → publication auto en `.ext` + archive OSM |
 | **Nivellement / Aéroports** | Patches à écrire à la main | ✅ Modèles générés auto, code OACI lu dans les données de la tuile |
@@ -174,6 +175,7 @@ Tous sont **autonomes** : aucun fichier du moteur d'origine n'est modifié. Si u
 | **Color Apply** | Applique les corrections au bon moment de la chaîne. **Sources jamais modifiées** |
 | **Correction d'imagerie** | Visualise les textures, sélection, retouche externe (GIMP…), regénération ciblée |
 | **Altimétrie / DEM** | Procédure QGIS de 41 étapes → 1 bouton |
+| **Bathymétrie** | Intégration des données de profondeur / relief sous-marin |
 | **Avancé (JOSM)** | Édition géographique, emprises, nivellement, aéroports |
 | **Provider Score** | Note chaque image : bruit, compression, **nuages**, dérive, risque de jointure — désigne le meilleur provider |
 | **Gestion mémoire** | Surveillance RAM temps réel + nettoyage auto avant saturation |
@@ -330,6 +332,8 @@ Fichier modifié : `src/O4_Menu_Avance.py` (aucun fichier de langue impacté).
 
 Merci en particulier à **Jojo**, référence technique sur Ortho4XP, QGIS et JOSM ; et à **Cricri**, pour les tests et validations sous Windows et Linux.
 
+Merci à **domisilasol (Dominique)** pour la **correction du triangulateur `triangle.exe` sous Windows** : recompilation pour Windows 64 bits d'un bug qui empêchait la génération des fichiers de maillage (`.1.node` / `.1.ele`) lors de la création d'emprises. Source et binaire fournis, conformément à la licence de Triangle (Jonathan R. Shewchuk).
+
 Merci également à tous ceux qui remontent leurs retours sur les forums.
 
 ---
@@ -442,6 +446,7 @@ Ortho4XP is a powerful tool, but for a long time it was only within reach of tho
 | **Color Check** | Absent | ✅ Color verification and correction interface |
 | **Imagery correction** | None | ✅ Dedicated module — view tile textures, retouch externally, targeted re-download |
 | **Elevation / DEM** | Manual configuration | ✅ Dedicated module — folder structure created automatically, file preparation |
+| **Bathymetry** | Absent | ✅ Dedicated module — integration of depth data / underwater relief |
 | **OSM editing (JOSM)** | Manual file handling | ✅ **Advanced** module — JOSM detected and launched automatically, files protected |
 | **Extents** | `.ext` files written by hand | ✅ Draw the extent in JOSM → automatic publication as `.ext` + OSM archive |
 | **Flattening / Airports** | Patches written by hand | ✅ Templates generated automatically, ICAO code read from the tile data |
@@ -531,6 +536,7 @@ They all follow the same design rule: **a self-contained file that modifies no p
 | **Color Apply** | Applies saved corrections at the right point in the chain. **Source files are never modified** |
 | **Imagery correction** | Displays tile textures, lets you select them, retouch in an external editor (GIMP…), regenerate only what needs it |
 | **Elevation / DEM** | The 41-step QGIS procedure reduced to one button |
+| **Bathymetry** | Integration of depth data / underwater relief |
 | **Advanced (JOSM)** | Geographic data editing, extents, terrain flattening and airports |
 | **Provider Score** | Rates every downloaded image: noise, compression artefacts, **cloud cover**, colour drift, seam risk — points to the best provider |
 | **Memory management** | Monitors RAM in real time and clears the cache before saturation |
@@ -686,6 +692,8 @@ Modified file: `src/O4_Menu_Avance.py` (no language file impacted).
 ## 15. Acknowledgements
 
 Special thanks to **Jojo**, the technical reference on Ortho4XP, QGIS and JOSM; and to **Cricri**, for testing and validating on Windows and Linux.
+
+Thanks to **domisilasol (Dominique)** for the **fix of the `triangle.exe` mesh generator on Windows**: recompiled for 64-bit Windows to solve a bug that prevented the mesh files (`.1.node` / `.1.ele`) from being generated during extent creation. Source and binary provided, in accordance with the Triangle license (Jonathan R. Shewchuk).
 
 Thanks as well to everyone posting feedback on the forums.
 

@@ -628,20 +628,41 @@ def _run_creation(country_name, extent_code, admin_level,
            "Creating the extent, please wait…"))
     log("→ " + extent_code + "  (" + query + ")")
 
-    try:
-        # cwd = Extents/<pays>/  → le trio se range tout seul ici.
-        proc = subprocess.run(
-            cmd, cwd=country_dir,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            universal_newlines=True,
-        )
-    except Exception as ex:
-        log(_L("Erreur au lancement : %s", "Launch error: %s") % ex)
-        return False
+    # ── Relance automatique (ADDITIF) ────────────────────────────────────────
+    # Certaines requêtes Overpass échouent au 1er essai quand le serveur est
+    # occupé : le .osm.bz2 se télécharge mais incomplet → Mask ne produit pas
+    # les .node/.poly → trio incomplet. Une relance aboutit (constaté en test).
+    # On automatise ici cette relance — SANS toucher à O4_Mask_Utils.py — avec
+    # une courte pause pour laisser le serveur respirer. Même esprit que le
+    # retry déjà en place côté génération de tuiles.
+    import time
+    MAX_ESSAIS = 3           # 1 essai initial + 2 relances automatiques
+    PAUSE_ENTRE_ESSAIS = 5   # secondes entre deux tentatives
 
-    # On vérifie le résultat par la présence du trio (pas par le code retour,
-    # car Mask sort proprement même quand la frontière est introuvable).
-    complet, manquants = _trio_status(country_dir, extent_code)
+    complet, manquants = (False, [])
+    for essai in range(1, MAX_ESSAIS + 1):
+        if essai > 1:
+            log(_L("↻ Serveur occupé — relance automatique (tentative %d/%d)…",
+                   "↻ Server busy — automatic retry (attempt %d/%d)…")
+                % (essai, MAX_ESSAIS))
+            time.sleep(PAUSE_ENTRE_ESSAIS)
+        try:
+            # cwd = Extents/<pays>/  → le trio se range tout seul ici.
+            proc = subprocess.run(
+                cmd, cwd=country_dir,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                universal_newlines=True,
+            )
+        except Exception as ex:
+            log(_L("Erreur au lancement : %s", "Launch error: %s") % ex)
+            return False
+
+        # On juge le résultat par la présence du trio (pas par le code retour,
+        # car Mask sort proprement même quand la frontière est introuvable).
+        complet, manquants = _trio_status(country_dir, extent_code)
+        if complet:
+            break
+
     if complet:
         log(_L("✅ Extent créé : les 3 fichiers sont présents dans %s/",
                "✅ Extent created: all 3 files present in %s/") % country_name)
@@ -654,10 +675,10 @@ def _run_creation(country_name, extent_code, admin_level,
                    "Remember to restart Ortho so it is taken into account."))
         return True
     else:
-        # Cas le plus fréquent : nom OSM incorrect → réponse vide → rien créé.
-        log(_L("⚠️ Aucun extent complet créé (manque : %s).",
-               "⚠️ No complete extent created (missing: %s).")
-            % ", ".join(manquants))
+        # Trio toujours incomplet après toutes les tentatives.
+        log(_L("⚠️ Aucun extent complet créé après %d tentatives (manque : %s).",
+               "⚠️ No complete extent created after %d attempts (missing: %s).")
+            % (MAX_ESSAIS, ", ".join(manquants)))
         log(_L("Vérifiez l'orthographe du nom OSM et la clé de nom "
                "(name, name:fr, name:de…), puis réessayez.",
                "Check the OSM name spelling and the name key "
