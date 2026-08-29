@@ -86,6 +86,47 @@ def _L(fr, en):
     return fr if _lang_code() == "FR" else en
 
 
+# ── Nom d'affichage dans la langue de l'interface (ADDITIF) ───────────────────
+# But : en mode « Par tuile », proposer le nom dans la langue de l'interface
+# (FR → name:fr, EN → name:en) QUAND il existe réellement dans OSM, sinon garder
+# le nom local (name). Renvoie AUSSI la clé OSM correspondante, pour que la
+# requête de création reste toujours fiable (jamais un pari) : on interroge sous
+# la même clé que le nom affiché. Cf. cas España : name=España (ñ) mais
+# name:fr=Espagne / name:en=Spain, tous deux sans caractère spécial.
+def _display_name(z):
+    """(texte_affiché, clé_OSM) pour une zone listée par _osm_list_zones.
+    - Interface FR et z a un name:fr → (name:fr, 'name:fr')
+    - Interface EN et z a un name:en → (name:en, 'name:en')
+    - sinon → (name brut, 'name')  ← comportement d'origine préservé."""
+    code = _lang_code()
+    if code == "FR" and z.get("name_fr"):
+        return z["name_fr"], "name:fr"
+    if code == "EN" and z.get("name_en"):
+        return z["name_en"], "name:en"
+    return z.get("name", ""), "name"
+
+
+# ── Nom de fichier « extent » garanti sûr (ADDITIF) ───────────────────────────
+# Règle Bible : éviter à tout prix les caractères spéciaux + compatibilité
+# Windows/macOS/Linux. Ce nettoyeur garantit qu'aucun caractère spécial
+# (ñ, accent, apostrophe, espace…) n'atteigne jamais le disque ni la ligne de
+# commande, quelle que soit la plateforme. ñ→n, é→e, espace→_, et on ne conserve
+# que lettres/chiffres/_/-.
+def _safe_code(text):
+    """Transforme un nom en identifiant de fichier ASCII sûr.
+    Ex. : 'España' → 'Espana', "Vallée d'Aoste" → 'Vallee_dAoste'.
+    Ne renvoie jamais une chaîne vide (repli 'extent')."""
+    import unicodedata
+    if not text:
+        return "extent"
+    norm = unicodedata.normalize("NFKD", text)
+    ascii_txt = norm.encode("ascii", "ignore").decode("ascii")
+    ascii_txt = ascii_txt.replace(" ", "_")
+    kept = [ch for ch in ascii_txt if ch.isalnum() or ch in ("_", "-")]
+    result = "".join(kept).strip("_-")
+    return result or "extent"
+
+
 def _c(key, fallback):
     """Couleur du thème actif, ou fallback si Theme Manager absent."""
     if _HAS_THEME:
@@ -396,6 +437,13 @@ def _osm_list_zones(tile, admin_level, timeout=25):
                 seen.add(name)
                 zones.append({
                     "name": name,
+                    # ADDITIF : noms localisés (s'ils existent dans OSM). Servent
+                    # à afficher / créer dans la langue de l'interface sans
+                    # caractère spécial. La réponse Overpass utilise déjà
+                    # « out tags » : ces étiquettes sont donc déjà disponibles,
+                    # aucune requête réseau supplémentaire.
+                    "name_fr": (tags.get("name:fr", "") or "").strip(),
+                    "name_en": (tags.get("name:en", "") or "").strip(),
                     "admin_level": tags.get("admin_level", str(admin_level)),
                     "kind": tags.get("border_type",
                                      tags.get("admin_title", "")),
@@ -903,7 +951,10 @@ def run_extent_generator(parent=None):
                "%d area(s) found. Tick the ones to create.") % len(res))
         for z in res:
             var = tk.BooleanVar(value=False)
-            label = z["name"]
+            # ADDITIF : libellé dans la langue de l'interface si dispo (Espagne /
+            # Spain), sinon nom local (comportement d'origine).
+            _disp, _key = _display_name(z)
+            label = _disp
             if z.get("kind"):
                 label += "   (" + z["kind"] + ")"
             cb = tk.Checkbutton(check_inner, text=label, variable=var,
@@ -1129,14 +1180,19 @@ def run_extent_generator(parent=None):
                 return
             n_ok = 0
             for _flag, z in coches:
-                nom = z["name"]
-                code = nom.strip().replace(" ", "_")
+                # ADDITIF : nom + clé OSM dans la langue de l'interface quand
+                # ils existent (España → Espagne / name:fr), sinon nom local +
+                # 'name' (comportement d'origine). Le nom de fichier passe par
+                # _safe_code : aucun caractère spécial (ñ, accent, apostrophe,
+                # espace) n'atteint jamais le disque ni la ligne de commande.
+                nom, name_key = _display_name(z)
+                code = _safe_code(nom)
                 log(_L("── Création : %s ──", "── Creating: %s ──") % nom)
                 ok = _run_creation(
                     country_name=dest, extent_code=code,
                     admin_level=z.get("admin_level", level_var.get()),
                     name_value=nom, pixel_size=px, buffer_size=bf,
-                    blur_size=bl, log=log, known_key="name")
+                    blur_size=bl, log=log, known_key=name_key)
                 if ok:
                     n_ok += 1
             log(_L("Terminé : %d extent(s) créé(s).",
