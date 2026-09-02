@@ -309,6 +309,87 @@ def _ouvrir_tutos(parent, status):
     return win
 
 
+# ── Anti-double-ouverture des fenêtres du menu Avancé ─────────────────────────
+# Chaque bouton ne doit ouvrir qu'UNE fenêtre : un 2e clic ramène la fenêtre
+# déjà ouverte au premier plan au lieu d'en empiler une nouvelle. Tout est géré
+# ICI (dans le menu), sans modifier les modules-fenêtres : on mémorise la
+# fenêtre créée, et au clic suivant on la ré-affiche si elle existe encore.
+_FENETRES_UNIQUES = {}
+
+
+def _est_fenetre(w):
+    """Vrai si w est une fenêtre Tk encore vivante. Ne lève jamais d'exception."""
+    try:
+        return w is not None and hasattr(w, "winfo_exists") and w.winfo_exists()
+    except Exception:
+        return False
+
+
+def _fenetre_deja_ouverte(cle):
+    """Retourne la fenêtre déjà ouverte pour 'cle' si elle vit encore, sinon
+    None (et nettoie l'entrée périmée)."""
+    w = _FENETRES_UNIQUES.get(cle)
+    if _est_fenetre(w):
+        return w
+    _FENETRES_UNIQUES.pop(cle, None)
+    return None
+
+
+def _presenter(w):
+    """Ramène une fenêtre existante au premier plan (dé-iconifie + lift + focus).
+    Chaque étape est protégée : une plateforme récalcitrante n'empêche pas les
+    autres."""
+    for action in ("deiconify", "lift", "focus_force"):
+        try:
+            getattr(w, action)()
+        except Exception:
+            pass
+
+
+def _ouvrir_unique(cle, ouvrir_callable, parent=None):
+    """Ouvre une fenêtre en garantissant l'unicité :
+      - si la fenêtre 'cle' est déjà ouverte -> on la ramène devant ;
+      - sinon on l'ouvre via 'ouvrir_callable' puis on la mémorise.
+    'ouvrir_callable' peut renvoyer la fenêtre créée (ou None) ; si elle ne la
+    renvoie pas, on la retrouve parmi les nouveaux Toplevel de 'parent'
+    (robustesse pour les modules qui ne renvoient pas leur fenêtre).
+    Ne lève jamais d'exception : en cas de souci, la fenêtre s'ouvre normalement
+    (comportement d'avant), aucune régression."""
+    existante = _fenetre_deja_ouverte(cle)
+    if existante is not None:
+        _presenter(existante)
+        return existante
+
+    avant = set()
+    if parent is not None:
+        try:
+            avant = set(parent.winfo_children())
+        except Exception:
+            avant = set()
+
+    try:
+        win = ouvrir_callable()
+    except Exception:
+        return None
+
+    # Repli (seulement si la fabrique n'a pas renvoyé la fenêtre) : retrouver le
+    # nouveau Toplevel parmi les enfants du parent. tkinter n'est importé QUE
+    # dans cette branche, sous garde, pour ne jamais gêner un usage sans écran.
+    if not _est_fenetre(win) and parent is not None:
+        try:
+            import tkinter as tk
+            nouveaux = [w for w in parent.winfo_children()
+                        if w not in avant and isinstance(w, tk.Toplevel)]
+            if nouveaux:
+                win = nouveaux[-1]
+        except Exception:
+            pass
+
+    if _est_fenetre(win):
+        _FENETRES_UNIQUES[cle] = win
+    return win
+
+
 # ── Actions des boutons ───────────────────────────────────────────────────────
 # Chaque action se contente d'OUVRIR un module autonome. Import LOCAL (au clic)
 # pour que la fenêtre Avancé s'ouvre même si un module optionnel est absent.
@@ -325,32 +406,11 @@ def _ouvrir_comb(parent, status):
     # suivante. Point d'entrée attendu : run_comb_generator(parent).
     fn = getattr(CG, "run_comb_generator", None)
     if callable(fn):
-        fn(parent)
+        win = fn(parent)
         status(tr("Générateur .comb ouvert."))
+        return win
     else:
         status(tr("Moteur .comb prêt (chapitres 1-5) — interface à assembler."))
-
-
-def _ouvrir_comb_assembler(parent, status):
-    """Ouvre l'ASSEMBLEUR de .comb (mode guidé) : tableau qui relie chaque
-    extent présent dans Extents/ à un provider, avec alertes de couverture.
-    Sortie dans Providers/Provider_Extents.comb. Même module que le générateur
-    (O4_comb_generator), point d'entrée run_comb_assembler(parent). Import LOCAL
-    et protégé : la fenêtre Avancé reste ouvrable même si le module est absent."""
-    try:
-        import O4_comb_generator as CG
-    except Exception as ex:
-        status(tr("Assembleur .comb introuvable : %s") % ex)
-        return
-    fn = getattr(CG, "run_comb_assembler", None)
-    if callable(fn):
-        try:
-            fn(parent)
-            status(tr("Assembleur .comb ouvert."))
-        except Exception as ex:
-            status(tr("Erreur à l'ouverture de l'assembleur .comb : %s") % ex)
-    else:
-        status(tr("Module .comb présent mais run_comb_assembler() absent."))
 
 
 def _ouvrir_josm(parent, status):
@@ -368,8 +428,9 @@ def _ouvrir_josm(parent, status):
         status(tr("O4_Avance_Utils présent mais open_avance_window() absent."))
         return
     try:
-        fn(parent)
+        win = fn(parent)
         status(tr("Fenêtre JOSM ouverte."))
+        return win
     except Exception as ex:
         status(tr("Erreur à l'ouverture de JOSM : %s") % ex)
 
@@ -392,8 +453,9 @@ def _ouvrir_altimetrie(parent, status):
         return
     fn = getattr(ALTI, "open_altimetrie_window", None)
     if callable(fn):
-        fn(parent)
+        win = fn(parent)
         status("Altimétrie ouverte.")
+        return win
     else:
         status("Point d'entrée Altimétrie manquant.")
 
@@ -410,8 +472,9 @@ def _ouvrir_bathymetrie(parent, status):
         return
     fn = getattr(BATHY, "open_bathymetrie_window", None)
     if callable(fn):
-        fn(parent)
+        win = fn(parent)
         status(_L("Bathymétrie ouverte.", "Bathymetry opened."))
+        return win
     else:
         status(_L("Point d'entrée Bathymétrie manquant.",
                   "Bathymetry entry point missing."))
@@ -433,8 +496,9 @@ def _ouvrir_extent_generator(parent, status):
                   "O4_Extent_Generator present but run_extent_generator() missing."))
         return
     try:
-        fn(parent)
+        win = fn(parent)
         status(_L("Générateur d'Extents ouvert.", "Extent Generator opened."))
+        return win
     except Exception as ex:
         status(_L("Erreur à l'ouverture du Générateur d'Extents : %s",
                   "Error opening the Extent Generator: %s") % ex)
@@ -457,9 +521,10 @@ def _ouvrir_lay_generator(parent, status):
                   "O4_lay_generator present but run_lay_generator() missing."))
         return
     try:
-        fn(parent)
+        win = fn(parent)
         status(_L("Générateur de provider (.lay) ouvert.",
                   "Provider (.lay) generator opened."))
+        return win
     except Exception as ex:
         status(_L("Erreur à l'ouverture du générateur .lay : %s",
                   "Error opening the .lay generator: %s") % ex)
@@ -501,26 +566,33 @@ def run_menu_avance(parent=None):
 
     # Les boutons de la porte d'entrée. Un seul est actif aujourd'hui (.comb) ;
     # les autres sont posés « à venir » pour montrer la structure sans mentir.
+    # Chaque action passe par _ouvrir_unique : un seul clic = une seule fenêtre
+    # (un 2e clic ramène la fenêtre déjà ouverte au premier plan).
     boutons = [
-        (_L("🔗  Relier mes extents aux providers (.comb)",
-            "🔗  Link my extents to providers (.comb)"),
-         lambda: _ouvrir_comb_assembler(parent, status)),
-        (_L("🧩  Générer un .comb — mode expert",
-            "🧩  Generate a .comb — expert mode"),
-         lambda: _ouvrir_comb(parent, status)),
+        (_L("🧩  Générer un .comb", "🧩  Generate a .comb"),
+         lambda: _ouvrir_unique(
+             "comb", lambda: _ouvrir_comb(parent, status), parent)),
         (_L("🗂  Créer / modifier un provider (.lay)",
             "🗂  Create / edit a provider (.lay)"),
-         lambda: _ouvrir_lay_generator(parent, status)),
-        (tr("JOSM / Extents (masques, zones)"), lambda: _ouvrir_josm(parent, status)),
+         lambda: _ouvrir_unique(
+             "lay", lambda: _ouvrir_lay_generator(parent, status), parent)),
+        (tr("JOSM / Extents (masques, zones)"),
+         lambda: _ouvrir_unique(
+             "josm", lambda: _ouvrir_josm(parent, status), parent)),
         (_L("🗺  Générer un Extent (pays / région)",
             "🗺  Generate an Extent (country / region)"),
-         lambda: _ouvrir_extent_generator(parent, status)),
-        (tr("Altimétrie / DEM / QGIS"), lambda: _ouvrir_altimetrie(parent, status)),
+         lambda: _ouvrir_unique(
+             "extent", lambda: _ouvrir_extent_generator(parent, status), parent)),
+        (tr("Altimétrie / DEM / QGIS"),
+         lambda: _ouvrir_unique(
+             "altimetrie", lambda: _ouvrir_altimetrie(parent, status), parent)),
         (_L("Bathymétrie / QGIS", "Bathymetry / QGIS"),
-         lambda: _ouvrir_bathymetrie(parent, status)),
-             (_L("📄  Pas à pas — utilisation des modules",
+         lambda: _ouvrir_unique(
+             "bathymetrie", lambda: _ouvrir_bathymetrie(parent, status), parent)),
+        (_L("📄  Pas à pas — utilisation des modules",
             "📄  Step by step — using the modules"),
-         lambda: _ouvrir_tutos(parent, status)),
+         lambda: _ouvrir_unique(
+             "tutos", lambda: _ouvrir_tutos(parent, status), parent)),
     ]
 
     zone = tk.Frame(win, bg=BG)
