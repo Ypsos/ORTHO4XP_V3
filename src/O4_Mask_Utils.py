@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.11
 import os
 import sys
+import ast
 import time
 import queue
 from math import atan, ceil, floor
@@ -193,7 +194,7 @@ def build_masks(tile, for_imagery=False):
         )[1024 : 4096 + 1024, 1024 : 4096 + 1024]
         
         if tile.masks_custom_extent:
-            blured_mask = numpy.maximum(blured_mask, custom_mask)
+            blured_mask = numpy.maximum(blured_mask, custom_array)
 
         if blured_mask.max() != 0 and (blured_mask < 249).any():
             mask_im = Image.fromarray(blured_mask)
@@ -940,7 +941,11 @@ if __name__ == "__main__":
     else:
         epsg_code = "4326"
     if nargs == 8:
-        grid_size_or_bbox = eval(sys.argv[7])
+        # Securite : ast.literal_eval au lieu de eval (aucune execution de
+        # code arbitraire). L'argument attendu est un simple litteral :
+        # soit un tuple bbox (xmin, ymin, xmax, ymax), soit un nombre
+        # (grid_size). Comportement identique a l'ancien eval pour ces cas.
+        grid_size_or_bbox = ast.literal_eval(sys.argv[7])
     else:
         grid_size_or_bbox = 0.02 if epsg_code == "4326" else 2000
     pixel_size = float(sys.argv[2])

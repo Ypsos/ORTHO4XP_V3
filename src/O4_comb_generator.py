@@ -1250,19 +1250,37 @@ def generer_comb_depuis_extents(provider_actif, base_dir=None,
 
 
 def recharger_comb_a_chaud():
-    """Après écriture, demande à Ortho de re-scanner Providers/ pour que la
-    nouvelle entrée « Provider_Extents » apparaisse dans imagery sans relancer.
-    Protégé : True si réussi, False sinon (repli : relancer Ortho)."""
+    """Après écriture d'un .comb, rafraîchit la liste Imagery SANS relancer Ortho.
+
+    Point important : reconstruire le dictionnaire interne des providers ne
+    suffit PAS — le MENU DÉROULANT Imagery affiché reste tel quel tant que son
+    widget n'est pas repeuplé (il n'est rempli qu'au lancement). C'est pourquoi,
+    avant, la nouvelle entrée n'apparaissait qu'après relance.
+
+    Correctif : on appelle la méthode _reload_personal_providers() DÉJÀ présente
+    dans la fenêtre principale (elle re-scanne les providers ET repeuple
+    self.img_combo). On atteint l'instance du GUI via O4_UI_Utils.gui. Aucune
+    ligne ajoutée côté GUI : toute la logique reste ici, dans le module .comb.
+
+    Retour : True si le menu déroulant a bien été repeuplé (message « Liste
+    imagery rafraîchie » justifié), False sinon (repli : relancer Ortho)."""
     try:
         import sys
+        # 1) Chemin idéal : repeupler le widget via la méthode du GUI.
+        UIU = sys.modules.get("O4_UI_Utils")
+        gui = getattr(UIU, "gui", None) if UIU is not None else None
+        reload_fn = getattr(gui, "_reload_personal_providers", None)
+        if callable(reload_fn):
+            reload_fn()
+            return True
+        # 2) Repli (GUI indisponible, ex. test isolé) : au moins rafraîchir le
+        #    dictionnaire interne pour que les données soient à jour.
         IMG = sys.modules.get("O4_Imagery_Utils")
-        if IMG is None:
-            return False
-        fn = getattr(IMG, "initialize_combined_providers_dict", None)
-        if not callable(fn):
-            return False
-        fn()
-        return True
+        fn = getattr(IMG, "initialize_combined_providers_dict", None) \
+            if IMG is not None else None
+        if callable(fn):
+            fn()
+        return False
     except Exception:
         return False
 
@@ -1906,16 +1924,94 @@ def run_comb_assembler(parent=None):
 
     _make_themed_button_c(tk, win, _tr("Fermer"), win.destroy).pack(pady=(2, 10))
 
-    # Démarrage MODE AUTOMATISÉ : on PRÉREMPLIT d'emblée depuis les extents
-    # présents dans Extents/ (une ligne par extent, reliée au provider le plus
-    # probable). L'utilisateur non expert voit ainsi tout de suite ses extents
-    # reliés, au lieu d'une fenêtre vide et déroutante ; il n'a plus qu'à
-    # vérifier/ajuster puis Enregistrer. _proposer_depuis_extents gère seul le
-    # cas « aucun extent » (message clair). Si vraiment rien n'a pu être posé,
-    # on laisse une ligne vide éditable (garde-fou anti-page-blanche).
-    _proposer_depuis_extents()
+    def _charger_ou_proposer():
+        """Démarrage intelligent du MODE AUTOMATISÉ :
+          - si Provider_Extents.comb existe déjà -> on le RECHARGE tel quel
+            (on conserve provider / filtre / priorité / ordre déjà choisis), y
+            compris les lignes dont l'extent a disparu de Extents/ (on ne
+            détruit pas le travail de l'utilisateur), PUIS on ajoute EN BAS les
+            extents de Extents/ pas encore présents dans le fichier ;
+          - sinon -> comportement initial : une proposition depuis les extents.
+        Ainsi, quand l'utilisateur ajoute des extents, il MET À JOUR son .comb
+        au lieu de repartir de zéro."""
+        chemin = os.path.join(prov_dir, COMB_OUTPUT_NAME)
+        lignes = []
+        if os.path.isfile(chemin):
+            try:
+                with open(chemin, encoding="utf-8") as _f:
+                    _txt = _f.read()
+                lignes, _rapport = parser_lignes_comb(_txt)
+            except Exception:
+                lignes = []
+
+        if not lignes:
+            # Pas de .comb exploitable : proposition fraîche depuis les extents.
+            _proposer_depuis_extents()
+            return
+
+        rows.clear()
+        zones_presentes = set()
+        # 1) Reprendre telles quelles les lignes du .comb existant.
+        for e in lignes:
+            rows.append(_new_row(
+                ext=_aff_ext(e["zone"]),
+                prov=e["provider"],
+                filtre=_aff_flt(e.get("filtre", "none")),
+                prio_aff=_PRIO_AFF.get(e["priorite"], _PRIO_AFF["medium"])))
+            zones_presentes.add(e["zone"])
+        # 2) Ajouter EN BAS les extents de Extents/ pas encore couverts.
+        nouveaux = 0
+        for e_nom in extents:
+            if e_nom not in zones_presentes:
+                props = _providers_pour(e_nom)
+                rows.append(_new_row(ext=_aff_ext(e_nom),
+                                     prov=(props[0] if props else ""),
+                                     prio_aff=_PRIO_AFF["medium"]))
+                nouveaux += 1
+        _rebuild()
+        if nouveaux:
+            status(_L("%d ligne(s) rechargée(s) + %d nouvel(s) extent(s) "
+                      "ajouté(s) en bas. Complétez-les puis Enregistrer.",
+                      "%d line(s) reloaded + %d new extent(s) added at the "
+                      "bottom. Complete them then Save.")
+                   % (len(lignes), nouveaux))
+        else:
+            status(_L("%d ligne(s) rechargée(s) depuis Provider_Extents.comb.",
+                      "%d line(s) reloaded from Provider_Extents.comb.")
+                   % len(lignes))
+
+    # Démarrage MODE AUTOMATISÉ : on recharge le .comb existant s'il y en a un
+    # (mise à jour incrémentale : nouveaux extents ajoutés en bas), sinon on
+    # propose depuis les extents. Garde-fou anti-page-blanche si rien n'a pu
+    # être posé.
+    _charger_ou_proposer()
     if not rows:
         _ajouter_ligne()
+
+    # Verrou de taille (identique au mode expert) : largeur pour ne pas couper
+    # les colonnes à droite, hauteur pour que le bouton « Fermer » (tout en bas)
+    # ne soit jamais masqué par le bord inférieur. Le tableau a une hauteur fixe
+    # (canvas 300 px + défilement interne) → hauteur requise bornée. Plafonnée à
+    # l'écran. Mesure après affichage (win.after).
+    def _verrouiller_largeur():
+        try:
+            win.update_idletasks()
+            besoin_liste = inner.winfo_reqwidth() + 24 + 22   # padx + scrollbar
+            besoin_bas = btns.winfo_reqwidth() + 24
+            larg = max(besoin_liste, besoin_bas, 1180)
+            ecran_h = win.winfo_screenheight()
+            haut = max(win.winfo_reqheight(), 600)   # inclut le bouton Fermer
+            haut = min(haut, ecran_h - 80)           # jamais plus haut que l'écran
+            win.minsize(larg, haut)
+            if win.winfo_width() < larg or win.winfo_height() < haut:
+                win.geometry("%dx%d" % (max(win.winfo_width(), larg), haut))
+        except Exception:
+            pass
+
+    try:
+        win.after(80, _verrouiller_largeur)
+    except Exception:
+        pass
 
     return win
 
@@ -2323,10 +2419,53 @@ def run_comb_corriger(parent=None):
             return
         _ok_e, _msg_e = _ouvrir_dans_editeur(chemin)
         status(_msg_e)
+    def _enregistrer_sous():
+        """« Enregistrer sous… » : écrit le tableau courant dans un .comb au nom
+        choisi par l'utilisateur (permet ex. d'ouvrir Provider_Extents.comb et de
+        le renommer/archiver). Garde-fou ZonePhoto.comb conservé."""
+        sel, incompletes, dups = _selection_depuis_table()
+        ok, problemes = valider_selection(sel)
+        if not ok:
+            messagebox.showwarning(_tr("Corriger .comb"),
+                                   _tr("Sélection incomplète :") + "\n- "
+                                   + "\n- ".join(problemes))
+            return
+        chemin = filedialog.asksaveasfilename(
+            title=_L("Enregistrer le .comb sous…", "Save the .comb as…"),
+            initialdir=prov_dir, initialfile=COMB_OUTPUT_NAME,
+            defaultextension=".comb",
+            filetypes=[(_L("Fichier .comb", ".comb file"), "*.comb")])
+        if not chemin:
+            status(_L("Enregistrement annulé.", "Save cancelled."))
+            return
+        # Garde-fou : ne JAMAIS écraser le fichier personnel ZonePhoto.comb.
+        if os.path.basename(chemin).lower() == "zonephoto.comb":
+            messagebox.showerror(
+                _tr("Corriger .comb"),
+                _L("ZonePhoto.comb est protégé et ne peut pas être écrasé. "
+                   "Choisissez un autre nom.",
+                   "ZonePhoto.comb is protected and cannot be overwritten. "
+                   "Choose another name."))
+            return
+        # asksaveasfilename confirme déjà le remplacement côté système → forcer.
+        ok1, msg1 = ecrire_comb(sel, chemin, entete_lignes=_entete(),
+                                forcer=True)
+        status(msg1 + _note_lignes(incompletes, dups))
+        if ok1:
+            recharge = recharger_comb_a_chaud()   # Chapitre 7
+            suffixe = ("\n\n" + _tr("Liste imagery rafraîchie.")) if recharge \
+                else ("\n\n" + _tr("Relancez Ortho4XP pour voir l'entrée dans "
+                                   "imagery."))
+            messagebox.showinfo(_tr("Corriger .comb"), msg1 + suffixe)
+        else:
+            messagebox.showerror(_tr("Corriger .comb"), msg1)
+
     for txt, cmd in ((_tr("Importer un .comb"), _importer),
                      (_tr("Ajouter une ligne"), _ajouter_ligne),
                      (_tr("Aperçu"), _apercu),
                      (_L("💾  Enregistrer", "💾  Save"), _generer),
+                     (_L("💾  Enregistrer sous…", "💾  Save as…"),
+                      _enregistrer_sous),
                      (_L("📝 Éditeur texte", "📝 Text editor"),
                       _ouvrir_editeur_out)):
         _make_themed_button_c(tk, btns, txt, cmd).pack(side="left", padx=4)
@@ -2368,21 +2507,40 @@ def run_comb_corriger(parent=None):
                   "Blank document: add lines, or « Import a .comb » to load a "
                   "file."))
 
-    # Verrou de largeur : une fois la fenêtre affichée, on MESURE la largeur
-    # réelle nécessaire (tableau + rangée de boutons) et on élargit la fenêtre
-    # si besoin, pour qu'AUCUNE colonne (Priorité, ✕) ne soit coupée par le bord
-    # droit. Mesure faite après affichage (win.after), sinon reqwidth vaut 1.
-    # S'adapte à la police et à la plateforme (macOS/Windows/Linux).
+    # La boîte de sélection de fichier vole le premier plan : on ramène la
+    # fenêtre « Corriger un .comb » DEVANT une fois le chargement fait, sinon
+    # elle reste cachée derrière la fenêtre principale (retour test).
+    def _au_premier_plan():
+        for a in ("deiconify", "lift", "focus_force"):
+            try:
+                getattr(win, a)()
+            except Exception:
+                pass
+    try:
+        win.after(120, _au_premier_plan)
+    except Exception:
+        pass
+
+    # Verrou de taille : une fois la fenêtre affichée, on MESURE la largeur ET
+    # la hauteur réellement nécessaires, et on impose une taille minimale.
+    #  - Largeur : pour qu'AUCUNE colonne (Priorité, ✕) ne soit coupée à droite.
+    #  - Hauteur : pour que le bouton « Fermer » (tout en bas) ne soit JAMAIS
+    #    masqué par le bord inférieur. Le tableau ayant une hauteur fixe (320 px
+    #    + défilement interne), la hauteur requise est bornée (elle ne gonfle pas
+    #    avec le nombre de lignes). On plafonne à l'écran pour que le bas reste
+    #    visible. S'adapte police + plateforme (macOS/Windows/Linux).
     def _verrouiller_largeur():
         try:
             win.update_idletasks()
             besoin_liste = inner.winfo_reqwidth() + 24 + 22   # padx + scrollbar
             besoin_bas = btns.winfo_reqwidth() + 24
             larg = max(besoin_liste, besoin_bas, 1180)
-            win.minsize(larg, 600)
-            if win.winfo_width() < larg:
-                haut = max(win.winfo_height(), 680)
-                win.geometry("%dx%d" % (larg, haut))
+            ecran_h = win.winfo_screenheight()
+            haut = max(win.winfo_reqheight(), 600)   # inclut le bouton Fermer
+            haut = min(haut, ecran_h - 80)           # jamais plus haut que l'écran
+            win.minsize(larg, haut)
+            if win.winfo_width() < larg or win.winfo_height() < haut:
+                win.geometry("%dx%d" % (max(win.winfo_width(), larg), haut))
         except Exception:
             pass
 

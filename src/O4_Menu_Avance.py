@@ -387,6 +387,13 @@ def _ouvrir_unique(cle, ouvrir_callable, parent=None):
 
     if _est_fenetre(win):
         _FENETRES_UNIQUES[cle] = win
+        # Nouvelle fenêtre : on la remonte DEVANT la fenêtre principale (retour
+        # test : les fenêtres secondaires s'ouvraient souvent derrière). Différé
+        # pour passer APRÈS d'éventuelles boîtes de dialogue du module.
+        try:
+            win.after(60, lambda w=win: _presenter(w))
+        except Exception:
+            _presenter(win)
     return win
 
 
