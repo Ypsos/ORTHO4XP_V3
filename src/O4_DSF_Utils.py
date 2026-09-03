@@ -118,6 +118,13 @@ def zone_list_to_ortho_dico(tile):
     if tile.cover_airports_with_highres in ("True", "ICAO"):
         UI.vprint(1, "-> Checking airport locations for upgraded zoomlevel.")
         try:
+            # Securite : on refuse de charger un cache airport non authentique
+            # (signature verifiee par le mecanisme existant, identique a
+            # O4_Mesh_Utils). Un cache absent ou falsifie leve une exception
+            # attrapee ci-dessous -> repli sur dico_airports = {} (comportement
+            # de securite deja prevu). Voir O4_File_Names.check_apt_file().
+            if not FNAMES.check_apt_file(tile):
+                raise Exception("airport cache absent or not authentic")
             f = open(FNAMES.apt_file(tile), "rb")
             dico_airports = pickle.load(f)
             f.close()
@@ -394,6 +401,31 @@ def extract_elevation_and_bathymetry_data(lat, lon):
         try:
             import py7zr
             os.replace(tmp_file, tmp_file + ".7z")
+            # Securite anti zip-slip : on verifie que chaque fichier de
+            # l'archive reste bien a l'interieur de Tmp_dir avant extraction.
+            # Une archive saine (cas normal) s'extrait exactement pareil ;
+            # une archive piegee est refusee -> bathymetrie sautee (repli
+            # deja prevu par le except ci-dessous). Controle independant de
+            # l'OS : on normalise les deux separateurs (/ et \) et on refuse
+            # tout chemin absolu ou toute remontee "..".
+            _dest_dir = os.path.realpath(FNAMES.Tmp_dir)
+            with py7zr.SevenZipFile(tmp_file + ".7z", mode='r') as _arch_check:
+                for _name in _arch_check.getnames():
+                    _parts = _name.replace("\\", "/").split("/")
+                    _target = os.path.realpath(
+                        os.path.join(FNAMES.Tmp_dir, *_parts)
+                    )
+                    if (
+                        _name.replace("\\", "/").startswith("/")
+                        or ".." in _parts
+                        or (
+                            _target != _dest_dir
+                            and not _target.startswith(_dest_dir + os.sep)
+                        )
+                    ):
+                        raise Exception(
+                            "Unsafe 7z member path (zip-slip): " + _name
+                        )
             with py7zr.SevenZipFile(tmp_file + ".7z", mode='r') as archive:
                 archive.extractall(path=FNAMES.Tmp_dir)
             os.remove(tmp_file + ".7z")
