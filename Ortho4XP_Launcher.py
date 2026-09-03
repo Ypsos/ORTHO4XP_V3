@@ -1117,12 +1117,24 @@ exec "./venv/bin/python3" "Ortho4XP_Launcher.py"
         self._log("✅ Lanceur ORTHO4XP.desktop créé — double-clic pour lancer !")
 
     def _create_windows_launcher(self):
-        """Crée Lanceur ORTHO4XP.vbs"""
+        """Crée Lanceur ORTHO4XP.vbs — chemins RELATIFS (portable).
+
+        Le .vbs dérive son propre dossier via WScript.ScriptFullName : il
+        continue de fonctionner après déplacement ou renommage du dossier de
+        base (plusieurs versions dans des dossiers différents). Identique à
+        _create_windows_daily_launcher (plus de chemins absolus en dur)."""
         vbs = BASE_DIR / "Lanceur ORTHO4XP.vbs"
         vbs.write_text(
-            f'Dim ws : Set ws = CreateObject("WScript.Shell")\n'
-            f'ws.Run Chr(34) & "{BASE_DIR / "venv" / "Scripts" / "pythonw.exe"}" & Chr(34)'
-            f' & " " & Chr(34) & "{BASE_DIR / "Ortho4XP_Launcher.py"}" & Chr(34), 1, False\n',
+            "Dim ws,fso,d,py,la\n"
+            "Set ws=CreateObject(\"WScript.Shell\")\n"
+            "Set fso=CreateObject(\"Scripting.FileSystemObject\")\n"
+            "d=fso.GetParentFolderName(WScript.ScriptFullName)\n"
+            "py=d & \"\\\\venv\\\\Scripts\\\\pythonw.exe\"\n"
+            "la=d & \"\\\\Ortho4XP_Launcher.py\"\n"
+            "If Not fso.FileExists(py) Then\n"
+            "  MsgBox \"Lancez d'abord INSTALL_ORTHO4XP.vbs\",48,\"Ortho4XP\"\n"
+            "  WScript.Quit\nEnd If\n"
+            "ws.Run Chr(34)&py&Chr(34)&\" \"&Chr(34)&la&Chr(34),1,False\n",
             encoding="utf-8")
         self._log("✅ Lanceur ORTHO4XP.vbs créé — double-clic pour lancer !")
 

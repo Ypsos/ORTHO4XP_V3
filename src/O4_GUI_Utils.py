@@ -1898,6 +1898,11 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             )
         except:
             self.zlpol.set(17)
+        # Memoire du ZL de la zone actuellement en cours de trace. Sert a
+        # l'auto-sauvegarde : quand l'utilisateur clique un NOUVEAU bouton ZL
+        # alors qu'une zone est en cours, on sauve cette zone avec SON ZL
+        # d'origine avant de passer au suivant (voir on_zl_change).
+        self._prev_zlpol = self.zlpol.get()
         self.gb = tk.StringVar()
         self.gb.set("0Gb")
 
@@ -2002,7 +2007,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 text="ZL" + str(zl),
                 variable=self.zlpol,
                 value=zl,
-                command=self.redraw_poly,
+                command=self.on_zl_change,
             ).grid(row=0, column=col, padx=1, pady=1, sticky=N + S + E + W)
 
         tk.Label(
@@ -2162,10 +2167,15 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             self.canvas.bind("<ButtonPress-3>", self.scroll_start)
             self.canvas.bind("<B3-Motion>", self.scroll_move)
             self.canvas.bind("<Control-ButtonPress-3>", self.delPol)
-        self.canvas.bind("<ButtonPress-1>",
-            lambda e: None if (e.state & 0x1 or e.state & 0x4) else self.scroll_start(e))
-        self.canvas.bind("<B1-Motion>",
-            lambda e: None if (e.state & 0x1 or e.state & 0x4) else self.scroll_move(e))
+        self.canvas.bind("<ButtonPress-1>",   self._on_left_press)
+        self.canvas.bind("<B1-Motion>",        self._on_left_drag)
+        self.canvas.bind("<ButtonRelease-1>",  self._on_left_release)
+        self.canvas.bind("<Motion>",           self._on_hover)
+        # Etat pour l'edition d'un sommet (attraper / deplacer un point de la
+        # zone EN COURS de trace). Reinitialise a chaque preview.
+        self._drag_pt_idx = None
+        self._hover_idx   = None
+        self._hover_obj   = None
         self.canvas.bind("<Shift-ButtonPress-1>",         self.newPoint)
         self.canvas.bind("<Control-Shift-ButtonPress-1>", self.newPointGrid)
         self.canvas.bind("<Control-ButtonPress-1>",       self._ctrl_click)
@@ -2320,6 +2330,31 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         self.canvas.scan_dragto(event.x, event.y, gain=1)
         return
 
+    def on_zl_change(self):
+        """Appelee quand l'utilisateur clique un bouton ZL.
+
+        Si une zone est en cours de trace (au moins 3 points poses mais pas
+        encore sauvegardee) ET que le ZL choisi est different du precedent,
+        on sauvegarde AUTOMATIQUEMENT la zone en cours avec son ZL d'origine
+        avant de passer au nouveau ZL. Cela evite que les points de la zone
+        suivante se rattachent a la precedente (zones reliees par un trait).
+
+        Le workflow "anneaux" devient : tracer l'anneau -> cliquer le ZL
+        suivant (la zone precedente se range toute seule) -> tracer le
+        suivant, etc.
+        """
+        new_zl = self.zlpol.get()
+        prev_zl = getattr(self, "_prev_zlpol", None)
+        # len(self.points) est en nombre de valeurs (2 par point) : >= 6 = au
+        # moins 3 points = un polygone valide (meme critere que save_zone_cmd).
+        if len(self.points) >= 6 and prev_zl is not None and new_zl != prev_zl:
+            # On sauve la zone en cours avec SON ZL (prev_zl), pas le nouveau.
+            self.zlpol.set(prev_zl)
+            self.save_zone_cmd()        # remet points/coords a zero
+            self.zlpol.set(new_zl)      # retablit la selection utilisateur
+        self._prev_zlpol = new_zl
+        self.redraw_poly()
+
     def redraw_poly(self):
         try:
             self.canvas.delete(self.poly_curr)
@@ -2338,6 +2373,103 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         except:
             pass
         return
+
+    def _find_near_point(self, event, threshold=12):
+        """Index (numero de sommet) du point de la zone EN COURS le plus proche
+        du curseur si distance <= threshold px, sinon None. Ne concerne QUE la
+        zone en cours de trace (self.points), pas les zones deja sauvegardees."""
+        if not self.points:
+            return None
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        best_idx = None
+        best_d2 = float(threshold * threshold)
+        for i in range(len(self.points) // 2):
+            dx = self.points[2 * i] - x
+            dy = self.points[2 * i + 1] - y
+            d2 = dx * dx + dy * dy
+            if d2 <= best_d2:
+                best_d2 = d2
+                best_idx = i
+        return best_idx
+
+    def _draw_hover_marker(self, idx):
+        """Affiche (ou retire) le petit rond de surbrillance sur le point
+        survole, pour montrer qu'il est attrapable."""
+        try:
+            if self._hover_obj is not None:
+                self.canvas.delete(self._hover_obj)
+        except Exception:
+            pass
+        self._hover_obj = None
+        if idx is None or not self.points:
+            return
+        try:
+            x = self.points[2 * idx]
+            y = self.points[2 * idx + 1]
+            r = 6
+            self._hover_obj = self.canvas.create_oval(
+                x - r, y - r, x + r, y + r,
+                outline="#742374", fill="#c8e65a", width=2
+            )
+        except Exception:
+            self._hover_obj = None
+
+    def _on_hover(self, event):
+        """Souris sans bouton : surligne le point survole s'il est assez proche,
+        pour indiquer qu'on peut l'attraper."""
+        if getattr(self, "_drag_pt_idx", None) is not None:
+            return
+        idx = self._find_near_point(event)
+        if idx == getattr(self, "_hover_idx", None):
+            return
+        self._hover_idx = idx
+        self._draw_hover_marker(idx)
+
+    def _on_left_press(self, event):
+        """Bouton gauche enfonce. Si un point de la zone en cours est juste sous
+        le curseur -> on l'attrape (edition). Sinon -> deplacement de la carte
+        (comportement historique). Les clics Shift/Ctrl gardent leurs propres
+        liaisons (ajout de point / rectangle)."""
+        if event.state & 0x1 or event.state & 0x4:
+            return
+        idx = self._find_near_point(event)
+        if idx is not None:
+            self._drag_pt_idx = idx
+            return
+        self._drag_pt_idx = None
+        self.scroll_start(event)
+
+    def _on_left_drag(self, event):
+        """Glisser bouton gauche. Point attrape -> on le deplace ; sinon ->
+        deplacement de la carte (comportement historique)."""
+        if event.state & 0x1 or event.state & 0x4:
+            return
+        if getattr(self, "_drag_pt_idx", None) is not None:
+            self._move_point(self._drag_pt_idx, event)
+            return
+        self.scroll_move(event)
+
+    def _on_left_release(self, event):
+        """Relacher bouton gauche : on lache le point eventuellement attrape."""
+        self._drag_pt_idx = None
+
+    def _move_point(self, idx, event):
+        """Deplace le sommet idx de la zone en cours vers le curseur. Met a jour
+        la coordonnee geographique (coords) ET le point ecran (points) de facon
+        coherente, comme newPointGrid / _redraw_all."""
+        if idx is None or 2 * idx + 1 >= len(self.points):
+            return
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        [latp, lonp] = self.xy_to_latlon(x, y, self.zoomlevel)
+        self.coords[2 * idx] = latp
+        self.coords[2 * idx + 1] = lonp
+        [px, py] = self.latlon_to_xy(latp, lonp, self.zoomlevel)
+        self.points[2 * idx] = int(px)
+        self.points[2 * idx + 1] = int(py)
+        self.redraw_poly()
+        self._draw_hover_marker(idx)
 
     def newPoint(self, event):
         x = self.canvas.canvasx(event.x)
