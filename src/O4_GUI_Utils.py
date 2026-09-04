@@ -264,6 +264,17 @@ class Ortho4XP_GUI(tk.Tk):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)   # console extensible
 
+        # ── Barre de menus native (module externe O4_Menu_Bar) ─────────
+        #  Ajout pur : double l'accès aux fonctions existantes, ne retire
+        #  aucun bouton. Non bloquant : si le module est absent ou en
+        #  erreur, l'interface démarre normalement (comme les autres
+        #  modules optionnels ci-dessus).
+        try:
+            import O4_Menu_Bar
+            O4_Menu_Bar.install_menubar(self)
+        except Exception as _e:
+            print(f"[GUI] menubar: {_e}")
+
         # ── Icônes (GIF natifs Ortho4XP) ─────────────────────────────
         def _load_icon(name):
             try:
@@ -375,43 +386,16 @@ class Ortho4XP_GUI(tk.Tk):
             kw_folder["text"] = "📁"; kw_folder["width"] = 4
         ttk.Button(self.frame_folder, **kw_folder).grid(row=0, column=2, padx=0, pady=0, sticky=N+S+E+W)
 
-               # ══ RUBRIQUE 2 : Gestion des Données ══════════════════════════
-        sec_data = _section(tr('Gestion des Données'), 1)
-        self.frame_data = tk.Frame(sec_data, border=0, padx=5, pady=2, bg=_BG)
-        self.frame_data.grid(row=0, column=0, sticky=N+S+W+E)
-        self.frame_data.columnconfigure(5, weight=1)
+        # ══ RUBRIQUE 2 « Gestion des Données » : SUPPRIMÉE ════════════
+        #  Ses boutons (Altimétrie, Bathymétrie, provider .lay, Cache OSM,
+        #  Analyse Fournisseurs) sont désormais dans la barre de menus
+        #  (Outils). Les méthodes correspondantes restent intactes.
+        #  Timeline (Chronologie) : bouton ET méthode d'affichage _show_timeline
+        #  supprimés (plus aucun appel). Le chronomètre du build lui-même
+        #  (_build_timeline) reste actif et mesure la durée de chaque étape.
+        #  Le label RAM est déplacé plus bas, au bout de la ligne des barres
+        #  de progression (rubrique Fabrication Tuile).
 
-        self._themed_button(self.frame_data,
-            tr("⛰ Altimétrie / DEM / QGIS"), self.open_altimetrie_module,
-            width=165).grid(row=0, column=0, padx=5, pady=2, sticky=W)
-
-        self._themed_button(self.frame_data,
-            tr("🌊 Bathymétrie"), self.open_bathymetrie_module,
-            width=165).grid(row=0, column=1, padx=5, pady=2, sticky=W)
-
-        self._themed_button(self.frame_data,
-            tr("🖼 Add Image Provider"), self.open_lay_generator_module,
-            width=225).grid(row=0, column=2, padx=5, pady=2, sticky=W)
-
-        self._themed_button(self.frame_data,
-            tr("🗺 Cache OSM local (.pbf)"), self.open_pbf_module,
-            width=165).grid(row=0, column=3, padx=5, pady=2, sticky=W)
-
-        self._themed_button(self.frame_data,
-            tr("📊 Analyse Fournisseurs"), self.open_provider_score_module,
-            width=165).grid(row=0, column=4, padx=5, pady=2, sticky=W)
-
-        self._themed_button(self.frame_data,
-            tr("⏱ Timeline"), self._show_timeline,
-            width=110).grid(row=0, column=5, padx=5, pady=2, sticky=W)
-
-        # Label RAM live (mise à jour périodique conservée à l'identique)
-        self._ram_label = tk.Label(self.frame_data,
-            text="RAM: --",
-            bg=_BG, fg=_FG2,
-            font=("TkFixedFont", fs(10)))
-        self._ram_label.grid(row=1, column=5, padx=12, sticky=E)
-        self._update_ram_label()
 
         # ══ RUBRIQUE 3 : Gestion des Couleurs automatisée ═════════════
         sec_color = _section(tr('Gestion des Couleurs automatisée'), 2)
@@ -574,23 +558,24 @@ class Ortho4XP_GUI(tk.Tk):
             self.pgrb_activity.grid(row=0, column=3, padx=5, pady=0)
             self._pgrb_ctk = False
 
-        # ══ RUBRIQUE 5 : Corrections avancées ═════════════════════════
-        sec_adv = _section(tr('Corrections avancées'), 4)
-        self.frame_advanced = tk.Frame(sec_adv, border=0, padx=5, pady=4, bg=_BG)
-        self.frame_advanced.grid(row=0, column=0, sticky=N+S+W+E)
-        for i in range(3): self.frame_advanced.columnconfigure(i, weight=1)
+        # ── Label RAM live : déplacé ici, au bout de la ligne des barres de
+        #    progression. Même objet et même mise à jour périodique
+        #    (_update_ram_label) qu'avant — seul son emplacement change. ──
+        self.frame_bars.columnconfigure(5, weight=1)
+        self._ram_label = tk.Label(self.frame_bars,
+            text="RAM: --",
+            bg=_BG, fg=_FG2,
+            font=("TkFixedFont", fs(10)))
+        self._ram_label.grid(row=0, column=5, padx=12, sticky=E)
+        self._update_ram_label()
 
-        self._themed_button(self.frame_advanced,
-            tr("🛠 Avancé"), self.open_avance_module
-            ).grid(row=0, column=0, padx=5, pady=2, sticky=N+S+E+W)
-
-        self._themed_button(self.frame_advanced,
-            tr("RGB adjustments, sharpness, saturation"), self.open_color_check
-            ).grid(row=0, column=1, padx=5, pady=2, sticky=N+S+E+W)
-
-        self._themed_button(self.frame_advanced,
-            tr("🖊 Correction imagerie/zone"), self.open_correction_module
-            ).grid(row=0, column=2, padx=5, pady=2, sticky=N+S+E+W)
+        # ══ RUBRIQUE « Corrections avancées » RETIRÉE de l'écran principal ══
+        # Le cadre et ses deux boutons — « Corrections R.G.B., Netteté,
+        # saturation » (open_color_check) et « Correction imagerie/zone »
+        # (open_correction_module) — sont désormais accessibles depuis la
+        # barre de menus (menu Outils). Les méthodes moteur sont CONSERVÉES
+        # (dormantes) plus bas dans ce fichier : retirer un bouton ne
+        # supprime jamais sa fonction.
 
         # ── CONSOLE (row=1 principal — extensible) ─────────────────────
         self.frame_console = tk.Frame(self, border=4, relief=RIDGE, bg=_BG)
@@ -734,31 +719,6 @@ class Ortho4XP_GUI(tk.Tk):
         else:
             self.cnorm_sat_label.config(text=f"{v}%  (+sat.)")
 
-    def _show_timeline(self):
-        """Affiche le rapport Timeline dans une fenêtre popup."""
-        try:
-            _reload_theme()
-            win = tk.Toplevel(self)
-            win.title(tr("⏱ Timeline — Durées du build"))
-            win.configure(bg=_BG)
-            win.geometry("520x320")
-            win.resizable(True, True)
-            txt = tk.Text(win, bg=_CON_BG, fg=_CON_FG,
-                          font=("Courier", 11), bd=0, wrap="none")
-            txt.pack(fill="both", expand=True, padx=8, pady=8)
-            report = _build_timeline.report() if _timeline_enabled else tr("Timeline non disponible.")
-            txt.insert("1.0", report)
-            txt.config(state="disabled")
-            # Bouton fermer
-            _ctk_button(win, text=tr("Fermer"), command=win.destroy).pack(pady=4)
-            # Taille minimale : le bouton Fermer reste toujours visible même
-            # si l'utilisateur réduit la fenêtre ; agrandissement libre conservé.
-            win.update_idletasks()
-            win.minsize(max(420, win.winfo_reqwidth()),
-                        max(260, win.winfo_reqheight()))
-        except Exception as e:
-            print(tr("[Timeline] Erreur affichage : ") + str(e))
-
     def _update_ram_label(self):
         """
         Met à jour le label RAM toutes les 10 secondes.
@@ -858,36 +818,6 @@ class Ortho4XP_GUI(tk.Tk):
     def open_lay_generator_module(self):
         import O4_lay_generator
         O4_lay_generator.run_lay_generator(parent=self)
-
-    def open_avance_module(self):
-        """Point d'entrée du bouton « Avancé ».
-
-        Ouvre la fenêtre Menu Avancé (O4_Menu_Avance), porte d'entrée vers
-        tous les outils avancés (JOSM, générateur .comb, etc.). Le module
-        JOSM (O4_Avance_Utils) n'est plus appelé ici : il est appelé depuis
-        le Menu Avancé lui-même.
-
-        Import LOCAL et protégé : si O4_Menu_Avance est absent ou lève une
-        erreur, le GUI reste parfaitement fonctionnel et on se contente
-        d'informer.
-        """
-        from tkinter import messagebox
-        try:
-            import O4_Menu_Avance as _MENUAV
-        except Exception:
-            messagebox.showinfo(
-                tr("Avancé"),
-                tr("Le module O4_Menu_Avance.py est introuvable "
-                   "dans le dossier src/."))
-            return
-        try:
-            _MENUAV.run_menu_avance(self)
-        except Exception as _e:
-            try:
-                UI.vprint(1, "[Avance] " + str(_e))
-            except Exception:
-                pass
-            messagebox.showerror(tr("Avancé"), str(_e))
 
     def open_pbf_module(self):
         """Point d'entrée du bouton « Cache OSM local (.pbf) ».

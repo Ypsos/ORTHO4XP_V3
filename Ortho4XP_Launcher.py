@@ -206,10 +206,22 @@ class Launcher(tk.Tk):
         self.minsize(900, 780)
         self.configure(bg=BG_GLOBAL)
 
-        tk.Label(self, text=f"Ortho4XP {APP_VERSION}", font=("Helvetica", 36, "bold"),
-                 fg="#a6e3a1", bg=BG_GLOBAL).pack(pady=(20, 0))
-        tk.Label(self, text="Version : Mac • Linux • Windows", 
-                 font=("Helvetica", 14, "bold"), fg="#a6e3a1", bg=BG_GLOBAL).pack(pady=(0, 15))
+        # ── Barre de menus native (module externe O4_Menu_Bar) ─────────
+        #  Ajout pur : range les fonctions (Installation, Configuration,
+        #  Aide) en menu natif. Le gros bouton LANCER reste au premier
+        #  niveau. Non bloquant : si le module est absent ou en erreur, le
+        #  lanceur démarre normalement.
+        try:
+            import O4_Menu_Bar
+            O4_Menu_Bar.install_launcher_menubar(self)
+        except Exception as _e:
+            print(f"[Launcher] menubar: {_e}")
+
+        # ── Bannière (image d'en-tête, collée à gauche) ───────────────
+        #  Titre texte « Ortho4XP V3.0 » et sous-titre supprimés : la
+        #  bannière tient lieu d'en-tête. « Version : … » est déplacé en bas
+        #  près de l'indicateur de langue. Non bloquant si image/Pillow absent.
+        self._add_banner()
 
         self.log = tk.Text(
             self,
@@ -243,28 +255,19 @@ class Launcher(tk.Tk):
         self.log.bind("<BackSpace>", lambda e: "break")
         self.log.bind("<Delete>",    lambda e: "break")
 
-        # ==================== 2 COLONNES (3 à gauche / 2 à droite) ====================
-        btn_container = tk.Frame(self, bg=BG_GLOBAL)
-        btn_container.pack(pady=15)
+        # ── Boutons Installer/Vérifier/Historique/Crédits : déplacés dans
+        #    la barre de menus (Installation / Aide). Les méthodes restent
+        #    intactes (open_install_menu, check_integrity, show_history,
+        #    show_credits) — seuls les boutons d'affichage sont retirés.
 
-        col1 = tk.Frame(btn_container, bg=BG_GLOBAL)
-        col1.grid(row=0, column=0, padx=15)
-        HoverButton(col1, tr("1. Installer les Modules"), self.open_install_menu).pack(pady=8)
-        HoverButton(col1, tr("📖 Historique"), self.show_history).pack(pady=8)
-
-        col2 = tk.Frame(btn_container, bg=BG_GLOBAL)
-        col2.grid(row=0, column=1, padx=15)
-        HoverButton(col2, tr("🔍 Vérifier Intégrité"), self.check_integrity).pack(pady=8)
-        HoverButton(col2, tr("📜 Crédits & Licence"), self.show_credits).pack(pady=8)
-
-        # ── Sélecteur de thème ────────────────────────────────────────────
+        # ── Cadre bas : indicateur de langue (le sélecteur de thème et le
+        #    bouton langue sont désormais dans la barre de menus →
+        #    Configuration. Les méthodes de thème/langue restent intactes ;
+        #    self._tm est conservé car le menu Thème s'appuie dessus). ──────
         theme_frame = tk.Frame(self, bg=BG_GLOBAL)
-        theme_frame.pack(pady=(5, 10))
+        theme_frame.pack(fill="x", padx=30, pady=(5, 10))
 
-        tk.Label(theme_frame, text="🎨 Thème :", bg=BG_GLOBAL,
-                 fg="#a6e3a1", font=("Helvetica", 13, "bold")).pack(side="left", padx=(0, 8))
-
-        # Chargement des thèmes disponibles
+        # Chargement des thèmes disponibles (nécessaire au menu Configuration)
         self._theme_keys   = ["roland", "custom", "ardoise", "sable", "ocean"]
         self._theme_labels = ["Roland", "Personnalisée", "Ardoise", "Sable", "Océan"]
         try:
@@ -302,19 +305,11 @@ class Launcher(tk.Tk):
             self._theme_key_var.set(key)
             self._apply_theme(key)
 
-        theme_combo = tk.OptionMenu(theme_frame, self._theme_label_var,
-                                    *self._theme_labels,
-                                    command=_on_theme_select)
-        theme_combo.config(bg=BG_GLOBAL, fg="#a6e3a1", font=("Helvetica", 12),
-                           activebackground=BG_GLOBAL, highlightthickness=0,
-                           relief="flat", bd=1)
-        theme_combo["menu"].config(bg=BG_GLOBAL, fg="#a6e3a1", font=("Helvetica", 12))
-        theme_combo.pack(side="left", padx=4)
-
-        tk.Button(theme_frame, text="🎨", font=("Helvetica", 16),
-                  bg=BG_GLOBAL, fg="#a6e3a1", relief="flat", bd=0,
-                  activebackground=BG_GLOBAL, cursor="hand2",
-                  command=self._apply_theme_btn).pack(side="left", padx=4)
+        # Le menu déroulant de thème et le bouton palette 🎨 sont retirés de
+        # l'affichage : ils vivent maintenant dans la barre de menus
+        # (Configuration → Thème / Éditeur de thème personnalisé…). La
+        # logique (_on_theme_select, _apply_theme, _apply_theme_btn) reste
+        # disponible et appelée par le menu.
 
         # ── Bouton de sélection de langue ─────────────────────────────────
         # Placé ici dans la fenêtre du lanceur (Mac / Linux / Windows).
@@ -335,23 +330,23 @@ class Launcher(tk.Tk):
                 bg=BG_GLOBAL, fg="#a6e3a1",
                 font=("Helvetica", 14, "bold"),
             )
-            self._lang_icon.pack(side="left", padx=(16, 4))
+            self._lang_icon.pack(side="left", padx=(18, 4))
 
-            # Bouton "Changer la langue…" : HoverButton (canvas vert arrondi)
-            # identique aux autres boutons du lanceur. On n'utilise plus le
-            # ttk.Button de make_language_button, qui gardait l'apparence
-            # native (fond blanc) car le style "TButton" n'est pas configuré
-            # dans le lanceur. Le clic ouvre la fenetre de choix de langue.
-            HoverButton(
-                theme_frame,
-                tr("language_menu_change_lang"),
-                lambda: _O4Lang.show_language_dialog(
-                    self, on_change=self._restart_with_new_lang),
-                width=250, height=44, font_size=13,
-            ).pack(side="left", padx=(0, 4))
+            # Le bouton « Changer la langue… » est retiré de l'affichage :
+            # il vit maintenant dans la barre de menus (Configuration →
+            # Langue). L'indicateur 🌐 ci-dessus reste, pour montrer la
+            # langue active d'un coup d'œil. show_language_dialog reste
+            # disponible dans O4_Lang (premier lancement, etc.).
         except Exception:
             pass  # si O4_Lang absent → le lanceur fonctionne quand même
         # ─────────────────────────────────────────────────────────────────
+
+        # « Version : … » déplacé ici (bas de fenêtre), collé à DROITE, sur la
+        # même ligne que l'indicateur 🌐 langue (collé à gauche). Placé hors du
+        # try ci-dessus pour rester visible même si O4_Lang est absent.
+        tk.Label(theme_frame, text="Version : Mac • Linux • Windows",
+                 font=("Helvetica", 14, "bold"), fg="#a6e3a1",
+                 bg=BG_GLOBAL).pack(side="right", padx=(4, 18))
 
         # Gros bouton LANCER en dessous
         HoverButton(self, tr("▶️ LANCER ORTHO4XP"), self.launch_ortho, 
@@ -362,6 +357,51 @@ class Launcher(tk.Tk):
         self._run_security_check()
 
     # ====================== IDENTIFICATION LANGUE ======================
+    def _add_banner(self):
+        """Affiche BanniereGithub.jpg en haut de la fenêtre du lanceur.
+
+        Entièrement non bloquant :
+          • si Pillow (PIL) est absent → on saute (Tkinter ne lit pas le JPG
+            nativement) ;
+          • si l'image est absente ou illisible → on saute ;
+          • dans tous ces cas le lanceur s'affiche exactement comme avant.
+
+        La PhotoImage est conservée sur l'instance (self._banner_photo) : sans
+        cette référence, Tkinter la ramasse et la bannière apparaît vide.
+        La largeur suit la fenêtre (≈900 px), la hauteur est plafonnée pour
+        rester une bande d'en-tête et ne pas écraser la console.
+        """
+        try:
+            from PIL import Image, ImageTk
+        except Exception:
+            return  # Pillow absent → pas de bannière (lanceur inchangé)
+
+        path = BASE_DIR / "BanniereGithub.jpg"
+        if not path.exists():
+            return
+
+        try:
+            img = Image.open(str(path))
+            w, h = img.size
+            scale = 900.0 / float(w)          # ajuste à la largeur fenêtre
+            if h * scale > 300:               # plafonne la hauteur
+                scale = 300.0 / float(h)
+            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+
+            # Pillow >= 10 : LANCZOS via Resampling ; repli anciennes versions
+            try:
+                resample = Image.Resampling.LANCZOS
+            except AttributeError:
+                resample = Image.LANCZOS
+
+            img = img.resize(new_size, resample)
+            self._banner_photo = ImageTk.PhotoImage(img)   # référence conservée
+            self._banner_label = tk.Label(self, image=self._banner_photo,
+                                          bg=BG_GLOBAL, bd=0)
+            self._banner_label.pack(anchor="w", padx=(65, 0), pady=(10, 0))
+        except Exception:
+            return  # toute erreur de décodage → on saute proprement
+
     def _current_lang_code(self):
         """
         Retourne le code de la langue active ('FR', 'EN', ...) pour l'icône.
