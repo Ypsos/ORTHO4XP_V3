@@ -110,9 +110,9 @@ _BANDE_LIGNES = 512
 #             └── Assemble <Pays>/<tuile>/<tuile>.tif
 # Imposer la structure supprime toute la classe d'erreurs « chemin
 # introuvable » chez les utilisateurs qui n'ont pas d'organisation.
-DOSSIER_RACINE = "Altimétrie"
-DOSSIER_STOCK = "Altimétrie TIFF"
-DOSSIER_ASSEMBLE = "Altimétrie assemble"
+DOSSIER_RACINE = "Altimetrie"
+DOSSIER_STOCK = "Altimetrie TIFF"
+DOSSIER_ASSEMBLE = "Altimetrie assemble"
 PREFIXE_PAYS_ASSEMBLE = "Assemble "
 
 CFG_RACINE = "dem_root_dir"      # ANCIEN — conservé pour la reprise
@@ -129,9 +129,9 @@ CFG_PREP_SRC = "dem_prepare_src_dir"  # dernier dossier source ouvert (Préparer
 #       ├── EPSG réduit/<Pays>/       ← sorties de « Préparer », toutes résolutions
 #       └── Assemblage tuile/<tuile>/ ← tuile finale (+46-003.tif) → custom_dem
 # Chaque dossier a son propre bouton qui pointe droit dessus.
-DOSSIER_SONNY = "Données Sonny"
-DOSSIER_ASC = "Altimétrie Sources"
-DOSSIER_EPSG = "EPSG réduit"
+DOSSIER_SONNY = "Donnees Sonny"
+DOSSIER_ASC = "Altimetrie Sources"
+DOSSIER_EPSG = "EPSG reduit"
 DOSSIER_TUILE = "Assemblage tuile"
 
 CFG_SONNY = "dem_sonny_dir"      # dossier Données Sonny (courant, par pays)
@@ -166,10 +166,10 @@ def _Lm(fr, en):
 
 
 # Noms bilingues des dossiers : (FR, EN). Le FR reste le nom historique.
-NOMS_RACINE = ("Altimétrie", "Altimetry")
-NOMS_SONNY = ("Données Sonny", "Sonny data")
-NOMS_ASC = ("Altimétrie Sources", "Source elevation")
-NOMS_EPSG = ("EPSG réduit", "Reduced EPSG")
+NOMS_RACINE = ("Altimetrie", "Altimetry")
+NOMS_SONNY = ("Donnees Sonny", "Sonny data")
+NOMS_ASC = ("Altimetrie Sources", "Source elevation")
+NOMS_EPSG = ("EPSG reduit", "Reduced EPSG")
 NOMS_TUILE = ("Assemblage tuile", "Tile assembly")
 
 

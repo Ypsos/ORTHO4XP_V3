@@ -676,7 +676,7 @@ for var in cfg_vars:
 ################################################################################
 # Update from Global Ortho4XP.cfg
 try:
-    f = open(os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg"), "r")
+    f = open(os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg"), "r", encoding="utf-8")
     for line in f.readlines():
         line = line.strip()
         if not line:
@@ -758,7 +758,7 @@ class Tile:
                     )
                     return 0
         try:
-            f = open(config_file, "r")
+            f = open(config_file, "r", encoding="utf-8")
             for line in f.readlines():
                 line = line.strip()
                 if not line:
@@ -808,7 +808,7 @@ class Tile:
         except:
             pass
         try:
-            f = open(config_file, "w")
+            f = open(config_file, "w", encoding="utf-8")
             for var in list_tile_vars:
                 f.write(var + "=" + str(getattr(self, var)) + "\n")
             f.close()
@@ -1315,7 +1315,7 @@ class Ortho4XP_Config(tk.Toplevel):
             return (False, lat, lon)
         zone_list = []
         try:
-            f = open(path, "r")
+            f = open(path, "r", encoding="utf-8")
         except Exception:
             return (False, lat, lon)
         try:
@@ -1351,7 +1351,7 @@ class Ortho4XP_Config(tk.Toplevel):
         Repli sur les valeurs en memoire si le fichier est absent."""
         cfg_path = os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
         try:
-            f = open(cfg_path, "r")
+            f = open(cfg_path, "r", encoding="utf-8")
         except Exception:
             self.load_interface_from_variables()
             return
@@ -1484,10 +1484,11 @@ class Ortho4XP_Config(tk.Toplevel):
                     "Ortho4XP_" + FNAMES.short_latlon(lat, lon) + ".cfg",
                 ),
                 "r",
+                encoding="utf-8",
             )
         except:
             try:
-                f = open(os.path.join(build_dir, "Ortho4XP.cfg"), "r")
+                f = open(os.path.join(build_dir, "Ortho4XP.cfg"), "r", encoding="utf-8")
             except:
                 self.popup("ERROR", "No config file found in " + str(build_dir))
                 return 0
@@ -1592,7 +1593,7 @@ class Ortho4XP_Config(tk.Toplevel):
     def load_global_cfg(self):
         cfg_path = os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
         try:
-            f = open(cfg_path, "r")
+            f = open(cfg_path, "r", encoding="utf-8")
         except:
             self.popup("ERROR", "No App config file found:\n" + cfg_path)
             return 0

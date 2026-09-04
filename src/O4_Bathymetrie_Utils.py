@@ -62,9 +62,9 @@ from O4_Altimetrie_Utils import (
 #       ├── Bathymétrie TIFF/<Pays>/      ← relevés déposés (EPSG:4326)
 #       └── Bathymétrie assemble/
 #             └── Assemble <Pays>/<tuile>/<tuile>.tif
-DOSSIER_RACINE = "Bathymétrie"
-DOSSIER_STOCK = "Bathymétrie TIFF"
-DOSSIER_ASSEMBLE = "Bathymétrie assemble"
+DOSSIER_RACINE = "Bathymetrie"
+DOSSIER_STOCK = "Bathymetrie TIFF"
+DOSSIER_ASSEMBLE = "Bathymetrie assemble"
 PREFIXE_PAYS_ASSEMBLE = "Assemble "
 
 CFG_RACINE = "bathy_root_dir"      # ANCIEN — conservé pour la reprise
@@ -83,10 +83,10 @@ CFG_QGIS = "qgis_app"              # application QGIS (partagée avec Altimétri
 # Noms BILINGUES : la variante FR ou EN déjà présente sur le disque est
 # réutilisée (jamais de doublon en changeant de langue) ; sinon création
 # dans la langue active. Ce sont les MÊMES conventions que l'altimétrie.
-NOMS_RACINE = ("Bathymétrie", "Bathymetry")
-NOMS_EMODNET = ("Données EMODnet", "EMODnet data")
-NOMS_SOURCES = ("Bathymétrie Sources", "Bathymetry sources")
-NOMS_EPSG = ("EPSG réduit", "Reduced EPSG")
+NOMS_RACINE = ("Bathymetrie", "Bathymetry")
+NOMS_EMODNET = ("Donnees EMODnet", "EMODnet data")
+NOMS_SOURCES = ("Bathymetrie Sources", "Bathymetry sources")
+NOMS_EPSG = ("EPSG reduit", "Reduced EPSG")
 NOMS_TUILE = ("Assemblage tuile", "Tile assembly")
 
 
