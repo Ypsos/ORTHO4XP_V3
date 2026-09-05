@@ -849,35 +849,23 @@ class Launcher(tk.Tk):
 
     def _create_launcher_linux(self):
         self._log("── 🐧 Création Lanceur ORTHO4XP.desktop ──")
-        script = BASE_DIR / "create_launcher_ORTHO.py"
-        if not script.exists():
-            self._log("❌ create_launcher_ORTHO.py introuvable."); return
-        py = str(VENV_PY) if VENV_PY.exists() else sys.executable
+        # Autonome : ne dépend plus du script externe create_launcher_ORTHO.py
+        # (absent du projet). Réutilise la méthode interne éprouvée — même flux
+        # que l'installation — identique à la correction déjà appliquée pour macOS.
         try:
-            r = subprocess.run([py, str(script)], cwd=str(BASE_DIR),
-                               capture_output=True, text=True)
-            for line in r.stdout.splitlines(): self._log(line)
-            if r.returncode == 0:
-                self._log("✅ Lanceur ORTHO4XP.desktop créé !")
-            else:
-                self._log(f"❌ {r.stderr[:300]}")
-        except Exception as e: self._log(f"❌ {e}")
+            self._create_linux_daily_launcher()
+        except Exception as e:
+            self._log(f"❌ {e}")
 
     def _create_launcher_windows(self):
         self._log("── 🪟 Création Lanceur ORTHO4XP.vbs ──────")
-        script = BASE_DIR / "create_launcher_ORTHO.py"
-        if not script.exists():
-            self._log("❌ create_launcher_ORTHO.py introuvable."); return
-        py = str(VENV_PY) if VENV_PY.exists() else sys.executable
+        # Autonome : ne dépend plus du script externe create_launcher_ORTHO.py
+        # (absent du projet). Réutilise la méthode interne éprouvée — même flux
+        # que l'installation — identique à la correction déjà appliquée pour macOS.
         try:
-            r = subprocess.run([py, str(script)], cwd=str(BASE_DIR),
-                               capture_output=True, text=True)
-            for line in r.stdout.splitlines(): self._log(line)
-            if r.returncode == 0:
-                self._log("✅ Lanceur ORTHO4XP.vbs créé !")
-            else:
-                self._log(f"❌ {r.stderr[:300]}")
-        except Exception as e: self._log(f"❌ {e}")
+            self._create_windows_daily_launcher()
+        except Exception as e:
+            self._log(f"❌ {e}")
 
 
     def _install_linux(self):

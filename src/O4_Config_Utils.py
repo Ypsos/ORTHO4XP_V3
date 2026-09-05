@@ -467,6 +467,61 @@ too low to grab these details.",
         "default": "",
         "hint": "Directory used by the altimetry module for source DEM/TIFF storage.",
     },
+    "dem_root_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Root directory of the altimetry structure (legacy, kept for resume).",
+    },
+    "dem_last_country": {
+        "type": str,
+        "default": "",
+        "hint": "Last country used by the altimetry module (legacy, kept for resume).",
+    },
+    "dem_prepare_src_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Last source folder opened by the altimetry Prepare step.",
+    },
+    "dem_sonny_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Altimetry structure folder: current Sonny data folder (per country).",
+    },
+    "dem_asc_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Altimetry structure folder: current raw ASC/source elevation folder.",
+    },
+    "dem_epsg_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Altimetry structure folder: current reduced-EPSG output folder.",
+    },
+    "dem_tile_out_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Altimetry structure folder: tile assembly output folder (per tile).",
+    },
+    "bathy_root_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Root directory of the bathymetry structure (legacy, kept for resume).",
+    },
+    "bathy_last_country": {
+        "type": str,
+        "default": "",
+        "hint": "Last country used by the bathymetry module (legacy, kept for resume).",
+    },
+    "bathy_stock_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Bathymetry structure folder: user-chosen surveyed-soundings folder.",
+    },
+    "bathy_output_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Bathymetry structure folder: assembled bathymetry output folder.",
+    },
 }
 
 list_app_vars = [
