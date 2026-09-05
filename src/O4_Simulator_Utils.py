@@ -1,20 +1,3 @@
-# ============================================================
-# Copyright (c) 2024-2026 Roland (Ypsos)
-#
-# CRÉDIT — AUTEUR : Roland (Ypsos) — Mars 2026
-# Module conçu et spécifié par Roland (Ypsos) pour Ortho4XP V3.
-# Cette notice d'auteur et de copyright doit être conservée
-# conformément à la GPLv3.
-# ============================================================
-# Copyright (c) 2024-2026 Roland (Ypsos)
-#
-# CREDIT — AUTHOR: Roland (Ypsos) — March 2026
-# Module designed and specified by Roland (Ypsos) for Ortho4XP V3.
-# This authorship and copyright notice must be retained
-# in accordance with GPLv3.
-# ============================================================
-
-
 # -*- coding: utf-8 -*-
 """
 O4_Simulator_Utils.py — Simulateur visuel Ortho4XP V2 (module autonome)
@@ -980,13 +963,13 @@ class Ortho4XP_Simulator(tk.Toplevel):
                     return p
         return None
 
-    def _mesh_photo(self, name, size):
-        """Charge et redimensionne une image mesh (cache par taille)."""
+    def _mesh_pil(self, name, size):
+        """Charge une image mesh en PIL RGBA redimensionnée (cache)."""
         key = (name, size)
-        cache = getattr(self, "_mesh_img_cache", None)
+        cache = getattr(self, "_mesh_pil_cache", None)
         if cache is None:
-            self._mesh_img_cache = {}
-            cache = self._mesh_img_cache
+            self._mesh_pil_cache = {}
+            cache = self._mesh_pil_cache
         if key in cache:
             return cache[key]
         path = self._mesh_image_path(name)
@@ -994,12 +977,11 @@ class Ortho4XP_Simulator(tk.Toplevel):
             cache[key] = None
             return None
         try:
-            from PIL import Image, ImageTk
+            from PIL import Image
             img = Image.open(path).convert("RGBA")
             img = img.resize(size, Image.LANCZOS)
-            photo = ImageTk.PhotoImage(img)
-            cache[key] = photo
-            return photo
+            cache[key] = img
+            return img
         except Exception:
             cache[key] = None
             return None
@@ -1009,42 +991,102 @@ class Ortho4XP_Simulator(tk.Toplevel):
         mzl  = float(self._get("mesh_zl", 19))
         ctol = float(self._get("curvature_tol", 16))
         lt   = float(self._get("limit_tris", 15))
-        # mesh_zl 14→0, 20→1
         s_zl = max(0.0, min(1.0, (mzl - 14.0) / 6.0))
-        # curvature basse = plus précis (30→0, 1→1)
         s_ct = max(0.0, min(1.0, (30.0 - ctol) / 29.0))
-        # plus de triangles = plus précis (1→0, 50→1)
         s_lt = max(0.0, min(1.0, (lt - 1.0) / 49.0))
         return 0.45 * s_zl + 0.35 * s_ct + 0.20 * s_lt
 
+    def _mesh_blended_photo(self, W, H, q):
+        """
+        Paysage : fondu progressif soft → sharp.
+        Grille : UNE seule densité à la fois (grands OU petits),
+        avec une courte transition d'opacité au milieu —
+        on ne mélange plus les deux motifs (effet « grillage moche »).
+        """
+        from PIL import Image, ImageTk
+        q = max(0.0, min(1.0, float(q)))
+        # Pas fin pour le paysage ; grille bascule autour de 0.5
+        q_land = round(q * 20) / 20.0
+        # Grille : 0 = grands seuls, 1 = petits seuls
+        if q < 0.42:
+            grid_mode, grid_alpha = "large", 1.0
+        elif q > 0.58:
+            grid_mode, grid_alpha = "small", 1.0
+        else:
+            # Zone de transition 0.42→0.58 : fond du grand, apparition du petit
+            t = (q - 0.42) / (0.58 - 0.42)  # 0→1
+            grid_mode, grid_alpha = "cross", t
+
+        key = (W, H, q_land, grid_mode, round(grid_alpha, 2))
+        cache = getattr(self, "_mesh_blend_cache", None)
+        if cache is None:
+            self._mesh_blend_cache = {}
+            cache = self._mesh_blend_cache
+        if key in cache:
+            return cache[key]
+
+        soft = self._mesh_pil("mesh_soft.png", (W, H))
+        sharp = self._mesh_pil("mesh_sharp.png", (W, H))
+        g_large = self._mesh_pil("mesh_grid_large.png", (W, H))
+        g_small = self._mesh_pil("mesh_grid_small.png", (W, H))
+
+        if soft and sharp:
+            base = Image.blend(soft, sharp, q_land)
+        else:
+            base = sharp or soft
+            if base is None:
+                cache[key] = None
+                return None
+            base = base.copy()
+
+        def _with_opacity(img, alpha):
+            if img is None or alpha <= 0:
+                return None
+            if alpha >= 0.99:
+                return img
+            r, g, b, a = img.split()
+            a = a.point(lambda p: int(p * alpha))
+            out = Image.merge("RGBA", (r, g, b, a))
+            return out
+
+        if grid_mode == "large" and g_large is not None:
+            base = Image.alpha_composite(base, g_large)
+        elif grid_mode == "small" and g_small is not None:
+            base = Image.alpha_composite(base, g_small)
+        elif grid_mode == "cross":
+            # Grand s'efface, petit apparaît (pas de blend des motifs)
+            gl = _with_opacity(g_large, 1.0 - grid_alpha)
+            gs = _with_opacity(g_small, grid_alpha)
+            if gl is not None:
+                base = Image.alpha_composite(base, gl)
+            if gs is not None:
+                base = Image.alpha_composite(base, gs)
+
+        photo = ImageTk.PhotoImage(base)
+        if len(cache) > 30:
+            cache.clear()
+        cache[key] = photo
+        return photo
+
     def _draw_mesh(self):
-        """Onglet Mesh : paysage soft/sharp + grille grands/petits triangles."""
+        """Onglet Mesh : fondu fluide entre paysage soft/sharp + grilles."""
         cv = self._canvases.get("mesh")
         if not cv or not cv.winfo_exists():
             return
         W, H = self._cv_size("mesh")
-        if W < 10 or H < 10:
+        if W < 40 or H < 40:
             return
         cv.delete("all")
 
         mzl  = int(self._get("mesh_zl", 19))
         ctol = float(self._get("curvature_tol", 16))
         lt   = float(self._get("limit_tris", 15))
-        q    = self._mesh_quality()  # 0 = arrondi/gros, 1 = découpé/fin
+        q    = self._mesh_quality()
 
-        # Fond paysage : soft si q bas, sharp si q haut
-        soft = self._mesh_photo("mesh_soft.png", (W, H))
-        sharp = self._mesh_photo("mesh_sharp.png", (W, H))
-        if soft and sharp:
-            # Affiche le plus adapté (bascule nette autour de 0.5 pour rester lisible)
-            photo = sharp if q >= 0.45 else soft
+        photo = self._mesh_blended_photo(W, H, q)
+        if photo is not None:
             cv.create_image(0, 0, anchor="nw", image=photo)
-            # garder une référence pour éviter le GC de Tk
-            cv._mesh_bg = photo
-        elif soft or sharp:
-            photo = sharp or soft
-            cv.create_image(0, 0, anchor="nw", image=photo)
-            cv._mesh_bg = photo
+            cv._mesh_bg = photo  # anti GC Tk
         else:
             cv.create_rectangle(0, 0, W, H, fill="#1a2a20", outline="")
             cv.create_text(W//2, H//2,
@@ -1052,18 +1094,11 @@ class Ortho4XP_Simulator(tk.Toplevel):
                         "Simulator_images/  (à la racine d'Ortho4XP)"),
                 fill="#a6e3a1", font=("TkFixedFont", 11), justify="center")
 
-        # Grille triangles : grands si grossier, petits si précis
-        grid_name = "mesh_grid_small.png" if q >= 0.45 else "mesh_grid_large.png"
-        grid = self._mesh_photo(grid_name, (W, H))
-        if grid:
-            cv.create_image(0, 0, anchor="nw", image=grid)
-            cv._mesh_grid = grid
-
-        # Pastille qualité
+        # Pastille qualité (texte suit le fondu)
         if q < 0.33:
             q_lbl, q_col = tr("grossier — collines arrondies"), "#ffaa66"
         elif q < 0.66:
-            q_lbl, q_col = tr("moyen — relief correct"), "#ffe066"
+            q_lbl, q_col = tr("transition — relief qui se précise"), "#ffe066"
         else:
             q_lbl, q_col = tr("précis — pics et vallées nets"), "#66ff99"
 
@@ -1073,7 +1108,8 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         cv.create_rectangle(0, H - 42, W, H, fill="#060e06", outline="")
         cv.create_text(W // 2, H - 28,
-            text=q_lbl, fill=q_col, font=("TkFixedFont", 11, "bold"))
+            text=q_lbl + f"  ({int(q*100)}%)",
+            fill=q_col, font=("TkFixedFont", 11, "bold"))
         cv.create_text(W // 2, H - 12,
             text=f"mesh_zl {mzl} — {prec}  |  "
                  + tr("courbure") + f" {ctol:g}  |  "

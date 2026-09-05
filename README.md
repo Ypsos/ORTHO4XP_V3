@@ -330,9 +330,9 @@ Fichier modifié : `src/O4_Menu_Avance.py` (aucun fichier de langue impacté).
 
 ## 15. Remerciements
 
-Merci en particulier à **Jojo**, référence technique sur Ortho4XP, QGIS et JOSM ; et à **Cricri**, pour les tests et validations sous Windows et Linux.
+Merci en particulier à **Jojo**, référence technique sur Ortho4XP, QGIS et JOSM ; à **Cricri**, pour les tests et validations sous Windows et Linux.
 
-Merci à **domisilasol (Dominique)** pour la **correction du triangulateur `triangle.exe` sous Windows** : recompilation pour Windows 64 bits d'un bug qui empêchait la génération des fichiers de maillage (`.1.node` / `.1.ele`) lors de la création d'emprises. Source et binaire fournis, conformément à la licence de Triangle (Jonathan R. Shewchuk).
+Merci à **domisilasol (Dominique)** pour la **correction du triangulateur `triangle.exe` sous Windows** : recompilation pour Windows 64 bits d'un bug qui empêchait la génération des fichiers de maillage (`.1.node` / `.1.ele`) lors de la création d'emprises. Source et binaire fournis, conformément à la licence de Triangle (Jonathan R. Shewchuk). Adaptations/ corrections sur Windows.
 
 Merci à **Len0y** pour avoir proposé et contribué à **séparer le « provider scoring » en une étape 4 dédiée**, distincte de la génération DSF (étape 3) — permettant de lancer la notation des providers séparément, une fois tous les réglages vérifiés.
 
@@ -351,7 +351,7 @@ Merci également à tous ceux qui remontent leurs retours sur les forums.
 | **Œuvre originale** | Oscar Pilote (Ortho4XP) |
 | **Adaptation 1.40** | Shred86 |
 | **Référence technique** | Jojo |
-| **Tests Windows / Linux** | Cricri |
+| **Tests Windows / Linux** | Cricri | 
 | **Autres contributeurs** | domisilasol(Dominique), Jasum,  Len0y|
 
 ---
@@ -697,7 +697,7 @@ Modified file: `src/O4_Menu_Avance.py` (no language file impacted).
 
 Special thanks to **Jojo**, the technical reference on Ortho4XP, QGIS and JOSM; and to **Cricri**, for testing and validating on Windows and Linux.
 
-Thanks to **domisilasol (Dominique)** for the **fix of the `triangle.exe` mesh generator on Windows**: recompiled for 64-bit Windows to solve a bug that prevented the mesh files (`.1.node` / `.1.ele`) from being generated during extent creation. Source and binary provided, in accordance with the Triangle license (Jonathan R. Shewchuk).
+Thanks to **domisilasol (Dominique)** for the **fix of the `triangle.exe` mesh generator on Windows**: recompiled for 64-bit Windows to solve a bug that prevented the mesh files (`.1.node` / `.1.ele`) from being generated during extent creation. Source and binary provided, in accordance with the Triangle license (Jonathan R. Shewchuk). Adaptations/corrections on Windows.
 
 Thanks to **Len0y** for proposing and contributing the **separation of "provider scoring" into a dedicated step 4**, distinct from the DSF build (step 3) — allowing provider scoring to be run separately, once all settings have been checked.
 
