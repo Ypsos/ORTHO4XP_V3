@@ -166,3 +166,4 @@ _apt_cache_key
 
 # Tuiles perso rangees dans Providers (ne pas publier)
 Providers/+[0-9]*/
+_ortho_run.sh
