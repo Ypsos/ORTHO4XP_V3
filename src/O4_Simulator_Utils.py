@@ -345,6 +345,15 @@ def _sim_load_imagerie(key, w, h, cache, blur_r=0.0, black_transparent=False,
     return img
 
 
+def _sim_help(fr, en):
+    """Aide curseur : FR ou EN selon la langue choisie (jamais les deux)."""
+    try:
+        from O4_Lang import current_lang
+        return en if current_lang() == "EN" else fr
+    except Exception:
+        return fr
+
+
 class Ortho4XP_Simulator(tk.Toplevel):
     """
     Fenêtre simulateur visuel.
@@ -793,16 +802,16 @@ class Ortho4XP_Simulator(tk.Toplevel):
         # ── Groupe 1 : Eau & Transparence ──────────────────────────
         sliders_eau = [
             ("ratio_water",    "ratio_water",    0, 1,    0.01, float,
-             tr('ratio_water : 0 = JPG satellite opaque sur mer. 1 = eau XP12 entièrement visible (vagues, reflets, bathymétrie). Recommandé : 0.10 pour Vendée/Atlantique.'), None),
+             _sim_help('ratio_water : Gauche = photo opaque sur mer. Droite = eau XP12 visible. Recommandé : 0.10.', 'ratio_water: Left = opaque photo on sea. Right = XP12 water visible. Recommended: 0.10.'), None),
             ("ratio_bathy",    "ratio_bathy",    0, 1,    0.05, float,
-             tr('ratio_bathy : dégradé de profondeur XP12. 0 = mer uniforme. 1 = eau profonde sombre → turquoise côtier (recommandé).'), None),
+             _sim_help('ratio_bathy : intensité du dégradé de profondeur (bathymétrie XP12). 0 = uniforme. 1 = max. Recommandé : 1.', 'ratio_bathy: XP12 depth-color strength. 0 = uniform. 1 = max. Recommended: 1.'), None),
             ("water_tech",     "water_tech",     0, 0,    1,    str,
-             tr('water_tech : XP12 = eau dynamique (vagues, reflets, bathymétrie). ⚠ XP11+bathy = ancien mode, incompatible avec imprint_masks_to_dds=True.'),
+             _sim_help('water_tech : moteur d\'eau. XP12 = vagues/reflets natifs. XP11+bathy = ancien mode.', 'water_tech: water engine. XP12 = native waves/reflections. XP11+bathy = legacy.'),
              ["XP12", "XP11+bathy"]),
             ("overlay_lod",    "overlay_lod (m)",5000,50000,1000,float,
-             tr("overlay_lod : distance en mètres jusqu'où XPlane affiche l'imagerie sur la mer. 30000 = recommandé."), None),
-            ("water_smoothing","water_smoothing",0, 5,    1,    int,
-             tr('water_smoothing : lissage du maillage eau intérieure. 2 = recommandé.'), None),
+             _sim_help('overlay_lod : Gauche = photo sur eau seulement tout près. Droite = photo visible au loin. Recommandé : 25000–30000.', 'overlay_lod: Left = photo on water only nearby. Right = photo visible far. Recommended: 25000–30000.'), None),
+            ("water_smoothing","water_smoothing",5, 0,    1,    int,
+             _sim_help('water_smoothing : Gauche = rivage arrondi (lissé). Droite = rivage découpé (dents de scie). Recommandé : 2.', 'water_smoothing: Left = rounded shore (smoothed). Right = jagged shore. Recommended: 2.'), None),
         ]
         self._add_group(inner, tr("Eau & Transparence"), sliders_eau, exp_lbl, fs,
                         inline_hint=True, row_hints={
@@ -814,14 +823,14 @@ class Ortho4XP_Simulator(tk.Toplevel):
         # ── Groupe 2 : Masques côtiers ──────────────────────────────
         sliders_cote = [
             ("masks_width",    "masks_width (m)", 50,8000,50,  int,
-             tr('masks_width : largeur en mètres de la zone de dégradé côtier. 100m = transition nette (recommandé). 500m = dégradé naturel. ⚠ Valeurs > 500m peuvent produire des jointures visibles.'), None),
+             _sim_help('masks_width : Gauche = transition côte étroite. Droite = large dégradé. Recommandé : 100 m.', 'masks_width: Left = narrow shore blend. Right = wide blend. Recommended: 100 m.'), None),
             ("mask_zl",        "mask_zl",        14,20,   1,    int,
-             tr('mask_zl : résolution des masques côtiers. 17 = bon équilibre (recommandé). 19-20 = très précis, fichiers lourds.'), None),
+             _sim_help('mask_zl : netteté du MASQUE côtier (pas de la photo). 14 = léger. 17+ = suit mieux la côte, plus lourd.', 'mask_zl: coastal MASK resolution (not the photo). 14 = light. 17+ = follows coast better, heavier.'), None),
             ("masking_mode",   "masking_mode",   0, 0,    1,    str,
-             tr('masking_mode : algorithme masque. sand = dégradé naturel (recommandé). rocks = transition abrupte (falaises). 3steps = 3 étapes personnalisées.'),
+             _sim_help('masking_mode : style de transition côte. sand = doux (recommandé). rocks = abrupt. 3steps = 3 zones.', 'masking_mode: shore blend style. sand = soft (recommended). rocks = abrupt. 3steps = 3 zones.'),
              ["sand","rocks","3steps"]),
             ("imprint_masks_to_dds","imprint DDS",0,0,   1,    str,
-             tr('imprint_masks_to_dds : grave le canal alpha dans le DDS (BC3). True = nécessaire pour transparence XP12 (recommandé). ⚠ False + water_tech=XP12 = jointures visibles.'),
+             _sim_help('imprint DDS : True = masque intégré dans le DDS (recommandé XP12). False = masque PNG externe.', 'imprint DDS: True = mask baked into DDS (recommended for XP12). False = external PNG mask.'),
              ["True","False"]),
         ]
         self._add_group(inner, tr("Masques côtiers"), sliders_cote, exp_lbl, fs,
@@ -831,7 +840,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders_inland = [
             ("use_masks_for_inland","use_inland", 0, 0, 1, str,
-             tr('use_masks_for_inland : applique les masques côtiers sur lacs et rivières. False = recommandé (économise VRAM). True = masque lac visible dans le canvas ci-dessus.'),
+             _sim_help('use_inland : True = même type de masque sur lacs/rivières (coûteux VRAM). False = recommandé.', 'use_inland: True = same masks on lakes/rivers (VRAM heavy). False = recommended.'),
              ["False","True"]),
         ]
         self._add_group(inner, tr("Lacs & Rivières"), sliders_inland, exp_lbl, fs,
@@ -876,22 +885,22 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders = [
             ("normal_map_strength","normal_map",  0, 2,   0.1,  float,
-             tr("normal_map_strength : intensité de l'ombrage terrain. 0 = terrain plat visuellement. 1.0 = ombrage exact (recommandé). 2.0 = ombrage très marqué."), None),
+             _sim_help('normal_map : force des normales du mesh (ombrage pentes). 1.0 = exact (recommandé). <1 = moins d\'ombrage.', 'normal_map: mesh normal strength (slope shading). 1.0 = exact (recommended). <1 = less shading.'), None),
             ("terrain_casts_shadows","ombres terrain",0,0,1,str,
-             tr('terrain_casts_shadows : le terrain projette des ombres. True = ombres réalistes (recommandé). False = gain perfs, moins réaliste.'),
+             _sim_help('ombres terrain : True = le sol projette des ombres (si ombres XP activées). Recommandé : True.', 'terrain shadows: True = ground casts shadows (if XP shadows on). Recommended: True.'),
              ["True","False"]),
             ("use_decal_on_terrain",tr('décals terrain'),0,0,1,str,
-             tr('use_decal_on_terrain : décals herbe/roche au sol. True = recommandé.'),
+             _sim_help('décals sol : True = texture de détail au sol (visible très bas). Peut distraire en altitude.', 'ground decals: True = close-range ground detail. Can distract at higher altitude.'),
              ["True","False"]),
             ("fill_nodata",    "fill_nodata",    0, 0,    1,    str,
-             tr('fill_nodata : comble les trous du DEM par interpolation. True = recommandé si le DEM a des trous.'),
+             _sim_help('fill_nodata : True = comble les trous du fichier altitude (DEM). Utile si le DEM a des manques.', 'fill_nodata: True = fill holes in the elevation file (DEM). Useful if the DEM has gaps.'),
              ["True","False"]),
             ("min_area",       "min_area (°²)",  0.00001,0.01,0.00001,float,
-             tr("min_area : surface mini d'un polygone vectoriel. 0.0001 = recommandé."), None),
+             _sim_help('min_area : taille mini (km²) d\'un plan d\'eau OSM pour qu\'il existe dans le mesh. Recommandé : 0.001.', 'min_area: min size (km²) of an OSM water body to keep in the mesh. Recommended: 0.001.'), None),
             ("max_area",       "max_area (°²)",  1,200,  5,    float,
-             tr("max_area : surface max d'un polygone. 100 = recommandé."), None),
-            ("water_simplification","water_simpl",0,1,  0.05, float,
-             tr('water_simplification : 0 (gauche) = rive simplifiée, 1 (droite) = rive très détaillée.'), None),
+             _sim_help('max_area : au-delà de cette taille (km²), un plan d\'eau est traité comme la mer (masqué). Recommandé : 200.', 'max_area: above this size (km²), a water body is treated as sea (masked). Recommended: 200.'), None),
+            ("water_simplification","water_simpl",1,0,  0.05, float,
+             _sim_help('water_simpl : Gauche = rive simplifiée (négatif). Droite = rive détaillée (positif).', 'water_simpl: Left = simplified shore (worse). Right = detailed shore (better).'), None),
         ]
         self._add_group(inner, tr("Terrain & Ombrage"), sliders[:3], exp_lbl, fs,
                         inline_hint=True, row_hints={
@@ -931,17 +940,17 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders = [
             ("mesh_zl",        "mesh_zl",        14,20,  1,    int,
-             tr('mesh_zl : zoom level du maillage 3D. 14-16 = mesh grossier, relief approximatif. 19 = mesh très précis, côtes et falaises détaillées (recommandé). 20 = très lourd, rarement nécessaire.'), None),
+             _sim_help('mesh_zl : ZL max pour lequel le mesh est préparé. Doit être ≥ au ZL des photos. Recommandé : 19.', 'mesh_zl: max ZL the mesh is built for. Must be ≥ your photo ZL. Recommended: 19.'), None),
             ("curvature_tol",  "curvature_tol",  30,1,   0.5,  float,
-             tr('curvature_tol : à GAUCHE (30) = pentes simplifiées, relief grossier. À DROITE (1) = le mesh épouse mieux les courbes du relief (plus détaillé, plus lourd). 16 = recommandé.'), None),
+             _sim_help('curvature_tol : Gauche = grands triangles, relief grossier. Droite = petits triangles, relief précis.', 'curvature_tol: Left = large triangles, coarse relief. Right = small triangles, precise relief.'), None),
             ("limit_tris",     "limit_tris (M)", 1,50,   1,    float,
-             tr('limit_tris : plafond du nombre de triangles (millions). Gauche = peu de triangles autorisés, maillage incomplet. Droite = assez de triangles pour tout le relief. 15 = recommandé.'), None),
+             _sim_help('limit_tris : Gauche = peu de triangles (mesh incomplet). Droite = budget large. Recommandé : 1–3 M.', 'limit_tris: Left = few triangles (incomplete mesh). Right = large budget. Recommended: 1–3 M.'), None),
             ("min_angle",      "min_angle (°)",  0.1,2,  0.1,  float,
-             tr('min_angle : angle mini des triangles. GAUCHE (0.1°) = triangles très étroits autorisés. DROITE (2°) = triangles plus réguliers seulement. 0.5 = recommandé.'), None),
+             _sim_help('min_angle : angle mini des triangles (°). Évite les triangles trop pointus. Recommandé : ~10.', 'min_angle: min triangle angle (°). Avoids skinny triangles. Recommended: ~10.'), None),
             ("iterate",        "iterate",        0, 3,   1,    int,
-             tr("iterate : passes de raffinement. 0 = une seule passe (rapide). 1-2 = affine côtes/relief. 3 = très long. Chaque cran = une passe de plus."), None),
+             _sim_help('iterate : Gauche = 1 passe rapide (côte grossière). Droite = plusieurs passes (côte fine, plus long).', 'iterate: Left = 1 fast pass (coarse coast). Right = more passes (fine coast, slower).'), None),
             ("clean_bad_geometries","clean_geom",0,0,   1,    str,
-             tr('clean_bad_geometries : supprime les géométries vectorielles invalides avant la triangulation. True = recommandé.'),
+             _sim_help('clean_bad_geometries : True = répare les géométries OSM invalides avant le mesh. Recommandé : True.', 'clean_bad_geometries: True = fix invalid OSM geometries before meshing. Recommended: True.'),
              ["True","False"]),
         ]
         self._add_group(inner, tr("Paramètres Mesh"), sliders[:4], exp_lbl, fs,
@@ -963,24 +972,24 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders = [
             ("default_zl",     "default_zl",     14,20,  1,    int,
-             tr("default_zl : niveau de zoom de l'imagerie principale. 14-15 = faible résolution, flou. 17 = résolution standard, recommandé. 19-20 = très haute résolution, très lourd en VRAM."), None),
+             _sim_help('default_zl : Gauche = photo basse définition. Droite = haute définition (plus lourd). Recommandé : 16–17.', 'default_zl: Left = low-res photo. Right = high-res (heavier). Recommended: 16–17.'), None),
             ("cover_zl",       "cover_zl airports",14,20,1,   int,
-             tr('cover_zl : zoom level haute résolution autour des aéroports. 18 = recommandé pour voir les marquages et taxiways.'), None),
+             _sim_help('cover_zl : zoom des photos UNIQUEMENT autour des aéroports (si HiRes activé). Recommandé : 18.', 'cover_zl: photo zoom ONLY around airports (if HiRes on). Recommended: 18.'), None),
             ("cover_extent",   "cover_extent (km)",0,5, 0.5,  float,
-             tr('cover_extent : rayon en km autour des aéroports pour la haute résolution. 1.0 = recommandé. 3.0 = large zone haute résolution.'), None),
+             _sim_help('cover_extent : rayon (km) de la zone aéroport en haute résolution. Recommandé : 1.0.', 'cover_extent: radius (km) of the airport high-res zone. Recommended: 1.0.'), None),
             ("cover_airports_with_highres","HiRes airports",0,0,1,str,
-             tr('cover_airports_with_highres (high_zl_airports) : upgrade le ZL des textures au-dessus des aéroports. False = désactivé. True = tous les aéroports OSM (y compris petits/privés). ICAO = uniquement ceux avec code ICAO (recommandé si beaucoup d’aéroports). Existing = dériver les zones ZL depuis le dossier textures d’une tuile déjà construite. cover_zl / cover_extent s’appliquent quand actif.'),
+             _sim_help('HiRes aéroports : active le zoom élevé sur les aéroports (True / ICAO / Existing).', 'Airport HiRes: enable higher zoom over airports (True / ICAO / Existing).'),
              ["False","True","ICAO","Existing"]),
             ("apt_smoothing_pix","apt_smooth (px)",0,30, 1,   int,
-             tr('apt_smoothing_pix : lissage de la piste dans le mesh. 0 = bosses possibles. 8 = piste plate (recommandé). 30 = très lissé.'), None),
-            ("apt_curv_tol",   "apt_curv_tol",   0.5,5, 0.5,  float,
-             tr('apt_curv_tol : précision du contour aéroport. Bas = suit bien les virages de piste. Haut = contour simplifié.'), None),
+             _sim_help('apt_smooth : Gauche = pistes bosselées. Droite = pistes lissées/plates (recommandé ~8).', 'apt_smooth: Left = bumpy runways. Right = smoothed/flat (recommended ~8).'), None),
+            ("apt_curv_tol",   "apt_curv_tol",   5,0.5, 0.5,  float,
+             _sim_help('apt_curv_tol : Gauche = contour aéroport grossier. Droite = contour précis (suit les virages).', 'apt_curv_tol: Left = coarse airport outline. Right = precise (follows curves).'), None),
             ("apt_curv_ext",   "apt_curv_ext (km)",0.5,3,0.5, float,
-             tr('apt_curv_ext : extension de la zone de précision autour des aéroports. 1.0 = recommandé.'), None),
-            ("road_level",     "road_level",     0, 4,   1,    int,
-             tr('road_level : densité des routes intégrées dans le mesh. 0 = aucune route. 4 = toutes les routes (recommandé).'), None),
+             _sim_help('apt_curv_ext : rayon (km) où apt_curv_tol s\'applique autour de l\'aéroport. Recommandé : 0.5–1.0.', 'apt_curv_ext: radius (km) where apt_curv_tol applies around the airport. Recommended: 0.5–1.0.'), None),
+            ("road_level",     "road_level",     0, 5,   1,    int,
+             _sim_help('road_level : Gauche = aucune route aplatie. Droite = toutes catégories de routes aplaties (0→5).', 'road_level: Left = no roads leveled. Right = all road types leveled (0→5).'), None),
             ("max_levelled_segs","levelled_segs",0,500000,10000,int,
-             tr('max_levelled_segs : combien de segments de route peuvent être aplatis. Bas = peu de routes plates. Haut = beaucoup de routes nivelées.'), None),
+             _sim_help('levelled_segs : Gauche = routes en bosses (montagne russe). Droite = routes aplaties (corrigé).', 'levelled_segs: Left = bumpy roads (roller-coaster). Right = flattened roads (fixed).'), None),
         ]
         self._add_group(inner, tr("Imagerie"), sliders[:4], exp_lbl, fs,
                         inline_hint=True)
@@ -1534,7 +1543,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
         # 0 = gauche, 1 = droite
         fr = max(0.0, min(1.0, (lod - 5000.0) / 45000.0))
         # photo pleine à gauche → invisible à droite
-        photo_a = 1.0 - fr
+        photo_a = fr  # LOD haut = photo visible plus loin
 
         cv.delete("all")
 
@@ -1613,11 +1622,11 @@ class Ortho4XP_Simulator(tk.Toplevel):
                        fill="#ffdd44", font=("TkFixedFont", 9, "bold"))
 
         if fr < 0.33:
-            msg, col = tr("photo recouvre toute la mer XP"), "#88ff88"
+            msg, col = tr("photo proche seulement (LOD bas)"), "#ff8866"
         elif fr < 0.66:
             msg, col = tr("fondu photo ↔ mer XP"), "#ffe066"
         else:
-            msg, col = tr("mer XP seule — plus de photo"), "#88ccff"
+            msg, col = tr("photo visible au loin (LOD haut)"), "#88ff88"
         cv.create_rectangle(0, H - 16, W, H, fill="#060e06", outline="")
         cv.create_text(W // 2, H - 8, text=msg, fill=col,
                        font=("TkFixedFont", 8, "bold"))
@@ -1626,7 +1635,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
     def _draw_smooth_hint(self):
         """
         water_smoothing — bord d'un lac :
-        0 = dents de scie ; élevé = rivage arrondi.
+        élevé (gauche) = rivage arrondi ; 0 (droite) = découpé.
         """
         import math, random
         cv = self._canvases.get("mer_hint_smooth")
@@ -1668,12 +1677,13 @@ class Ortho4XP_Simulator(tk.Toplevel):
         cv.create_text(x0 + 4, y0 + bh - 6, text=tr("lac"),
             fill="#c8d8ff", font=("TkFixedFont", 7), anchor="w")
 
-        if sm == 0:
-            msg, col = tr("rivage en dents de scie"), "#ff8866"
-        elif sm <= 2:
+        # Valeur haute = arrondi (gauche sur le curseur 5→0)
+        if sm >= 4:
+            msg, col = tr("rivage très arrondi"), "#88ccff"
+        elif sm >= 2:
             msg, col = tr("rivage naturel (reco)"), "#66ff99"
         else:
-            msg, col = tr("rivage très arrondi"), "#88ccff"
+            msg, col = tr("rivage découpé (dents de scie)"), "#ff8866"
         cv.create_text(W // 2, H - 8, text=f"×{sm} — " + msg, fill=col,
             font=("TkFixedFont", 8, "bold"))
 
@@ -2135,7 +2145,9 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ws = float(self._get("water_simplification", 0))
         except Exception:
             ws = 0.0
-        detail = max(0.0, min(1.0, ws))  # 0 = simple, 1 = détaillé
+        # Officiel Ortho4XP : valeur haute = plus de simplification OSM
+        # → 0 = rive détaillée, 1 = rive simplifiée
+        detail = 1.0 - max(0.0, min(1.0, ws))
         cv.delete("all")
         cv.create_rectangle(0, 0, W, H, fill="#0a140a", outline="")
 
@@ -2161,12 +2173,12 @@ class Ortho4XP_Simulator(tk.Toplevel):
         cv.create_text(10, H - 28, text=tr("eau"), fill="#c8d8ff",
             font=("TkFixedFont", 7), anchor="sw")
 
-        if detail < 0.25:
-            msg, col = "0 — " + tr("rive simplifiée"), "#ff8866"
-        elif detail < 0.7:
+        if detail > 0.75:
+            msg, col = tr("rive très détaillée"), "#66ff99"
+        elif detail > 0.35:
             msg, col = tr("rive intermédiaire"), "#ffe066"
         else:
-            msg, col = "1 — " + tr("rive très détaillée"), "#66ff99"
+            msg, col = tr("rive simplifiée"), "#ff8866"
         cv.create_rectangle(0, H - 18, W, H, fill="#060e06", outline="")
         cv.create_text(W // 2, H - 9, text=msg, fill=col,
             font=("TkFixedFont", 8, "bold"))
@@ -2400,27 +2412,31 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
     def _mesh_scores(self):
         """
-        mesh_zl       → taille triangles + relief (ronds/pics) liés
-        curvature_tol → alignement montagne / grille
-        limit_tris    → « budget » de triangles : grille partielle → complète
+        curvature_tol → densité triangles + forme des pics
+            (curseur GAUCHE=30 : grands △, sommets arrondis ;
+             curseur DROITE=1  : petits △, sommets pointus)
+        limit_tris    → densité/opacité de la grille (plein cadre, pas de coupe)
+        mesh_zl       → ZL max supporté (affichage / netteté paysage légère)
         """
         mzl  = float(self._get("mesh_zl", 19))
         ctol = float(self._get("curvature_tol", 16))
         lt   = float(self._get("limit_tris", 15))
 
-        mesh_q = max(0.0, min(1.0, (mzl - 14.0) / 6.0))
-        grid_q = mesh_q
-        land_q = mesh_q
-        misalign = max(0.0, min(1.0, (ctol - 1.0) / 29.0))
-        # 1M → quasi vide, 15M → moyen, 50M → plein
+        # densite : 30 → 0 (grossier), 1 → 1 (fin)
+        dens = max(0.0, min(1.0, (30.0 - ctol) / 29.0))
+        grid_q = dens
+        land_q = dens
+        # fort curvature_tol = mesh suit moins le relief
+        misalign = max(0.0, min(1.0, 1.0 - dens))
+        # budget triangles : opacité de la grille (toujours pleine hauteur)
         fill_q = max(0.0, min(1.0, (lt - 1.0) / 49.0))
 
         return grid_q, land_q, misalign, fill_q, mzl, ctol, lt
 
     def _mesh_blended_photo(self, W, H, grid_q, land_q, misalign, fill_q):
         """
-        Paysage + grille (mesh_zl), décalage (curvature),
-        couverture partielle de la grille (limit_tris).
+        Paysage + grille (curvature_tol), décalage si tolérance haute,
+        opacité de la grille (limit_tris) — grille pleine hauteur collée aux crêtes.
         """
         grid_q = max(0.0, min(1.0, float(grid_q)))
         land_q = max(0.0, min(1.0, float(land_q)))
@@ -2438,7 +2454,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             t = (grid_q - 0.42) / (0.58 - 0.42)
             grid_mode, grid_alpha = "cross", t
 
-        key = ("v7fill", W, H, q_land, grid_mode, round(grid_alpha, 2),
+        key = ("v8full", W, H, q_land, grid_mode, round(grid_alpha, 2),
                mis_step, fill_step)
         cache = getattr(self, "_mesh_blend_cache", None)
         if cache is None:
@@ -2492,20 +2508,19 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         def _apply_fill_budget(grid_img, fq):
             """
-            limit_tris bas → grille seulement en bas (budget épuisé).
-            limit_tris haut → grille sur tout le relief.
+            limit_tris bas → grille plus transparente (moins de budget).
+            limit_tris haut → grille bien visible.
+            Toujours PLEINE HAUTEUR (collée aux crêtes via mask), jamais coupée au milieu.
             """
             if grid_img is None:
                 return None
-            # Toujours un peu de grille en bas (15%), jusqu'à 100%
-            cover = 0.15 + 0.85 * fq
-            y_cut = int(H * (1.0 - cover))
-            g = grid_img.copy()
-            # Efface les traits au-dessus de y_cut (alpha = 0)
-            if y_cut > 0:
-                top = Image.new("RGBA", (W, y_cut), (0, 0, 0, 0))
-                g.paste(top, (0, 0))
-            return g, y_cut
+            alpha = 0.20 + 0.80 * fq
+            g = grid_img
+            if alpha < 0.99:
+                r, gc, b, a = g.split()
+                a = a.point(lambda p, al=alpha: int(p * al))
+                g = Image.merge("RGBA", (r, gc, b, a))
+            return g, 0
 
         grid_final = None
         y_cut = 0
@@ -2726,7 +2741,11 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
 
     def _draw_iterate_hint(self, cv=None, W=None, H=None, iterate=None):
-        """iterate : surface 3D de plus en plus raffinée."""
+        """
+        iterate — visuel simple pour utilisateur lambda :
+        chaque passe affine le tracé de la côte (grossier → détaillé).
+        Plus de passes = plus précis, mais plus long à calculer.
+        """
         if cv is None:
             cv = self._canvases.get("mesh_hint_iter")
         if not cv or not cv.winfo_exists():
@@ -2736,49 +2755,98 @@ class Ortho4XP_Simulator(tk.Toplevel):
         if H is None:
             H = max(60, cv.winfo_height())
         if iterate is None:
-            iterate = int(float(self._get("iterate", 0)))
+            try:
+                iterate = int(float(self._get("iterate", 0)))
+            except Exception:
+                iterate = 0
         iterate = max(0, min(3, iterate))
         cv.delete("all")
-        cv.create_rectangle(0, 0, W, H, fill="#0a120a", outline="")
 
         import math
-        # Grille perspective : plus de subdivisions si iterate haut
-        cols = 2 + iterate * 2  # 2,4,6,8
-        rows = 1 + iterate      # 1,2,3,4
-        y0, y1 = int(H * 0.25), H - 22
-        for r in range(rows + 1):
-            fy = r / rows
-            y = y0 + int((y1 - y0) * fy)
-            # largeur perspective
-            margin = int(W * (0.28 - 0.18 * fy))
-            cv.create_line(margin, y, W - margin, y, fill="#4a7a5a", width=1)
-        for c in range(cols + 1):
-            fx = c / cols
-            # ligne de fuite
-            x_near = int(W * 0.08 + fx * W * 0.84)
-            x_far = int(W * 0.30 + fx * W * 0.40)
-            cv.create_line(x_far, y0, x_near, y1, fill="#4a7a5a", width=1)
 
-        # relief ondulé sur la surface
-        pts = []
-        for c in range(cols + 1):
-            fx = c / cols
-            x = int(W * 0.08 + fx * W * 0.84)
-            y = y1 - int(8 * math.sin(fx * math.pi * (1 + iterate)))
-            pts.append((x, y))
-        for i in range(len(pts) - 1):
-            cv.create_line(*pts[i], *pts[i + 1], fill="#a6e3a1", width=2)
+        # Fond
+        cv.create_rectangle(0, 0, W, H, fill="#0a140a", outline="")
+        # Ciel
+        cv.create_rectangle(0, 0, W, int(H * 0.35), fill="#1a3048", outline="")
+        # Mer
+        cv.create_rectangle(0, int(H * 0.35), W, H - 16, fill="#1a5080", outline="")
+
+        # ── Côte : plus de segments = plus de passes ──
+        # Forme de base : baie / promontoire
+        n_pts = 4 + iterate * 4   # 4, 8, 12, 16 points
+        y_coast = int(H * 0.42)
+        amp = H * 0.22
+        pts_land = [0, H - 16]
+        coast_xy = []
+        for i in range(n_pts + 1):
+            t = i / max(1, n_pts)
+            x = int(4 + t * (W - 8))
+            # Vague de côte (plus riche si plus de points)
+            wave = (math.sin(t * math.pi * 1.2) * 0.55
+                    + math.sin(t * math.pi * 2.4 + 0.4) * 0.30
+                    + math.sin(t * math.pi * 4.8 + 1.1) * 0.15)
+            # À iterate bas : quantifier pour un aspect "cassé"
+            if iterate == 0:
+                wave = round(wave * 2) / 2.0
+            elif iterate == 1:
+                wave = round(wave * 4) / 4.0
+            y = int(y_coast - wave * amp)
+            coast_xy.append((x, y))
+            pts_land.extend([x, y])
+        pts_land.extend([W, H - 16])
+
+        # Terre (vert)
+        cv.create_polygon(pts_land, fill="#3d7a34", outline="")
+        # Trait de côte bien visible
+        flat = []
+        for x, y in coast_xy:
+            flat.extend([x, y])
+        col_coast = ["#ffe066", "#a6e3a1", "#66ddff", "#c8a0ff"][iterate]
+        cv.create_line(flat, fill=col_coast, width=2 + (1 if iterate >= 2 else 0),
+                       smooth=(iterate >= 2))
+
+        # Petits points sur les sommets (montre les « nœuds » du maillage)
+        if iterate <= 2:
+            for x, y in coast_xy[::max(1, len(coast_xy) // 8)]:
+                cv.create_oval(x - 2, y - 2, x + 2, y + 2,
+                               fill="#ffe066", outline="")
+
+        # ── Indicateur de passes (1 2 3 4) ──
+        # iterate 0 → 1 passe, 1 → 2 passes, etc.
+        n_pass = iterate + 1
+        bx0 = 8
+        by = 8
+        for p in range(4):
+            x = bx0 + p * 18
+            on = p < n_pass
+            cv.create_rectangle(x, by, x + 14, by + 12,
+                fill=("#4fc3f7" if on else "#1a2a20"),
+                outline=("#a6e3a1" if on else "#3a5a40"))
+            cv.create_text(x + 7, by + 6, text=str(p + 1),
+                fill=("#0a140a" if on else "#5a7a60"),
+                font=("TkFixedFont", 7, "bold"))
+
+        # Horloge simple (temps de calcul)
+        cx, cy = W - 18, 16
+        cv.create_oval(cx - 10, cy - 10, cx + 10, cy + 10,
+                       outline="#a6e3a1", width=1)
+        # Aiguille : plus tournée = plus long
+        ang = -90 + n_pass * 55  # degrés
+        rad = math.radians(ang)
+        cv.create_line(cx, cy,
+                       cx + int(7 * math.cos(rad)),
+                       cy + int(7 * math.sin(rad)),
+                       fill="#ffe066", width=2)
 
         labels = [
-            tr("1 passe — rapide"),
-            tr("2 passes — côtes affinées"),
-            tr("3 passes — relief fin"),
-            tr("4 passes — très long"),
+            tr("1 passe — rapide, côte grossière"),
+            tr("2 passes — côte un peu affinées"),
+            tr("3 passes — côte bien détaillée"),
+            tr("4 passes — très précis, très long"),
         ]
-        lbl = labels[iterate]
-        col = ["#e0c080", "#a6e3a1", "#66ccff", "#ffaa66"][iterate]
-        cv.create_rectangle(0, H - 18, W, H, fill="#060e06", outline="")
-        cv.create_text(W // 2, H - 9, text=f"{iterate} — {lbl}", fill=col,
+        cols = ["#e0c080", "#a6e3a1", "#66ccff", "#ffaa66"]
+        cv.create_rectangle(0, H - 16, W, H, fill="#060e06", outline="")
+        cv.create_text(W // 2, H - 8, text=labels[iterate], fill=cols[iterate],
                        font=("TkFixedFont", 8, "bold"))
 
 
@@ -2803,7 +2871,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
                 cv.create_line(0, y_cut, W, y_cut,
                     fill="#ff8866", width=1, dash=(6, 4))
                 cv.create_text(W - 8, y_cut - 8,
-                    text=tr("limit_tris") + f" → {lt:g}M",
+                    text=_sim_help('limit_tris : plafond du nombre de triangles (millions). Limite la charge XP. Recommandé : 1–3.', 'limit_tris: max triangle count (millions). Caps XP load. Recommended: 1–3.') + f" → {lt:g}M",
                     fill="#ff8866", font=("TkFixedFont", 9, "bold"),
                     anchor="e")
         else:
@@ -2828,11 +2896,12 @@ class Ortho4XP_Simulator(tk.Toplevel):
             c_lbl, c_col = tr("curvature → calé"), "#66ff99"
 
         if grid_q < 0.33:
-            g_lbl = tr("mesh_zl → grands △")
+            g_lbl = tr("curvature → grands △, pics doux")
         elif grid_q < 0.66:
-            g_lbl = tr("mesh_zl → moyen")
+            g_lbl = tr("curvature → mixte")
         else:
-            g_lbl = tr("mesh_zl → petits △")
+            g_lbl = tr("curvature → petits △, pics nets")
+        mzl_lbl = f"mesh_zl {int(mzl)}"
 
         if fill_q < 0.33:
             f_lbl = tr("limit → peu de △")
@@ -2843,7 +2912,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         cv.create_rectangle(0, H - 28, W, H, fill="#060e06", outline="")
         cv.create_text(W // 2, H - 14,
-            text=f"{g_lbl}  |  {c_lbl}  |  {f_lbl}",
+            text=f"{mzl_lbl}  |  {g_lbl}  |  {c_lbl}  |  {f_lbl}",
             fill=c_col, font=("TkFixedFont", 9, "bold"))
 
         # Animations dans leurs cadres (sous l'image)
@@ -3382,8 +3451,9 @@ class Ortho4XP_Simulator(tk.Toplevel):
         try:
             self._apply_to_tile()
             self._tile.write_to_config()
+            self._refresh_outils_config()
             self._status.config(
-                text=tr("✅ Sauvegardé dans cfg tuile."), fg=self.FG2)
+                text=tr("✅ Sauvegardé dans cfg tuile (Outils Config rafraîchi)."), fg=self.FG2)
         except Exception as e:
             self._status.config(text=f"❌ {e}", fg="#ff6b6b")
 
@@ -3391,35 +3461,76 @@ class Ortho4XP_Simulator(tk.Toplevel):
     def _write_app(self):
         try:
             self._apply_to_tile()
-            # Écrire le cfg global Ortho4XP
-            import O4_Config_Utils as _CFG
-            cfg_path = os.path.join(
-                FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
+            cfg_path = os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
             self._tile.write_to_config(cfg_path)
+            # Mettre à jour aussi les variables globales CFG (Outils Config)
+            try:
+                import O4_Config_Utils as _CFG
+                for key, var in self._vars.items():
+                    try:
+                        val = getattr(self._tile, key, None)
+                        if val is None:
+                            continue
+                        if hasattr(_CFG, "cfg_set"):
+                            _CFG.cfg_set(key, val)
+                        elif hasattr(_CFG, "cfg_vars"):
+                            # repli : certains builds exposent seulement cfg_vars
+                            pass
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            self._refresh_outils_config()
             self._status.config(
-                text=tr("✅ Sauvegardé dans cfg global."), fg=self.FG2)
+                text=tr("✅ Sauvegardé dans cfg global (Outils Config rafraîchi)."), fg=self.FG2)
         except Exception as e:
             self._status.config(text=f"❌ {e}", fg="#ff6b6b")
 
     def _apply_to_tile(self):
+        """Recopie les curseurs simulateur → objet Tile (mêmes noms que Outils Config)."""
         bool_keys = {
-            "use_masks_for_inland","imprint_masks_to_dds",
-            "distance_masks_too","masks_use_DEM_too",
+            "use_masks_for_inland", "imprint_masks_to_dds",
+            "distance_masks_too", "masks_use_DEM_too",
             "terrain_casts_shadows",
-            "use_decal_on_terrain","fill_nodata","clean_bad_geometries"
+            "use_decal_on_terrain", "fill_nodata", "clean_bad_geometries",
+        }
+        # Enums / chaînes à ne PAS convertir en float
+        str_keys = {
+            "water_tech", "masking_mode", "cover_airports_with_highres",
+            "sea_smoothing_mode", "custom_dem", "custom_bathy_dem",
         }
         for key, var in self._vars.items():
             try:
                 raw = var.get()
                 if key in bool_keys:
-                    setattr(self._tile, key, raw == "True")
+                    setattr(self._tile, key, str(raw) in ("True", "true", "1"))
+                elif key in str_keys:
+                    setattr(self._tile, key, str(raw))
                 elif isinstance(raw, str):
+                    s = raw.strip()
                     try:
-                        setattr(self._tile, key, float(raw)
-                            if '.' in raw else int(raw))
+                        if "." in s or "e" in s.lower():
+                            setattr(self._tile, key, float(s))
+                        else:
+                            setattr(self._tile, key, int(s))
                     except Exception:
-                        setattr(self._tile, key, raw)
+                        setattr(self._tile, key, s)
                 else:
                     setattr(self._tile, key, raw)
             except Exception:
                 pass
+
+    def _refresh_outils_config(self):
+        """Si la fenêtre Outils Config est ouverte, recharge le cfg tuile."""
+        try:
+            parent = self.parent
+            for w in parent.winfo_children():
+                if w.__class__.__name__ == "Ortho4XP_Config" and w.winfo_exists():
+                    if hasattr(w, "load_tile_cfg"):
+                        w.load_tile_cfg()
+                    if hasattr(w, "load_interface_from_variables"):
+                        # optionnel : si le mode global affiche cfg_get
+                        pass
+                    break
+        except Exception:
+            pass
