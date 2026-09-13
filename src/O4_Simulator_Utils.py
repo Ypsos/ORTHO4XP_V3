@@ -891,7 +891,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ("max_area",       "max_area (°²)",  1,200,  5,    float,
              tr("max_area : surface max d'un polygone. 100 = recommandé."), None),
             ("water_simplification","water_simpl",0,1,  0.05, float,
-             tr('water_simplification : simplification des polygones eau. 0 = précis, 1 = très simplifié.'), None),
+             tr('water_simplification : 0 (gauche) = rive simplifiée, 1 (droite) = rive très détaillée.'), None),
         ]
         self._add_group(inner, tr("Terrain & Ombrage"), sliders[:3], exp_lbl, fs,
                         inline_hint=True, row_hints={
@@ -997,13 +997,21 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
     # ── Forcer redraw de tous les canvas ────────────────────────────
     def _redraw_all(self):
-        # Vues légères : immédiat
+        # Vues procédurales : immédiat
         for fn in (self._draw_mer, self._draw_terrain, self._draw_mesh):
             try:
                 fn()
             except Exception:
                 pass
-        # PNG lourds : debounce 60 ms (évite 50 recalculs pendant un drag)
+        # Vignettes Imagerie (levelled_segs, smooth, curv) : immédiat
+        # (sinon le cache de _draw_imagerie bloque l'animation du curseur)
+        for fn in (self._draw_img_smooth_hint, self._draw_img_curv_hint,
+                   self._draw_img_segs_hint):
+            try:
+                fn()
+            except Exception:
+                pass
+        # PNG lourds : debounce 60 ms
         if getattr(self, "_png_redraw_after", None):
             try:
                 self.after_cancel(self._png_redraw_after)
@@ -1509,63 +1517,111 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
     def _draw_lod_hint(self):
         """
-        overlay_lod — jusqu'où la photo satellite reste collée sur la mer.
-        Vue du dessus : avion, zone photo, puis eau XP seule.
+        overlay_lod — fondu PLEIN CADRE photo satellite ↔ mer XP.
+
+        GAUCHE : photo (fond marin.png) couvre TOUTE la vignette.
+        CENTRE : fondu progressif photo ↔ mer XP sur toute la surface.
+        DROITE : uniquement mer XP (plus de photo), plein cadre.
+
+        Chemin universel : images/Mer_Cotes/fond marin.png
         """
-        import math
         cv = self._canvases.get("mer_hint_lod")
         if not cv or not cv.winfo_exists():
             return
         W = max(120, cv.winfo_width())
         H = max(60, cv.winfo_height())
         lod = float(self._get("overlay_lod", 30000))
+        # 0 = gauche, 1 = droite
+        fr = max(0.0, min(1.0, (lod - 5000.0) / 45000.0))
+        # photo pleine à gauche → invisible à droite
+        photo_a = 1.0 - fr
+
         cv.delete("all")
-        cv.create_rectangle(0, 0, W, H, fill="#0a140a", outline="")
 
-        fr = max(0.0, min(1.0, (lod - 5000) / 45000.0))
-        # Zone photo (gauche) vs eau nue (droite)
-        split = int(16 + fr * (W - 28))
+        try:
+            from PIL import Image as _PIL, ImageTk as _ITK, ImageDraw as _ID
+            import math
 
-        # Mer avec photo (hachures = imagerie)
-        cv.create_rectangle(8, 18, split, H - 20, fill="#1a6b4a", outline="")
-        for x in range(10, split, 7):
-            for y in range(20, H - 20, 7):
-                cv.create_rectangle(x, y, x + 4, y + 4,
-                    fill="#2d8f62", outline="")
-        cv.create_text((8 + split) // 2, 28,
-            text=tr("photo sur mer"), fill="#e8ffe8",
-            font=("TkFixedFont", 7))
+            if not hasattr(self, "_lod_cache"):
+                self._lod_cache = {}
 
-        # Eau XP seule
-        if split < W - 10:
-            cv.create_rectangle(split, 18, W - 8, H - 20,
-                fill="#0d2b5c", outline="")
-            cv.create_text((split + W - 8) // 2, 28,
-                text=tr("eau XP seule"), fill="#aaccff",
-                font=("TkFixedFont", 7))
+            ck = (W, H, round(photo_a, 2))
+            if getattr(self, "_lod_photo_ck", None) == ck and getattr(cv, "_pk_lod", None):
+                pass  # réutilise cv._pk_lod
+            else:
+                # ── Mer XP plein cadre (bleu) ──
+                xp = _PIL.new("RGBA", (W, H), (0, 0, 0, 255))
+                dr = _ID.Draw(xp)
+                for y in range(H):
+                    k = y / max(1, H - 1)
+                    rr = int(15 + 25 * k)
+                    gg = int(55 + 60 * k)
+                    bb = int(110 + 100 * k)
+                    dr.line([(0, y), (W, y)], fill=(rr, gg, bb, 255))
+                for i in range(0, W, 7):
+                    yy = int(H * 0.45 + 6 * math.sin(i * 0.2))
+                    dr.ellipse([i, yy, i + 5, yy + 3],
+                               fill=(170, 215, 255, 140))
 
-        # Limite + avion
-        cv.create_line(split, 16, split, H - 18, fill="#ffffff", width=1,
-            dash=(3, 2))
-        # Petit avion (triangle)
-        ax = 14
-        ay = H // 2
-        cv.create_polygon(ax, ay, ax + 10, ay - 5, ax + 10, ay + 5,
-            fill="#ffe066", outline="")
-        cv.create_text(ax + 4, ay + 12, text=tr("vous"),
-            fill="#ffe066", font=("TkFixedFont", 7))
+                # ── Photo satellite : crop de la zone NON noire, étirée plein cadre ──
+                raw = _sim_load_full("fond", 400, 300, self._lod_cache,
+                                     make_black_transparent=False)
+                if raw.mode != "RGBA":
+                    raw = raw.convert("RGBA")
+                # Trouver la bande utile (pas le noir du haut)
+                px = raw.load()
+                w0, h0 = raw.size
+                y0 = 0
+                for y in range(h0):
+                    # ligne non noire si assez de pixels clairs
+                    n_lit = 0
+                    for x in range(0, w0, 4):
+                        r, g, b, a = px[x, y]
+                        if r + g + b > 40:
+                            n_lit += 1
+                    if n_lit > w0 // 20:
+                        y0 = y
+                        break
+                cropped = raw.crop((0, y0, w0, h0))
+                photo = cropped.resize((W, H), _PIL.LANCZOS).convert("RGBA")
+                # Opacité globale selon curseur
+                alpha = photo.split()[3].point(
+                    lambda p, r=photo_a: int(p * max(0.0, min(1.0, r))))
+                photo.putalpha(alpha)
 
-        cv.create_text(W // 2, 8, text=f"{lod / 1000:.0f} km",
-            fill="#ffdd44", font=("TkFixedFont", 9, "bold"))
+                # Composite : XP en dessous, photo par-dessus
+                base = _PIL.alpha_composite(xp, photo)
+                cv._pk_lod = _ITK.PhotoImage(base.convert("RGB"))
+                self._lod_photo_ck = ck
 
-        if lod < 15000:
-            msg, col = tr("photo disparaît vite"), "#ff8866"
-        elif lod < 40000:
-            msg, col = tr("portée confortable"), "#66ff99"
+            cv.create_image(0, 0, anchor="nw", image=cv._pk_lod)
+
+        except Exception:
+            # Fallback rectangles
+            cv.create_rectangle(0, 0, W, H, fill="#0d2b5c", outline="")
+            if photo_a > 0.05:
+                # approximation verte/grise de la photo
+                shade = int(40 + 50 * photo_a)
+                cv.create_rectangle(0, 0, W, H,
+                    fill=f"#{shade:02x}{shade+20:02x}{shade+10:02x}", outline="")
+
+        cv.create_text(8, 10, text=tr("photo sat."),
+                       fill="#c8ffc8", font=("TkFixedFont", 7), anchor="nw")
+        cv.create_text(W - 8, 10, text=tr("mer XP"),
+                       fill="#aaccff", font=("TkFixedFont", 7), anchor="ne")
+        cv.create_text(W // 2, 10, text=f"{lod / 1000:.0f} km",
+                       fill="#ffdd44", font=("TkFixedFont", 9, "bold"))
+
+        if fr < 0.33:
+            msg, col = tr("photo recouvre toute la mer XP"), "#88ff88"
+        elif fr < 0.66:
+            msg, col = tr("fondu photo ↔ mer XP"), "#ffe066"
         else:
-            msg, col = tr("photo très loin"), "#88ccff"
+            msg, col = tr("mer XP seule — plus de photo"), "#88ccff"
+        cv.create_rectangle(0, H - 16, W, H, fill="#060e06", outline="")
         cv.create_text(W // 2, H - 8, text=msg, fill=col,
-            font=("TkFixedFont", 8, "bold"))
+                       font=("TkFixedFont", 8, "bold"))
+
 
     def _draw_smooth_hint(self):
         """
@@ -2065,8 +2121,9 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
     def _draw_wsimpl_hint(self):
         """
-        water_simplification : rive détaillée vs simplifiée.
-        0 = sinueuse ; 1 = presque droite.
+        water_simplification — sens demandé :
+          gauche (0) = rive simplifiée
+          droite (1) = rive très détaillée
         """
         import math
         cv = self._canvases.get("terrain_hint_wsimpl")
@@ -2078,11 +2135,11 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ws = float(self._get("water_simplification", 0))
         except Exception:
             ws = 0.0
-        t = max(0.0, min(1.0, ws))
+        detail = max(0.0, min(1.0, ws))  # 0 = simple, 1 = détaillé
         cv.delete("all")
         cv.create_rectangle(0, 0, W, H, fill="#0a140a", outline="")
 
-        npts = int(28 - t * 22)
+        npts = int(4 + detail * 24)
         npts = max(3, npts)
         midy = H // 2 - 2
         pts = []
@@ -2090,26 +2147,26 @@ class Ortho4XP_Simulator(tk.Toplevel):
             f = i / max(1, npts - 1)
             x = 8 + int(f * (W - 16))
             jag = (math.sin(f * math.pi * 7) * 11 +
-                   math.sin(f * math.pi * 15) * 5) * (1 - t)
+                   math.sin(f * math.pi * 15) * 5) * detail
             pts.extend([x, int(midy + jag)])
 
         cv.create_polygon([8, H - 18] + pts + [W - 8, H - 18],
             fill="#1a5080", outline="")
         cv.create_polygon([8, 8] + pts + [W - 8, 8],
             fill="#2a5a32", outline="")
-        cv.create_line(pts, fill="#ffe066", width=2, smooth=(t < 0.4))
+        cv.create_line(pts, fill="#ffe066", width=2, smooth=(detail > 0.5))
 
         cv.create_text(10, 10, text=tr("terre"), fill="#c8e8c8",
             font=("TkFixedFont", 7), anchor="nw")
         cv.create_text(10, H - 28, text=tr("eau"), fill="#c8d8ff",
             font=("TkFixedFont", 7), anchor="sw")
 
-        if t < 0.2:
-            msg, col = "0 — " + tr("rive très détaillée"), "#66ff99"
-        elif t < 0.55:
-            msg, col = tr("rive un peu simplifiée"), "#ffe066"
+        if detail < 0.25:
+            msg, col = "0 — " + tr("rive simplifiée"), "#ff8866"
+        elif detail < 0.7:
+            msg, col = tr("rive intermédiaire"), "#ffe066"
         else:
-            msg, col = "1 — " + tr("rive simplifiée (droite)"), "#ff8866"
+            msg, col = "1 — " + tr("rive très détaillée"), "#66ff99"
         cv.create_rectangle(0, H - 18, W, H, fill="#060e06", outline="")
         cv.create_text(W // 2, H - 9, text=msg, fill=col,
             font=("TkFixedFont", 8, "bold"))
@@ -2916,110 +2973,129 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
 
     def _draw_img_segs_hint(self):
-        """levelled_segs — coupe de profil : route PLATE + terrain (design validé).
-
-        La ROUTE est une bande plate (référence), au milieu. Le TERRAIN (vert
-        clair) ondule autour : des BOSSES qui dépassent AU-DESSUS de la route
-        (leur sommet est marqué en ROUGE — c'est ce qu'il faut raboter) et des
-        CREUX qui plongent EN DESSOUS. En glissant vers la DROITE (segments
-        nivelés), le terrain se rabote au niveau de la route : les bosses rouges
-        disparaissent, les creux se comblent, tout devient plat au niveau de la
-        route.
+        """levelled_segs — vignette validée, lisible :
+        GAUCHE : route montagne russe, bosses ROUGES au-dessus, cuvettes VERT CLAIR en dessous.
+        DROITE : route épaisse et plate, vert collé à la route, plus de bosses/cuvettes.
         """
         import math
         cv = self._canvases.get("img_hint_segs")
         if not cv or not cv.winfo_exists():
             return
-        W = max(120, cv.winfo_width())
-        H = max(60, cv.winfo_height())
+        W = max(140, cv.winfo_width())
+        H = max(70, cv.winfo_height())
         segs = float(self._get("max_levelled_segs", 200000))
-        t = max(0.0, min(1.0, segs / 500000.0))   # 0 = bosselé, 1 = à plat
+        t = max(0.0, min(1.0, segs / 500000.0))  # 0=gauche, 1=droite
         cv.delete("all")
 
-        top = 2
-        bot = H - 18
-        x0, x1 = 4, W - 4
-        Hd = max(10, bot - top)
-        cy = top + 0.50 * Hd            # niveau de la route (plate, fixe)
-        amp0 = 0.34 * Hd               # amplitude des bosses/creux à t=0
-        amp = amp0 * (1.0 - t)         # se réduit à 0 quand on nivelle
-
-        def _u(px):
-            return (px - x0) / max(1.0, float(x1 - x0))
+        top, bot = 6, H - 18
+        x0, x1 = 6, W - 6
+        Hd = max(12, bot - top)
+        cy = top + 0.50 * Hd
+        amp0 = 0.40 * Hd
+        amp = amp0 * (1.0 - t)
 
         def wave(px):
-            u = _u(px)
-            return (0.72 * math.sin(u * math.pi * 3.0)
-                    + 0.28 * math.sin(u * math.pi * 6.0 + 0.8))
+            u = (px - x0) / max(1.0, float(x1 - x0))
+            return (0.75 * math.sin(u * math.pi * 2.5)
+                    + 0.25 * math.sin(u * math.pi * 5.0 + 0.6))
 
-        def terr_y(px):
-            # au-dessus de la route (y plus petit) quand wave > 0 = bosse
+        def profile(px):
             return cy - amp * wave(px)
 
-        step = 3
+        step = 2
         xs = list(range(x0, x1 + 1, step))
         if xs[-1] != x1:
             xs.append(x1)
 
-        # Fond + ciel
+        # Fond
         cv.create_rectangle(0, 0, W, H, fill="#0a120a", outline="")
-        cv.create_rectangle(0, 0, W, int(cy), fill="#223a52", outline="")
+        cv.create_rectangle(0, 0, W, bot, fill="#1a3048", outline="")
 
-        # Terrain vert clair : sommet = terr_y, descend jusqu'en bas
+        # ── Cuvettes VERT CLAIR (sous le niveau moyen cy) ──
+        if amp > 2.0:
+            run, runs = [], []
+            for px in xs:
+                if profile(px) > cy + 1.0:
+                    run.append(px)
+                else:
+                    if len(run) >= 2:
+                        runs.append(run)
+                    run = []
+            if len(run) >= 2:
+                runs.append(run)
+            for r in runs:
+                pts = []
+                for px in r:
+                    pts.extend([px, profile(px)])
+                for px in reversed(r):
+                    pts.extend([px, cy])
+                cv.create_polygon(pts, fill="#9ee87a", outline="#6bc04a")
+
+        # ── Terrain de base (vert) ──
         gpts = [x0, bot]
         for px in xs:
-            gpts.extend([px, terr_y(px)])
+            gpts.extend([px, profile(px)])
         gpts.extend([x1, bot])
-        cv.create_polygon(gpts, fill="#5fa64e", outline="#3d7a34")
+        # À droite (t→1) le vert se colle à la route (profil plat)
+        cv.create_polygon(gpts, fill="#4a9a3a", outline="#2e6e28")
 
-        # Bosses ROUGES : la part du terrain qui DÉPASSE au-dessus de la route
-        # (entre le sommet du terrain terr_y et le niveau de la route cy).
-        run = []
-        runs = []
-        for px in xs:
-            if terr_y(px) < cy - 0.8:
-                run.append(px)
-            else:
-                if len(run) >= 2:
-                    runs.append(run)
-                run = []
-        if len(run) >= 2:
-            runs.append(run)
-        for r in runs:
-            pts = []
-            for px in r:
-                pts.extend([px, terr_y(px)])
-            for px in reversed(r):
-                pts.extend([px, cy])
-            cv.create_polygon(pts, fill="#e04840", outline="")
-
-        # Route PLATE (bande grise) au niveau cy + médiane jaune pointillée
-        cv.create_rectangle(x0, cy - 3, x1, cy + 3, fill="#3a3f45", outline="")
-        cv.create_line(x0, cy, x1, cy, fill="#f2d75a", width=1, dash=(5, 4))
-
-        # Croix rouges sur le sommet des bosses (tant que ce n'est pas nivelé)
+        # ── Bosses ROUGES (au-dessus de cy) ──
         if amp > 2.0:
-            for bxf in (1.0 / 6.0, 5.0 / 6.0):
-                bx = x0 + bxf * (x1 - x0)
-                ty = terr_y(bx)
-                if ty < cy - 3:
-                    by = ty - 5
-                    s = 4
-                    cv.create_line(bx - s, by - s, bx + s, by + s,
-                                   fill="#ff5a4a", width=2)
-                    cv.create_line(bx + s, by - s, bx - s, by + s,
-                                   fill="#ff5a4a", width=2)
+            run, runs = [], []
+            for px in xs:
+                if profile(px) < cy - 1.0:
+                    run.append(px)
+                else:
+                    if len(run) >= 2:
+                        runs.append(run)
+                    run = []
+            if len(run) >= 2:
+                runs.append(run)
+            for r in runs:
+                pts = []
+                for px in r:
+                    pts.extend([px, profile(px)])
+                for px in reversed(r):
+                    pts.extend([px, cy])
+                cv.create_polygon(pts, fill="#e84840", outline="#c03028")
 
-        # Bandeau bas
+        # ── Route : montagne russe → plate et plus ÉPAISSE à droite ──
+        # Épaisseur : 3 px à gauche → 6 px à droite
+        half = 3.0 + 3.0 * t
+        band = []
+        mid = []
+        for px in xs:
+            ry = profile(px) * (1.0 - t) + cy * t
+            band.extend([px, ry - half])
+            mid.extend([px, ry])
+        for px in reversed(xs):
+            ry = profile(px) * (1.0 - t) + cy * t
+            band.extend([px, ry + half])
+        cv.create_polygon(band, fill="#4a4f56", outline="#2a2e34")
+        cv.create_line(mid, fill="#f2d75a", width=max(1, int(1 + t)), dash=(6, 3))
+
+        # Croix sur bosses (gauche seulement)
+        if amp > 3.0:
+            for bxf in (0.18, 0.82):
+                bx = x0 + bxf * (x1 - x0)
+                ty = profile(bx)
+                if ty < cy - 4:
+                    by = ty - 6
+                    s = 5
+                    cv.create_line(bx - s, by - s, bx + s, by + s,
+                                   fill="#ff6048", width=2)
+                    cv.create_line(bx + s, by - s, bx - s, by + s,
+                                   fill="#ff6048", width=2)
+
         k = int(segs / 1000)
-        if t < 0.2:
-            lbl, col = tr("bosses au-dessus, creux en dessous"), "#ff8866"
+        if t < 0.25:
+            lbl, col = tr("montagne russe — bosses + cuvettes"), "#ff8866"
         elif t < 0.7:
-            lbl, col = tr("en partie raboté"), "#e0c080"
+            lbl, col = tr("en partie nivelé"), "#e0c080"
         else:
-            lbl, col = tr("terrain à plat, route nivelée"), "#a6e3a1"
-        cv.create_rectangle(0, H - 18, W, H, fill="#060e06", outline="")
-        cv.create_text(W // 2, H - 9, text=f"{k}k — {lbl}", fill=col,
+            lbl, col = tr("route plate — vert collé"), "#a6e3a1"
+        cv.create_rectangle(0, H - 16, W, H, fill="#060e06", outline="")
+        cv.create_text(W // 2, H - 8, text=f"{k}k — {lbl}", fill=col,
                        font=("TkFixedFont", 8, "bold"))
 
 
