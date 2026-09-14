@@ -20,7 +20,7 @@ O4_Simulator_Utils.py — Simulateur visuel Ortho4XP V3 (module autonome)
 import os
 import sys
 import tkinter as tk
-from tkinter import ttk, messagebox, HORIZONTAL, LEFT, RIGHT, CENTER, N, S, E, W, NW, NE, SW, SE, END, ALL, RIDGE
+from tkinter import ttk, messagebox, filedialog, HORIZONTAL, LEFT, RIGHT, CENTER, N, S, E, W, NW, NE, SW, SE, END, ALL, RIDGE
 try:
     import customtkinter as ctk
     _HAS_CTK = True
@@ -417,6 +417,84 @@ class Ortho4XP_Simulator(tk.Toplevel):
         self._anim_running = False
         self.destroy()
 
+
+    def _build_path_fields(self, parent, fs):
+        """
+        4 chemins comme Outils Config :
+          custom_dem, custom_bathy_dem (fichiers DEM)
+          custom_scenery_dir, custom_overlay_src (dossiers)
+        """
+        specs = [
+            ("custom_dem",
+             _sim_help("custom_dem", "custom_dem"),
+             "file"),
+            ("custom_bathy_dem",
+             _sim_help("custom_bathy_dem", "custom_bathy_dem"),
+             "file"),
+            ("custom_scenery_dir",
+             _sim_help("custom_scenery_dir", "custom_scenery_dir"),
+             "dir"),
+            ("custom_overlay_src",
+             _sim_help("custom_overlay_src", "custom_overlay_src"),
+             "dir"),
+        ]
+        for row, (key, label, kind) in enumerate(specs):
+            if key not in self._vars:
+                self._vars[key] = tk.StringVar(value="")
+            var = self._vars[key]
+            # pastille label
+            lab = tk.Label(
+                parent, text=label,
+                bg="#4a6b59", fg="#ffffff",
+                font=("TkFixedFont", max(8, fs(9))),
+                padx=8, pady=3)
+            lab.grid(row=row, column=0, sticky="w", padx=(0, 6), pady=2)
+            ent = tk.Entry(
+                parent, textvariable=var,
+                bg="#e8f0ec", fg="#1a2a20",
+                insertbackground="#1a2a20",
+                font=("TkFixedFont", max(8, fs(9))),
+                relief="solid", bd=1)
+            ent.grid(row=row, column=1, sticky="ew", pady=2)
+            btn = tk.Button(
+                parent, text="📁", width=3,
+                command=lambda k=key, kd=kind: self._browse_path(k, kd),
+                bg="#4a6b59", fg="#ffffff",
+                activebackground="#5a7b69",
+                relief="flat", cursor="hand2")
+            btn.grid(row=row, column=2, padx=(4, 0), pady=2)
+
+    def _browse_path(self, key, kind):
+        """Sélecteur fichier (DEM) ou dossier (scenery / overlay)."""
+        try:
+            if kind == "file":
+                title = _sim_help(
+                    "Choisir un fichier DEM",
+                    "Choose a DEM file")
+                tmp = filedialog.askopenfilename(
+                    parent=self,
+                    title=title,
+                    filetypes=[
+                        ("DEM files", (".tif", ".hgt", ".raw", ".img", ".tiff")),
+                        ("all files", "*.*"),
+                    ],
+                )
+            else:
+                title = _sim_help(
+                    "Choisir un dossier",
+                    "Choose a folder")
+                tmp = filedialog.askdirectory(parent=self, title=title)
+            if tmp:
+                if key not in self._vars:
+                    self._vars[key] = tk.StringVar()
+                self._vars[key].set(str(tmp))
+        except Exception as e:
+            try:
+                self._status.config(text=f"❌ {e}", fg="#ff6b6b")
+            except Exception:
+                pass
+
+
     # ── Construction UI ────────────────────────────────────────────────
     def _build_ui(self):
         s = 1.0
@@ -429,7 +507,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         self.configure(bg=self.BG)
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)
 
         # Bandeau mode (comme Outils Config) : bascule Tuile / Globale en premier
         mode_fr = tk.Frame(self, bg=self.BG)
@@ -443,8 +521,14 @@ class Ortho4XP_Simulator(tk.Toplevel):
             font=("TkFixedFont", fs(11), "bold"))
         self._mode_lbl.pack(side="left", padx=10)
 
+        # ── Chemins (comme Outils Config) : DEM + Application ──
+        paths_fr = tk.Frame(self, bg=self.BG)
+        paths_fr.grid(row=1, column=0, sticky="ew", padx=8, pady=(2, 4))
+        paths_fr.columnconfigure(1, weight=1)
+        self._build_path_fields(paths_fr, fs)
+
         hdr = tk.Frame(self, bg=self.BG)
-        hdr.grid(row=1, column=0, sticky="ew", padx=8, pady=2)
+        hdr.grid(row=2, column=0, sticky="ew", padx=8, pady=2)
         tk.Label(hdr, text="Simulateur visuel — Ortho4XP V3",
             bg=self.BG, fg=self.FG2,
             font=("TkFixedFont", fs(13), "bold")).pack(side="left")
@@ -454,7 +538,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             font=("TkFixedFont", fs(10))).pack(side="left", padx=12)
 
         nb = ttk.Notebook(self)
-        nb.grid(row=2, column=0, sticky="nsew", padx=6, pady=4)
+        nb.grid(row=3, column=0, sticky="nsew", padx=6, pady=4)
 
         try:
             self._tab_mer_cote(nb, fs)
@@ -469,13 +553,13 @@ class Ortho4XP_Simulator(tk.Toplevel):
                 font=("TkFixedFont", 11), justify="left").pack(anchor="w", padx=12, pady=12)
 
         status_fr = tk.Frame(self, bg=self.BG)
-        status_fr.grid(row=3, column=0, sticky="ew", padx=10, pady=2)
+        status_fr.grid(row=4, column=0, sticky="ew", padx=10, pady=2)
         self._status = tk.Label(status_fr, text="", bg=self.BG,
             fg=self.FG2, font=("TkFixedFont", fs(10)))
         self._status.pack(side="left")
 
         btn_fr = tk.Frame(self, bg=self.BG)
-        btn_fr.grid(row=4, column=0, sticky="ew", padx=8, pady=4)
+        btn_fr.grid(row=5, column=0, sticky="ew", padx=8, pady=4)
         _ctk_button(btn_fr, text=_sim_help("↺  Recharger depuis config Tuile", "↺  Reload from Tile config"),
             command=self._load_from_tile).pack(side="left", padx=2)
         _ctk_button(btn_fr, text=_sim_help("↺  Recharger depuis config Globale", "↺  Reload from Global config"),
@@ -3492,10 +3576,16 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
     def _apply_loaded_tile_to_vars(self):
         bool_map = {True: "True", False: "False"}
+        path_keys = (
+            "custom_dem", "custom_bathy_dem",
+            "custom_scenery_dir", "custom_overlay_src",
+        )
         for key, var in self._vars.items():
             try:
                 val = getattr(self._tile, key, None)
                 if val is None:
+                    if key in path_keys:
+                        var.set("")
                     continue
                 if isinstance(var, tk.StringVar):
                     if isinstance(val, bool):
@@ -3551,6 +3641,16 @@ class Ortho4XP_Simulator(tk.Toplevel):
         out = {}
         for key in self._vars:
             try:
+                # chemins : écrire même si vide (effacement volontaire)
+                if key in (
+                    "custom_dem", "custom_bathy_dem",
+                    "custom_scenery_dir", "custom_overlay_src",
+                ):
+                    try:
+                        out[key] = str(self._vars[key].get() or "")
+                    except Exception:
+                        out[key] = ""
+                    continue
                 val = getattr(self._tile, key, None)
                 if val is None:
                     continue
@@ -3661,6 +3761,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
         str_keys = {
             "water_tech", "masking_mode", "cover_airports_with_highres",
             "sea_smoothing_mode", "custom_dem", "custom_bathy_dem",
+            "custom_scenery_dir", "custom_overlay_src",
         }
         for key, var in self._vars.items():
             try:
