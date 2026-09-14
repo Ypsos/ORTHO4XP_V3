@@ -418,16 +418,29 @@ class Ortho4XP_Simulator(tk.Toplevel):
         self.destroy()
 
 
+    def _dem_source_list(self):
+        """Liste déroulante custom_dem = DEM.available_sources (comme Outils Config)."""
+        try:
+            import O4_DEM_Utils as DEM
+            vals = list(DEM.available_sources[1::2])
+            if vals:
+                return [str(x) for x in vals]
+        except Exception:
+            pass
+        return []
+
     def _build_path_fields(self, parent, fs):
         """
         4 chemins comme Outils Config :
-          custom_dem, custom_bathy_dem (fichiers DEM)
-          custom_scenery_dir, custom_overlay_src (dossiers)
+          custom_dem = Combobox (sources DEM + chemin libre) + 📁
+          custom_bathy_dem = Entry + 📁
+          custom_scenery_dir / custom_overlay_src = Entry + 📁 dossier
+        Shift+clic sur 📁 de custom_dem : ajoute un fichier (séparé par ;)
         """
         specs = [
             ("custom_dem",
              _sim_help("custom_dem", "custom_dem"),
-             "file"),
+             "dem"),
             ("custom_bathy_dem",
              _sim_help("custom_bathy_dem", "custom_bathy_dem"),
              "file"),
@@ -438,24 +451,42 @@ class Ortho4XP_Simulator(tk.Toplevel):
              _sim_help("custom_overlay_src", "custom_overlay_src"),
              "dir"),
         ]
+        self._path_widgets = {}
         for row, (key, label, kind) in enumerate(specs):
             if key not in self._vars:
                 self._vars[key] = tk.StringVar(value="")
             var = self._vars[key]
-            # pastille label
             lab = tk.Label(
                 parent, text=label,
                 bg="#4a6b59", fg="#ffffff",
                 font=("TkFixedFont", max(8, fs(9))),
                 padx=8, pady=3)
             lab.grid(row=row, column=0, sticky="w", padx=(0, 6), pady=2)
-            ent = tk.Entry(
-                parent, textvariable=var,
-                bg="#e8f0ec", fg="#1a2a20",
-                insertbackground="#1a2a20",
-                font=("TkFixedFont", max(8, fs(9))),
-                relief="solid", bd=1)
+
+            if kind == "dem":
+                # Liste déroulante comme Outils Config (DEM.available_sources)
+                values = self._dem_source_list()
+                ent = ttk.Combobox(
+                    parent,
+                    textvariable=var,
+                    values=values,
+                    font=("TkFixedFont", max(8, fs(9))),
+                )
+                # Permet saisie libre d'un chemin en plus des sources listées
+                try:
+                    ent.configure(state="normal")
+                except Exception:
+                    pass
+            else:
+                ent = tk.Entry(
+                    parent, textvariable=var,
+                    bg="#e8f0ec", fg="#1a2a20",
+                    insertbackground="#1a2a20",
+                    font=("TkFixedFont", max(8, fs(9))),
+                    relief="solid", bd=1)
             ent.grid(row=row, column=1, sticky="ew", pady=2)
+            self._path_widgets[key] = ent
+
             btn = tk.Button(
                 parent, text="📁", width=3,
                 command=lambda k=key, kd=kind: self._browse_path(k, kd),
@@ -463,11 +494,43 @@ class Ortho4XP_Simulator(tk.Toplevel):
                 activebackground="#5a7b69",
                 relief="flat", cursor="hand2")
             btn.grid(row=row, column=2, padx=(4, 0), pady=2)
+            if kind == "dem":
+                # Shift+clic = ajouter un DEM (comme Outils Config add_dem)
+                btn.bind(
+                    "<Shift-ButtonPress-1>",
+                    lambda e, k=key: self._add_dem_path(k))
+
+    def _add_dem_path(self, key="custom_dem"):
+        """Shift+📁 : ajoute un fichier DEM (séparé par ;), comme Outils Config."""
+        try:
+            title = _sim_help("Ajouter un fichier DEM", "Add a DEM file")
+            tmp = filedialog.askopenfilename(
+                parent=self,
+                title=title,
+                filetypes=[
+                    ("DEM files", (".tif", ".hgt", ".raw", ".img", ".tiff")),
+                    ("all files", "*.*"),
+                ],
+            )
+            if not tmp:
+                return
+            if key not in self._vars:
+                self._vars[key] = tk.StringVar(value="")
+            cur = (self._vars[key].get() or "").strip()
+            if not cur:
+                self._vars[key].set(str(tmp))
+            else:
+                self._vars[key].set(cur + ";" + str(tmp))
+        except Exception as e:
+            try:
+                self._status.config(text=f"❌ {e}", fg="#ff6b6b")
+            except Exception:
+                pass
 
     def _browse_path(self, key, kind):
         """Sélecteur fichier (DEM) ou dossier (scenery / overlay)."""
         try:
-            if kind == "file":
+            if kind in ("file", "dem"):
                 title = _sim_help(
                     "Choisir un fichier DEM",
                     "Choose a DEM file")
@@ -488,6 +551,17 @@ class Ortho4XP_Simulator(tk.Toplevel):
                 if key not in self._vars:
                     self._vars[key] = tk.StringVar()
                 self._vars[key].set(str(tmp))
+                # Si Combobox : rafraîchir values pour inclure le chemin choisi
+                w = getattr(self, "_path_widgets", {}).get(key)
+                if w is not None and isinstance(w, ttk.Combobox):
+                    try:
+                        vals = list(w.cget("values") or ())
+                        s = str(tmp)
+                        if s not in vals:
+                            vals = list(vals) + [s]
+                            w.configure(values=vals)
+                    except Exception:
+                        pass
         except Exception as e:
             try:
                 self._status.config(text=f"❌ {e}", fg="#ff6b6b")
