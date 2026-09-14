@@ -177,6 +177,8 @@ def _open_module(window, module_name, entry_point):
 #  Rendus indépendants ici pour que O4_Menu_Avance.py puisse disparaître.
 #  Convention de nommage des PDF : « <Titre>_FR.pdf » / « <Titre>_EN.pdf »
 #  dans le dossier Docs/ à la racine du projet.
+#  Filtre langue : seule la version correspondant à la langue active de
+#  l'interface (FR ou EN) est listée dans le sous-menu Aide.
 
 def _docs_dir():
     """Chemin absolu du dossier Docs/ à la racine du projet (un cran au-dessus
@@ -187,13 +189,17 @@ def _docs_dir():
 
 
 def _scan_tutos():
-    """Scanne Docs/ et regroupe les PDF par tuto.
+    """Scanne Docs/ et liste UNIQUEMENT les PDF de la langue active.
 
-    Retourne une liste triée de (titre_affiché, {'FR': chemin, 'EN': chemin}).
-    Un PDF sans suffixe _FR/_EN est classé EN pour rester visible.
+    Convention de nommage : « <Titre>_FR.pdf » / « <Titre>_EN.pdf ».
+    - Langue FR → seuls les fichiers dont le nom se termine par _FR (avant .pdf)
+    - Langue EN (ou autre) → seuls les fichiers se terminant par _EN
+    Les PDF sans suffixe _FR/_EN sont exclus (non identifiables).
+    Retourne une liste triée de (titre_affiché, chemin_absolu).
     """
+    want = "FR" if _current_lang().startswith("FR") else "EN"
     docs = _docs_dir()
-    tutos = {}
+    resultat = []
     if not os.path.isdir(docs):
         return []
     try:
@@ -203,18 +209,25 @@ def _scan_tutos():
     for nom in noms:
         if not nom.lower().endswith(".pdf"):
             continue
-        base = nom[:-4]
-        lang = "EN"
-        cle = base
-        if base[-3:].upper() == "_FR":
-            lang = "FR"; cle = base[:-3]
-        elif base[-3:].upper() == "_EN":
-            lang = "EN"; cle = base[:-3]
-        tutos.setdefault(cle, {})[lang] = os.path.join(docs, nom)
-    resultat = []
-    for cle in sorted(tutos.keys()):
+        base = nom[:-4]  # retire « .pdf »
+        # Identifie la langue par le suffixe juste avant l'extension
+        if len(base) >= 3 and base[-3:].upper() == "_FR":
+            lang = "FR"
+            cle = base[:-3]
+        elif len(base) >= 3 and base[-3:].upper() == "_EN":
+            lang = "EN"
+            cle = base[:-3]
+        else:
+            # Pas de suffixe _FR / _EN → non listé (filtre strict demandé)
+            continue
+        if lang != want:
+            continue
         titre = cle.replace("_", " ").strip()
-        resultat.append((titre, tutos[cle]))
+        if not titre:
+            titre = nom
+        resultat.append((titre, os.path.join(docs, nom)))
+    # Tri alphabétique sur le titre affiché
+    resultat.sort(key=lambda x: x[0].lower())
     return resultat
 
 
@@ -233,22 +246,12 @@ def _open_pdf(chemin):
         pass
 
 
-def _open_one_tuto(paires):
-    """Ouvre la bonne langue d'un tuto : FR si langue active = FR et fichier FR
-    présent, sinon EN ; si une seule langue existe, ouvre celle-là."""
-    want = "FR" if _current_lang().startswith("FR") else "EN"
-    other = "EN" if want == "FR" else "FR"
-    chemin = paires.get(want) or paires.get(other)
-    if chemin:
-        _open_pdf(chemin)
-
-
 def _add_tutos_submenu(parent, window, mkw):
-    """Sous-menu « Pas à pas » listant les PDF trouvés dans Docs/.
+    """Sous-menu « Pas à pas » : PDF de la langue active uniquement (Docs/).
 
-    Remplace l'ancienne fenêtre : chaque tuto est une entrée de menu qui ouvre
-    directement le PDF (langue active FR/EN, repli sur l'autre). Si aucun tuto,
-    une entrée grisée l'indique. Native → contraste géré par l'OS.
+    Filtre strict : interface FR → uniquement *_FR.pdf ; EN → *_EN.pdf.
+    Chaque entrée ouvre directement le fichier correspondant.
+    Si aucun tuto dans la langue active, entrée grisée.
     """
     sub = tk.Menu(parent, tearoff=0, **mkw)
     tutos = _scan_tutos()
@@ -256,9 +259,9 @@ def _add_tutos_submenu(parent, window, mkw):
         sub.add_command(label=L("Aucun tuto trouvé dans Docs/",
                                 "No tutorial found in Docs/"), state="disabled")
     else:
-        for titre, paires in tutos:
+        for titre, chemin in tutos:
             sub.add_command(label="📄  " + titre,
-                            command=(lambda p=paires: _open_one_tuto(p)))
+                            command=(lambda c=chemin: _open_pdf(c)))
     parent.add_cascade(
         label=L("Pas à pas — utilisation des modules",
                 "Step by step — using the modules"), menu=sub)

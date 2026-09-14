@@ -385,6 +385,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
         self._t = 0
         self._vars = {}
         self._canvases = {}
+        self._cfg_mode = "tile"  # 'tile' | 'global' — comme Outils Config
         self._tile = CFG.Tile(lat, lon, custom_build_dir)
         self._tile.read_from_config()
         self._build_ui()
@@ -428,11 +429,23 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         self.configure(bg=self.BG)
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
+
+        # Bandeau mode (comme Outils Config) : bascule Tuile / Globale en premier
+        mode_fr = tk.Frame(self, bg=self.BG)
+        mode_fr.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 2))
+        _ctk_button(mode_fr, text=_sim_help("⇄  Mode Tuile / Globale", "⇄  Tile / Global mode"),
+            command=self._toggle_cfg_mode).pack(side="left", padx=4)
+        self._mode_lbl = tk.Label(
+            mode_fr,
+            text=_sim_help("Configuration active : TUILE", "Active configuration: TILE"),
+            bg=self.BG, fg=self.ACC,
+            font=("TkFixedFont", fs(11), "bold"))
+        self._mode_lbl.pack(side="left", padx=10)
 
         hdr = tk.Frame(self, bg=self.BG)
-        hdr.grid(row=0, column=0, sticky="ew", padx=8, pady=4)
-        tk.Label(hdr, text="Simulateur visuel — Ortho4XP V2",
+        hdr.grid(row=1, column=0, sticky="ew", padx=8, pady=2)
+        tk.Label(hdr, text="Simulateur visuel — Ortho4XP V3",
             bg=self.BG, fg=self.FG2,
             font=("TkFixedFont", fs(13), "bold")).pack(side="left")
         tk.Label(hdr,
@@ -441,7 +454,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             font=("TkFixedFont", fs(10))).pack(side="left", padx=12)
 
         nb = ttk.Notebook(self)
-        nb.grid(row=1, column=0, sticky="nsew", padx=6, pady=4)
+        nb.grid(row=2, column=0, sticky="nsew", padx=6, pady=4)
 
         try:
             self._tab_mer_cote(nb, fs)
@@ -456,20 +469,22 @@ class Ortho4XP_Simulator(tk.Toplevel):
                 font=("TkFixedFont", 11), justify="left").pack(anchor="w", padx=12, pady=12)
 
         status_fr = tk.Frame(self, bg=self.BG)
-        status_fr.grid(row=2, column=0, sticky="ew", padx=10, pady=2)
+        status_fr.grid(row=3, column=0, sticky="ew", padx=10, pady=2)
         self._status = tk.Label(status_fr, text="", bg=self.BG,
             fg=self.FG2, font=("TkFixedFont", fs(10)))
         self._status.pack(side="left")
 
         btn_fr = tk.Frame(self, bg=self.BG)
-        btn_fr.grid(row=3, column=0, sticky="ew", padx=8, pady=4)
-        _ctk_button(btn_fr, text=tr("↺  Recharger depuis cfg"),
-            command=self._load_values).pack(side="left", padx=4)
-        _ctk_button(btn_fr, text=tr("✅  Écrire cfg tuile"),
-            command=self._write_tile).pack(side="left", padx=4)
-        _ctk_button(btn_fr, text=tr("🌍  Écrire cfg app"),
-            command=self._write_app).pack(side="left", padx=4)
-        _ctk_button(btn_fr, text=tr("✖  Fermer"),
+        btn_fr.grid(row=4, column=0, sticky="ew", padx=8, pady=4)
+        _ctk_button(btn_fr, text=_sim_help("↺  Recharger depuis config Tuile", "↺  Reload from Tile config"),
+            command=self._load_from_tile).pack(side="left", padx=2)
+        _ctk_button(btn_fr, text=_sim_help("↺  Recharger depuis config Globale", "↺  Reload from Global config"),
+            command=self._load_from_global).pack(side="left", padx=2)
+        _ctk_button(btn_fr, text=_sim_help("✅  Écrire cfg Tuile", "✅  Write Tile cfg"),
+            command=self._write_tile).pack(side="left", padx=2)
+        _ctk_button(btn_fr, text=_sim_help("🌍  Écrire cfg App", "🌍  Write App cfg"),
+            command=self._write_app).pack(side="left", padx=2)
+        _ctk_button(btn_fr, text=_sim_help("✖  Fermer", "✖  Close"),
             command=self._on_close).pack(side="right", padx=4)
 
         # La géométrie est calculée après construction de l'UI dans __init__
@@ -3425,10 +3440,58 @@ class Ortho4XP_Simulator(tk.Toplevel):
             self.custom_build_dir, self._vars)
 
     # ── Chargement valeurs depuis cfg ──────────────────────────────
+    def _toggle_cfg_mode(self):
+        """Bascule Tuile ↔ Globale (affichage + rechargement)."""
+        self._cfg_mode = "global" if self._cfg_mode == "tile" else "tile"
+        self._update_mode_label()
+        if self._cfg_mode == "tile":
+            self._load_from_tile()
+        else:
+            self._load_from_global()
+
+    def _update_mode_label(self):
+        if not hasattr(self, "_mode_lbl"):
+            return
+        if self._cfg_mode == "tile":
+            self._mode_lbl.config(
+                text=_sim_help("Configuration active : TUILE", "Active configuration: TILE"),
+                fg=self.ACC)
+        else:
+            self._mode_lbl.config(
+                text=_sim_help("Configuration active : GLOBALE", "Active configuration: GLOBAL"),
+                fg="#ffcc66")
+
+    def _tile_cfg_path(self):
+        try:
+            short = FNAMES.short_latlon(self.lat, self.lon)
+        except Exception:
+            short = f"{self.lat:+03d}{self.lon:+04d}"
+        build = getattr(self._tile, "build_dir", None)
+        if not build:
+            try:
+                build = FNAMES.build_dir(self.lat, self.lon, self.custom_build_dir)
+            except Exception:
+                build = os.path.join(FNAMES.Ortho4XP_dir, "Tiles",
+                    f"zOrtho4XP_{self.lat:+03d}{self.lon:+04d}")
+        p = os.path.join(build, f"Ortho4XP_{short}.cfg")
+        if not os.path.isfile(p):
+            alt = os.path.join(build, "Ortho4XP.cfg")
+            if os.path.isfile(alt):
+                return alt
+        return p
+
+    def _global_cfg_path(self):
+        return os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
+
     def _load_values(self):
-        self._tile = CFG.Tile(self.lat, self.lon, self.custom_build_dir)
-        self._tile.read_from_config()
-        bool_map = {True:"True", False:"False"}
+        """Recharge selon le mode actif (compat)."""
+        if getattr(self, "_cfg_mode", "tile") == "global":
+            self._load_from_global()
+        else:
+            self._load_from_tile()
+
+    def _apply_loaded_tile_to_vars(self):
+        bool_map = {True: "True", False: "False"}
         for key, var in self._vars.items():
             try:
                 val = getattr(self._tile, key, None)
@@ -3443,46 +3506,146 @@ class Ortho4XP_Simulator(tk.Toplevel):
                     var.set(val)
             except Exception:
                 pass
-        self._status.config(
-            text=tr("✓ Valeurs chargées depuis le cfg."), fg=self.FG2)
 
-    # ── Écriture cfg tuile ─────────────────────────────────────────
-    def _write_tile(self):
+    def _load_from_tile(self):
+        """Recharger depuis la configuration Tuile."""
         try:
-            self._apply_to_tile()
-            self._tile.write_to_config()
-            self._refresh_outils_config()
+            self._tile = CFG.Tile(self.lat, self.lon, self.custom_build_dir)
+            self._tile.read_from_config()
+            self._apply_loaded_tile_to_vars()
+            self._cfg_mode = "tile"
+            self._update_mode_label()
             self._status.config(
-                text=tr("✅ Sauvegardé dans cfg tuile (Outils Config rafraîchi)."), fg=self.FG2)
+                text=_sim_help("✓ Valeurs chargées depuis la config Tuile.", "✓ Values loaded from Tile config."), fg=self.FG2)
+            try:
+                self._redraw_all()
+            except Exception:
+                pass
         except Exception as e:
             self._status.config(text=f"❌ {e}", fg="#ff6b6b")
 
-    # ── Écriture cfg app global ────────────────────────────────────
+    def _load_from_global(self):
+        """Recharger depuis la configuration Globale (Ortho4XP.cfg)."""
+        try:
+            self._tile = CFG.Tile(self.lat, self.lon, self.custom_build_dir)
+            gpath = self._global_cfg_path()
+            if os.path.isfile(gpath):
+                self._tile.read_from_config(gpath)
+            else:
+                self._tile.read_from_config()
+            self._apply_loaded_tile_to_vars()
+            self._cfg_mode = "global"
+            self._update_mode_label()
+            self._status.config(
+                text=_sim_help("✓ Valeurs chargées depuis la config Globale.", "✓ Values loaded from Global config."), fg=self.FG2)
+            try:
+                self._redraw_all()
+            except Exception:
+                pass
+        except Exception as e:
+            self._status.config(text=f"❌ {e}", fg="#ff6b6b")
+
+    def _sim_updates_dict(self):
+        """Clés gérées par le simulateur → valeurs à écrire (str)."""
+        self._apply_to_tile()
+        out = {}
+        for key in self._vars:
+            try:
+                val = getattr(self._tile, key, None)
+                if val is None:
+                    continue
+                if isinstance(val, bool):
+                    out[key] = "True" if val else "False"
+                else:
+                    out[key] = str(val)
+            except Exception:
+                pass
+        return out
+
+    def _merge_write_cfg(self, path, updates):
+        """
+        Écrit les clés du simulateur SANS effacer les autres clés du fichier
+        (language=, dem_sonny_dir=, dem_asc_dir=, dem_epsg_dir=,
+         dem_tile_out_dir=, dem_prepare_src_dir=, etc.).
+        """
+        lines_out = []
+        seen = set()
+        if path and os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        raw = line.rstrip("\n\r")
+                        s = raw.strip()
+                        if not s or s.startswith("#") or "=" not in s:
+                            lines_out.append(raw)
+                            continue
+                        k, _v = s.split("=", 1)
+                        k = k.strip()
+                        if k in updates:
+                            lines_out.append(f"{k}={updates[k]}")
+                            seen.add(k)
+                        else:
+                            # conserver language, dem_*, et toute clé V3 inconnue
+                            lines_out.append(raw)
+                            seen.add(k)
+            except Exception:
+                lines_out = []
+                seen = set()
+        for k, v in updates.items():
+            if k not in seen:
+                lines_out.append(f"{k}={v}")
+        parent = os.path.dirname(path)
+        if parent and not os.path.isdir(parent):
+            try:
+                os.makedirs(parent, exist_ok=True)
+            except Exception:
+                pass
+        # backup
+        try:
+            if os.path.isfile(path):
+                os.replace(path, path + ".bak")
+        except Exception:
+            pass
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines_out) + "\n")
+
+    def _write_tile(self):
+        try:
+            updates = self._sim_updates_dict()
+            path = self._tile_cfg_path()
+            self._merge_write_cfg(path, updates)
+            self._refresh_outils_config()
+            self._cfg_mode = "tile"
+            self._update_mode_label()
+            self._status.config(
+                text=_sim_help("✅ cfg Tuile enregistré (clés V3 conservées).", "✅ Tile cfg saved (V3 keys kept)."), fg=self.FG2)
+        except Exception as e:
+            self._status.config(text=f"❌ {e}", fg="#ff6b6b")
+
     def _write_app(self):
         try:
-            self._apply_to_tile()
-            cfg_path = os.path.join(FNAMES.Ortho4XP_dir, "Ortho4XP.cfg")
-            self._tile.write_to_config(cfg_path)
-            # Mettre à jour aussi les variables globales CFG (Outils Config)
+            updates = self._sim_updates_dict()
+            path = self._global_cfg_path()
+            self._merge_write_cfg(path, updates)
             try:
                 import O4_Config_Utils as _CFG
-                for key, var in self._vars.items():
+                for key, val in updates.items():
                     try:
-                        val = getattr(self._tile, key, None)
-                        if val is None:
-                            continue
                         if hasattr(_CFG, "cfg_set"):
-                            _CFG.cfg_set(key, val)
-                        elif hasattr(_CFG, "cfg_vars"):
-                            # repli : certains builds exposent seulement cfg_vars
-                            pass
+                            # reparse type if possible
+                            if hasattr(_CFG, "cfg_parse_value"):
+                                _CFG.cfg_set(key, _CFG.cfg_parse_value(key, val))
+                            else:
+                                _CFG.cfg_set(key, val)
                     except Exception:
                         pass
             except Exception:
                 pass
             self._refresh_outils_config()
+            self._cfg_mode = "global"
+            self._update_mode_label()
             self._status.config(
-                text=tr("✅ Sauvegardé dans cfg global (Outils Config rafraîchi)."), fg=self.FG2)
+                text=_sim_help("✅ cfg App enregistré (clés V3 conservées).", "✅ App cfg saved (V3 keys kept)."), fg=self.FG2)
         except Exception as e:
             self._status.config(text=f"❌ {e}", fg="#ff6b6b")
 
