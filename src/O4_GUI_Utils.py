@@ -1291,17 +1291,22 @@ class Ortho4XP_GUI(tk.Tk):
         lat = int(self.lat.get() or 48)
         lon = int(self.lon.get() or -6)
         tile = CFG.Tile(lat, lon, self.custom_build_dir.get() or "")
-        # Charge UNIQUEMENT zone_list depuis le cfg tuile sauvegarde, via une
-        # tuile-sonde jetable (meme schema que save_zone_list plus bas, deja
-        # valide). Sans ca, un Step 3 seul (do_ptc faux) ne rechargeait jamais
-        # zone_list -> les zones d'imagerie dessinees/sauvees etaient ignorees.
-        # On ne recopie QUE zone_list : pas de rechargement de custom_dem, etc.
+        # Le fichier de config de la tuile (Ortho4XP_+LATLON.cfg) est LA
+        # reference pour cette tuile. On le charge par-dessus les valeurs
+        # globales par defaut heritees a la creation de la tuile : c'est
+        # l'etape que l'interface sautait (elle ne recopiait que zone_list),
+        # d'ou le custom_dem / les masques / etc. enregistres dans le fichier
+        # tuile ignores au build tant qu'on ne passait pas par "Appliquer".
+        # read_from_config n'ecrase que les variables reellement presentes
+        # dans le fichier ; si le fichier est absent, la tuile garde les
+        # valeurs globales par defaut (comportement inchange).
         try:
-            _probe = CFG.Tile(lat, lon, self.custom_build_dir.get() or "")
-            _probe.read_from_config()
-            tile.zone_list = _probe.zone_list
+            tile.read_from_config()
         except Exception as e:
-            UI.vprint(1, "   WARNING: chargement zone_list impossible:", e)
+            UI.vprint(1, "   WARNING: chargement cfg tuile impossible:", e)
+        # Le provider et le zoomlevel restent le choix de la fenetre
+        # principale (choix de session) : ils priment donc sur le fichier
+        # tuile, appliques apres le chargement.
         tile.default_website = self.default_website.get() or "BI"
         tile.default_zl = int(self.default_zl.get() or 16)
         return tile
