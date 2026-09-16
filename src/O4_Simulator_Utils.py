@@ -452,13 +452,22 @@ class Ortho4XP_Simulator(tk.Toplevel):
              "dir"),
         ]
         self._path_widgets = {}
+        # Couleurs issues du THEME ACTIF (jamais codees en dur) : les
+        # libelles et les boutons dossier suivent ainsi le theme choisi.
+        try:
+            import O4_Theme_Manager as _TM
+            _th = _TM.get_theme()
+        except Exception:
+            _th = {}
+        _lbl_bg = _th.get("btn_bg", "#4a6b59")
+        _lbl_fg = _th.get("btn_fg", "#ffffff")
         for row, (key, label, kind) in enumerate(specs):
             if key not in self._vars:
                 self._vars[key] = tk.StringVar(value="")
             var = self._vars[key]
             lab = tk.Label(
                 parent, text=label,
-                bg="#4a6b59", fg="#ffffff",
+                bg=_lbl_bg, fg=_lbl_fg,
                 font=("TkFixedFont", max(8, fs(9))),
                 padx=8, pady=3)
             lab.grid(row=row, column=0, sticky="w", padx=(0, 6), pady=2)
@@ -487,12 +496,13 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ent.grid(row=row, column=1, sticky="ew", pady=2)
             self._path_widgets[key] = ent
 
-            btn = tk.Button(
-                parent, text="📁", width=3,
-                command=lambda k=key, kd=kind: self._browse_path(k, kd),
-                bg="#4a6b59", fg="#ffffff",
-                activebackground="#5a7b69",
-                relief="flat", cursor="hand2")
+            # Bouton dossier via le helper thematise du fichier (comme les
+            # autres boutons) : il prend la couleur du theme actif et, sous
+            # macOS, l'affiche vraiment (CTk dessine le fond, contrairement
+            # a tk.Button qui l'ignore et reste clair).
+            btn = _ctk_button(
+                parent, text="📁", width=44,
+                command=lambda k=key, kd=kind: self._browse_path(k, kd))
             btn.grid(row=row, column=2, padx=(4, 0), pady=2)
             if kind == "dem":
                 # Shift+clic = ajouter un DEM (comme Outils Config add_dem)
