@@ -908,6 +908,38 @@ class Ortho4XP_Config(tk.Toplevel):
     def __init__(self, parent):
 
         tk.Toplevel.__init__(self)
+        # ── Styles ttk au theme (mecanisme repris de O4_GUI_Utils) ─────
+        #  Les boutons-icones (dossier) utilisent style="Flat.TButton".
+        #  Comme dans O4_GUI_Utils, il faut configurer ce style avec les
+        #  couleurs du THEME ACTIF (lu a chaque ouverture) et forcer
+        #  theme_use("alt") : sinon, sous macOS, la couleur de fond des
+        #  boutons est ignoree et le style reste fige sur le theme de
+        #  depart -> boutons dossier clairs qui ne suivent pas le theme.
+        try:
+            import O4_Theme_Manager as _TM
+            _t = _TM.get_theme()
+            _bg      = _t.get("bg",      "#3b5b49")
+            _btn_bg  = _t.get("btn_bg",  "#4a6b59")
+            _btn_fg  = _t.get("btn_fg",  "#ffffff")
+            _accent  = _t.get("accent",  "#a6e3a1")
+            _O4 = ttk.Style()
+            try:
+                _O4.theme_use("alt")
+            except Exception:
+                pass
+            for _st in ("Flat.TButton",):
+                _O4.configure(_st,
+                    background=_btn_bg, foreground=_btn_fg,
+                    relief="flat", borderwidth=1)
+                _O4.map(_st,
+                    background=[("active",   _accent),
+                                ("pressed",  _bg),
+                                ("disabled", _bg)],
+                    foreground=[("active",   "#1e3028"),
+                                ("pressed",  _btn_fg),
+                                ("disabled", "#888888")])
+        except Exception:
+            pass
         self.option_add("*Font", "TkFixedFont")
         self.title("Ortho4XP V3 Config")
         self.columnconfigure(0, weight=1)

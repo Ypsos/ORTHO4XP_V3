@@ -1211,8 +1211,48 @@ class Ortho4XP_GUI(tk.Tk):
         self.destroy()
 
     # ── Build ──────────────────────────────────────────────────────────
+    def _ensure_tile_cfg_complete(self, tile):
+        """Au debut du Step 1 : si le fichier de config tuile est ABSENT ou
+        INCOMPLET, l'ecrire complet (tous les reglages effectifs de la tuile)
+        pour qu'il serve de reference figee a toute la construction. Un
+        fichier deja complet n'est JAMAIS ecrase ici : seul l'utilisateur le
+        modifie volontairement via 'Ecrire cfg tuile'. La sauvegarde .bak est
+        assuree par write_to_config. Toute erreur est non bloquante (le build
+        continue)."""
+        try:
+            cfg_path = os.path.join(
+                tile.build_dir,
+                "Ortho4XP_" + FNAMES.short_latlon(tile.lat, tile.lon)
+                + ".cfg",
+            )
+            needed = list(CFG.list_tile_vars)
+            if os.path.isfile(cfg_path):
+                present = set()
+                with open(cfg_path, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line or line[0] == "#" or "=" not in line:
+                            continue
+                        present.add(line.split("=", 1)[0].strip())
+                if all(var in present for var in needed):
+                    UI.vprint(
+                        1,
+                        "   Tile cfg already complete, left untouched:",
+                        cfg_path,
+                    )
+                    return
+            if not os.path.isdir(tile.build_dir):
+                os.makedirs(tile.build_dir, exist_ok=True)
+            if tile.write_to_config():
+                UI.vprint(1, "   Tile cfg completed and saved:", cfg_path)
+        except Exception as e:
+            UI.vprint(1, "   WARNING: could not complete tile cfg:", e)
+
     def build_poly_file(self):
         tile = self.tile_from_interface()
+        # Le fichier de config tuile fait foi : on le complete/fige des le
+        # Step 1 s'il n'est pas deja complet (voir _ensure_tile_cfg_complete).
+        self._ensure_tile_cfg_complete(tile)
         _build_timeline.start(tr("Step 1 — Vectors"))
         self._activity_start()
         def _run():
@@ -1300,10 +1340,19 @@ class Ortho4XP_GUI(tk.Tk):
         # read_from_config n'ecrase que les variables reellement presentes
         # dans le fichier ; si le fichier est absent, la tuile garde les
         # valeurs globales par defaut (comportement inchange).
-        try:
-            tile.read_from_config()
-        except Exception as e:
-            UI.vprint(1, "   WARNING: chargement cfg tuile impossible:", e)
+        # On ne tente la lecture QUE si un cfg existe reellement : sinon
+        # read_from_config afficherait "CFG error: No config file found"
+        # (trompeur -> ce n'est pas une erreur : une tuile encore sans cfg
+        # sera completee par _ensure_tile_cfg_complete au Step 1).
+        _tile_cfg = os.path.join(
+            tile.build_dir,
+            "Ortho4XP_" + FNAMES.short_latlon(lat, lon) + ".cfg")
+        _generic_cfg = os.path.join(tile.build_dir, "Ortho4XP.cfg")
+        if os.path.isfile(_tile_cfg) or os.path.isfile(_generic_cfg):
+            try:
+                tile.read_from_config()
+            except Exception as e:
+                UI.vprint(1, "   WARNING: chargement cfg tuile impossible:", e)
         # Le provider et le zoomlevel restent le choix de la fenetre
         # principale (choix de session) : ils priment donc sur le fichier
         # tuile, appliques apres le chargement.

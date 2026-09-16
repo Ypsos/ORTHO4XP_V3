@@ -2,6 +2,8 @@
 
 **[🇫🇷 Français](#ortho4xp-v3--version-officielle) | [🇬🇧 English](#ortho4xp-v3--official-version)**
 
+![Version](https://img.shields.io/badge/version-3.5-1f6feb?style=flat-square) ![Statut](https://img.shields.io/badge/statut%20%7C%20status-stable-2ea043?style=flat-square) ![Plateformes](https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square) ![X-Plane](https://img.shields.io/badge/X--Plane-12-ff8c00?style=flat-square) ![Licence](https://img.shields.io/badge/licence%20%7C%20license-GPL%20v3-yellow?style=flat-square)
+
 ---
 
 # ORTHO4XP V3 — Version officielle
@@ -18,10 +20,28 @@
 >
 > Conçue, réalisée et maintenue par Roland (Ypsos) — assisté de Claude (IA, Anthropic) comme outil d'aide au développement.
 >
+> ### 🎉 Version 3.5 — première version stable
+>
+> ORTHO4XP V3 **quitte la phase bêta**. La 3.5 est la première version qualifiée de **stable**, validée en vol dans X-Plane 12. Le développement se poursuit (améliorations en cours).
+>
 > **La version moderne d'Ortho4XP**  
 > Installation automatique • Sans terminal • Pour X-Plane 12
 >
 > [![TÉLÉCHARGER LA DERNIÈRE VERSION](https://img.shields.io/badge/T%C3%89L%C3%89CHARGER%20LA%20DERNI%C3%88RE%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
+
+---
+
+## 🆕 Nouveautés de la version 3.5
+
+- 🌊 **Bathymétrie** — nouveau module (EMODnet / SHOM) : rendu de l'eau par la profondeur, validé en vol dans X-Plane 12
+- 🧭 **Barre de menus native** (macOS / Windows / Linux) et lanceur repensé
+- 🔒 **Sécurité renforcée** — chargeurs `.cfg` / `.lay` durcis, protections sur la chaîne DSF
+- 🐛 **Bugs historiques corrigés** et validés en build réel
+- 🗂️ **Config par tuile fiabilisée** — le `.cfg` de la tuile fait foi (fini la manipulation « Appliquer »)
+- 🔤 **Encodage UTF-8** des fichiers `.cfg` (accents préservés) et dossiers en noms ASCII
+- 🖥️ **Lanceur Windows / Linux finalisé** — installation neuve depuis GitHub validée
+
+> Le développement reste actif : quelques finitions sont encore en cours (harmonisation colorimétrique entre textures, Progressive ZL aéroports).
 
 ---
 
@@ -243,8 +263,7 @@ Outil qui ajoute le support du provider PCRS_IGN et un générateur automatique 
 
 ![Générateur Lay](https://github.com/user-attachments/assets/4440001a-58e3-4c0c-bc74-b34251c427f4)
 
-**Presets intégrés :** IGN Ortho France (France + DOM-TOM) et PCRS_IGN  
-**Crédit preset IGN Ortho France :** contribution de domisilasol (Dominique), X-Plane.fr
+**Presets intégrés :** IGN Ortho France (France + DOM-TOM) et PCRS_IGN
 
 ---
 
@@ -332,7 +351,7 @@ Fichier modifié : `src/O4_Menu_Avance.py` (aucun fichier de langue impacté).
 
 Merci en particulier à **Jojo**, référence technique sur Ortho4XP, QGIS et JOSM ; à **Cricri**, pour les tests et validations sous Windows et Linux.
 
-Merci à **domisilasol (Dominique)** pour la **correction du triangulateur `triangle.exe` sous Windows** : recompilation pour Windows 64 bits d'un bug qui empêchait la génération des fichiers de maillage (`.1.node` / `.1.ele`) lors de la création d'emprises. Source et binaire fournis, conformément à la licence de Triangle (Jonathan R. Shewchuk). Adaptations/ corrections sur Windows.
+Un grand merci à **domisilasol (Dominique)** (X-Plane.fr) pour ses nombreux tests d'ORTHO4XP V3 et ses retours précis sur son fonctionnement. Ses signalements ont permis d'identifier et de documenter plusieurs **bugs historiques** — dont la gestion du fichier de configuration (`.cfg`) — et de faire évoluer l'organisation des menus **Outils** et **Configuration** de l'interface. On lui doit également la **recompilation de `triangle.exe` pour Windows 64 bits** (bug qui empêchait la génération des fichiers de maillage `.1.node` / `.1.ele` lors de la création d'emprises ; source et binaire fournis, conformément à la licence de Triangle — Jonathan R. Shewchuk), ainsi que la contribution du preset **IGN Ortho France** (France + DOM-TOM).
 
 Merci à **Len0y** pour avoir proposé et contribué à **séparer le « provider scoring » en une étape 4 dédiée**, distincte de la génération DSF (étape 3) — permettant de lancer la notation des providers séparément, une fois tous les réglages vérifiés.
 
@@ -383,10 +402,28 @@ Données altimétriques (relief) : Modèles numériques de terrain LiDAR de Sonn
 >
 > Developed and maintained by Roland (Ypsos) with assistance from Claude AI (Anthropic).
 >
+> ### 🎉 Version 3.5 — first stable release
+>
+> ORTHO4XP V3 **leaves the beta phase**. Version 3.5 is the first release considered **stable**, validated in flight in X-Plane 12. Development continues (improvements ongoing).
+>
 > **The modern version of Ortho4XP**  
 > Automatic installation • No terminal required • For X-Plane 12
 >
 > [![DOWNLOAD LATEST VERSION](https://img.shields.io/badge/DOWNLOAD%20LATEST%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
+
+---
+
+## 🆕 What's new in version 3.5
+
+- 🌊 **Bathymetry** — new module (EMODnet / SHOM): depth-based water rendering, validated in flight in X-Plane 12
+- 🧭 **Native menu bar** (macOS / Windows / Linux) and redesigned launcher
+- 🔒 **Hardened security** — stricter `.cfg` / `.lay` loaders, safeguards on the DSF chain
+- 🐛 **Long-standing bugs fixed** and validated in real builds
+- 🗂️ **Reliable per-tile config** — the tile `.cfg` is now authoritative (no more "Apply" dance)
+- 🔤 **UTF-8 encoding** for `.cfg` files (accents preserved) and ASCII folder names
+- 🖥️ **Windows / Linux launcher finalized** — clean install from GitHub validated
+
+> Development is still active: a few finishing touches remain (colour harmonisation between textures, airport Progressive ZL).
 
 ---
 
@@ -608,8 +645,7 @@ This tool adds PCRS_IGN provider support and an automatic `.lay` configuration f
 
 ![Lay Generator](https://github.com/user-attachments/assets/4440001a-58e3-4c0c-bc74-b34251c427f4)
 
-**Built-in presets:** IGN Ortho France (France + overseas territories) and PCRS_IGN  
-**IGN Ortho France preset credit:** contribution from domisilasol (Dominique), X-Plane.fr
+**Built-in presets:** IGN Ortho France (France + overseas territories) and PCRS_IGN
 
 ---
 
@@ -697,7 +733,7 @@ Modified file: `src/O4_Menu_Avance.py` (no language file impacted).
 
 Special thanks to **Jojo**, the technical reference on Ortho4XP, QGIS and JOSM; and to **Cricri**, for testing and validating on Windows and Linux.
 
-Thanks to **domisilasol (Dominique)** for the **fix of the `triangle.exe` mesh generator on Windows**: recompiled for 64-bit Windows to solve a bug that prevented the mesh files (`.1.node` / `.1.ele`) from being generated during extent creation. Source and binary provided, in accordance with the Triangle license (Jonathan R. Shewchuk). Adaptations/corrections on Windows.
+Many thanks to **domisilasol (Dominique)** (X-Plane.fr) for his extensive testing of ORTHO4XP V3 and his detailed feedback on its behaviour. His reports helped identify and document several **long-standing bugs** — including configuration file (`.cfg`) handling — and shaped improvements to the **Tools** and **Configuration** menus of the interface. He also **recompiled `triangle.exe` for 64-bit Windows** (a bug that prevented the mesh files `.1.node` / `.1.ele` from being generated during extent creation; source and binary provided, in accordance with the Triangle license — Jonathan R. Shewchuk), and contributed the **IGN Ortho France** preset (France + overseas territories).
 
 Thanks to **Len0y** for proposing and contributing the **separation of "provider scoring" into a dedicated step 4**, distinct from the DSF build (step 3) — allowing provider scoring to be run separately, once all settings have been checked.
 
@@ -717,7 +753,7 @@ Thanks as well to everyone posting feedback on the forums.
 | **1.40 adaptation** | Shred86 |
 | **Technical reference** | Jojo |
 | **Windows / Linux testing** | Cricri |
-| **Other contributorss** | domisilasol(Dominique), Jasum,  Len0y|
+| **Other contributors** | domisilasol(Dominique), Jasum,  Len0y|
 
 ---
 
