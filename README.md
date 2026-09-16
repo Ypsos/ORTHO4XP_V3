@@ -206,9 +206,26 @@ Tous sont **autonomes** : aucun fichier du moteur d'origine n'est modifié. Si u
 
 ### 9.1 Installation et Lanceur
 
-[![Lanceur Ortho4XP V3 — installation](https://github.com/user-attachments/assets/e0c62747-a4fb-4afd-9645-caa196a19c27)](https://github.com/user-attachments/assets/e0c62747-a4fb-4afd-9645-caa196a19c27)
+<img width="1226" height="866" alt="Barre_Menu_FR" src="https://github.com/user-attachments/assets/3bf4bad9-13d2-4af7-b751-83638813895e" />
 
-![Interface principale](https://github.com/user-attachments/assets/9eacd131-76a9-44cf-8d60-76866ddd8095)
+
+<img width="902" height="234" alt="Installeur_Python_Venv_fr" src="https://github.com/user-attachments/assets/32656e27-85d6-46b2-a2eb-0d2a2329938d" />
+
+
+<img width="890" height="272" alt="Creation_Lanceur_fr" src="https://github.com/user-attachments/assets/175cb21e-f6fa-4c48-a1cd-e6b98031698c" />
+
+
+<img width="888" height="805" alt="Lanceur_FR" src="https://github.com/user-attachments/assets/b9ab08ed-8095-4ef3-9367-b393c8474183" />
+
+
+<img width="3440" height="1044" alt="Interface_principale_FR" src="https://github.com/user-attachments/assets/e4645651-166f-4710-8c6d-c68dac9797a1" />
+
+
+<img width="2534" height="1972" alt="Interface_Outils_FR" src="https://github.com/user-attachments/assets/5383f799-141a-4223-89a9-636ccd3b3bfc" />
+
+
+<img width="1920" height="1860" alt="Visualiseur CFG_FR" src="https://github.com/user-attachments/assets/637f0398-6c50-4a7a-ada1-2a2511b9ed9e" />
+
 
 ### 9.2 Personnalisation des couleurs de l'interface
 
@@ -588,16 +605,25 @@ They all follow the same design rule: **a self-contained file that modifies no p
 
 ### 9.1 Installation and Launcher
 
+
 <img width="1226" height="866" alt="Barre_Menu_FR" src="https://github.com/user-attachments/assets/a99b123f-fc6a-4eea-a926-f01f57a24b02" />
+
 
 <img width="902" height="234" alt="Installeur_Python_Venv_fr" src="https://github.com/user-attachments/assets/f1d1da06-5c2e-4428-8014-02385ff1edb9" />
 
+
 <img width="890" height="272" alt="Creation_Lanceur_fr" src="https://github.com/user-attachments/assets/4c8dc32f-d7b5-4395-865f-1617e902e55f" />
+
 
 <img width="888" height="805" alt="Lanceur_FR" src="https://github.com/user-attachments/assets/dd5a476d-2597-466f-ad3b-f4e6a411c5dd" />
 
 
 <img width="3440" height="1044" alt="Interface_principale_FR" src="https://github.com/user-attachments/assets/8d747b98-591b-47be-927d-a743673f9caa" />
+
+
+<img width="2534" height="1972" alt="Interface_Outils_FR" src="https://github.com/user-attachments/assets/44ff3fff-219f-4e2b-b500-7724b188676c" />
+
+
 
 <img width="1920" height="1860" alt="Visualiseur CFG_FR" src="https://github.com/user-attachments/assets/a7e68986-5caf-49f2-abc0-fc0cc7f817b4" />
 
