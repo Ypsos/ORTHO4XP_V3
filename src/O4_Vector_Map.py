@@ -35,6 +35,26 @@ def build_poly_file(tile):
         + FNAMES.short_latlon(tile.lat, tile.lon)
         + " : \n--------\n",
     )
+
+    # >>> Controle de place disque AVANT tout traitement (CDC V3.6, Priorite 1).
+    # Verification dans le THREAD PRINCIPAL, tout au debut de l'Etape 1, AVANT
+    # que le moindre dossier ne soit cree ou que le moindre traitement ne
+    # demarre. 100 % additif, aucune logique de pipeline touchee. Si le controle
+    # lui-meme echoue (import/calcul), on LAISSE l'Etape 1 demarrer (fail-open) :
+    # ce garde-fou ne doit JAMAIS bloquer un build sain. Il ne bloque QUE sur un
+    # manque de place AVERE. Voir O4_Estimation_Utils.check_disk_before_build().
+    try:
+        import O4_Estimation_Utils as ESTIM
+        (_disk_ok, _disk_msg) = ESTIM.check_disk_before_build(tile)
+    except Exception as _est_e:
+        (_disk_ok, _disk_msg) = (True, "")
+        UI.vprint(2, "Disk pre-check skipped:", _est_e)
+    if not _disk_ok:
+        UI.vprint(0, _disk_msg)
+        UI.exit_message_and_bottom_line()
+        return 0
+    # <<< fin controle place disque
+
     timer = time.time()
 
     if not os.path.exists(tile.build_dir):
@@ -164,7 +184,7 @@ def build_poly_file(tile):
             vector_map.seeds["SEA"] = [numpy.array([1000, 1000])]
         else:
             vector_map.seeds["SEA"] = [numpy.array([0.5, 0.5])]
-    vector_map.snap_to_grid(9) 
+    vector_map.snap_to_grid(9)
     vector_map.write_node_file(node_file)
     vector_map.write_poly_file(poly_file)
 

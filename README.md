@@ -40,6 +40,7 @@
 - 🗂️ **Config par tuile fiabilisée** — le `.cfg` de la tuile fait foi (fini la manipulation « Appliquer »)
 - 🔤 **Encodage UTF-8** des fichiers `.cfg` (accents préservés) et dossiers en noms ASCII
 - 🖥️ **Lanceur Windows / Linux finalisé** — installation neuve depuis GitHub validée
+- 🗂️ **Bibliothèque de tuiles** — gestion des tuiles Ortho4XP déjà installées dans X-Plane (liste, activation/désactivation, suppression sécurisée, vidage de cache) sans toucher à `scenery_packs.ini`
 
 > Le développement reste actif : quelques finitions sont encore en cours (harmonisation colorimétrique entre textures, Progressive ZL aéroports).
 
@@ -119,6 +120,7 @@ Ortho4XP est un outil puissant, longtemps réservé à ceux qui acceptaient le t
 | **Langues** | Anglais | ✅ Interface complète français et anglais |
 | **Portabilité** | Lié au système | ✅ Dossier autonome — déplaçable sur disque externe |
 | **Validation XP12** | Non testée spécifiquement | ✅ Tuiles produites et validées dans X-Plane 12 |
+| **Gestion des tuiles installées** | Manuelle (`scenery_packs.ini`) | ✅ **Bibliothèque de tuiles** — liste, activation/désactivation, suppression et vidage de cache depuis l'interface |
 
 ---
 
@@ -137,6 +139,7 @@ Ortho4XP est un outil puissant, longtemps réservé à ceux qui acceptaient le t
 - 🧠 **Mémoire surveillée** — Nettoyage automatique avant saturation sur les grosses tuiles
 - 🖥️ **Console lisible** — Défilement souris et navigation clavier dans le journal
 - 🌍 **Bilingue** — Interface complète en français et en anglais
+- 🗂️ **Bibliothèque de tuiles** — Activer, désactiver ou supprimer une tuile Ortho4XP depuis l'interface, sans manipuler `scenery_packs.ini`
 
 ---
 
@@ -199,6 +202,7 @@ Tous sont **autonomes** : aucun fichier du moteur d'origine n'est modifié. Si u
 | **Avancé (JOSM)** | Édition géographique, emprises, nivellement, aéroports |
 | **Provider Score** | Note chaque image : bruit, compression, **nuages**, dérive, risque de jointure — désigne le meilleur provider |
 | **Gestion mémoire** | Surveillance RAM temps réel + nettoyage auto avant saturation |
+| **Bibliothèque de tuiles** | Gestion des tuiles Ortho4XP déjà installées dans X-Plane : liste + filtre, activation/désactivation instantanée, suppression sécurisée (lien symbolique ou dossier), vidage de cache (OSM_data / Masks / Patches). Aucune écriture sans sauvegarde `.bak`, chemin de `scenery_packs.ini` mémorisé automatiquement |
 
 ---
 
@@ -439,6 +443,7 @@ Données altimétriques (relief) : Modèles numériques de terrain LiDAR de Sonn
 - 🗂️ **Reliable per-tile config** — the tile `.cfg` is now authoritative (no more "Apply" dance)
 - 🔤 **UTF-8 encoding** for `.cfg` files (accents preserved) and ASCII folder names
 - 🖥️ **Windows / Linux launcher finalized** — clean install from GitHub validated
+- 🗂️ **Tile Library** — manage already-installed Ortho4XP tiles in X-Plane (list, enable/disable, safe deletion, cache clearing) without editing `scenery_packs.ini`
 
 > Development is still active: a few finishing touches remain (colour harmonisation between textures, airport Progressive ZL).
 
@@ -518,6 +523,7 @@ Ortho4XP is a powerful tool, but for a long time it was only within reach of tho
 | **Languages** | English | ✅ Full French and English interface |
 | **Portability** | Tied to the system | ✅ Self-contained folder — movable to an external drive |
 | **XP12 validation** | Not specifically tested | ✅ Tiles produced and validated in X-Plane 12 |
+| **Installed tile management** | Manual (`scenery_packs.ini`) | ✅ **Tile Library** — list, enable/disable, safe deletion and cache clearing from the interface |
 
 ---
 
@@ -536,6 +542,7 @@ Ortho4XP is a powerful tool, but for a long time it was only within reach of tho
 - 🧠 **Monitored memory** — Automatic cleanup before saturation on large tiles
 - 🖥️ **Readable console** — Mouse scrolling and keyboard navigation in the processing log
 - 🌍 **Bilingual** — Complete interface in French and English
+- 🗂️ **Tile Library** — Enable, disable or delete an Ortho4XP tile from the interface, without editing `scenery_packs.ini`
 
 ---
 
@@ -598,6 +605,7 @@ They all follow the same design rule: **a self-contained file that modifies no p
 | **Advanced (JOSM)** | Geographic data editing, extents, terrain flattening and airports |
 | **Provider Score** | Rates every downloaded image: noise, compression artefacts, **cloud cover**, colour drift, seam risk — points to the best provider |
 | **Memory management** | Monitors RAM in real time and clears the cache before saturation |
+| **Tile Library** | Manage already-installed Ortho4XP tiles in X-Plane: list + filter, instant enable/disable, safe deletion (symlink or folder), clear cache (OSM_data / Masks / Patches). No write without `.bak` backup, `scenery_packs.ini` path remembered automatically |
 
 ---
 

@@ -107,7 +107,7 @@ cfg_vars = {
         "type": int,
         "default": 1,
         "values": (0, 1, 2, 3),
-        "hint": 
+        "hint":
 "Verbosity determines the amount of information about the whole process which \
 is printed on screen.  Critical errors, if any, are reported in all states as \
 well as in the Log. Values above 1 are probably only useful for for debug \
@@ -118,7 +118,7 @@ purposes.",
         "type": int,
         "default": 1,
         "values": (0, 1, 2, 3),
-        "hint": 
+        "hint":
 "Determines which temporary files are removed. Level 3 erases everything \
 except the config and what is needed for X-Plane; Level 2 erases everything \
 except what is needed to redo the current step only; Level 1 allows you to \
@@ -129,7 +129,7 @@ redo any prior step; Level 0 keeps every single file.",
         "type": str,
         "default": "random",
         "values": ["random"] + sorted(OSM.overpass_servers.keys()),
-        "hint": 
+        "hint":
 "The (country) of the Overpass OSM server used to grab vector data. It can be \
 modified on the fly (as all _Application_ variables) in case of problem with \
 a particular server.",
@@ -609,7 +609,7 @@ list_global_cfg = (
     + list_mesh_vars
     + list_mask_vars
     + list_dsf_vars
-    + list_other_vars 
+    + list_other_vars
 )
 
 ################################################################################
@@ -854,7 +854,7 @@ class Tile:
                         value = value[:-1]
                     setattr(self, var, cfg_parse_value(var, value))
                 except Exception as e:
-                    # compatibility with zone_list config files from 
+                    # compatibility with zone_list config files from
                     # version <= 1.20
                     if "zone_list.append" in line:
                         try:
@@ -986,8 +986,8 @@ class Ortho4XP_Config(tk.Toplevel):
         self.frame_mode.grid(
             row=0, column=0, pady=(10, 8), sticky=N + S + E + W
         )
-        self.frame_cfg.grid(row=1, column=0, pady=10, sticky=N + S + E + W)
-        self.frame_lastbtn.grid(row=2, column=0, pady=10, sticky=N + S + E + W)
+        self.frame_cfg.grid(row=1, column=0, pady=self.pady, sticky=N + S + E + W)
+        self.frame_lastbtn.grid(row=2, column=0, pady=self.pady, sticky=N + S + E + W)
 
         # Variables and widgets and their placement
         self.v_ = {}
@@ -1020,7 +1020,7 @@ class Ortho4XP_Config(tk.Toplevel):
                 row=0,
                 column=col,
                 columnspan=2,
-                pady=(0, 10),
+                pady=(0, self.pady),
                 sticky=N + S + E + W,
             )
             self._tile_titles.append(_title_lbl)
@@ -1156,7 +1156,7 @@ class Ortho4XP_Config(tk.Toplevel):
             anchor=W,
             font="TKFixedFont 14",
         )
-        self._app_title.grid(row=row, column=0, columnspan=4, pady=10, sticky=N + S + E + W)
+        self._app_title.grid(row=row, column=0, columnspan=4, pady=self.pady, sticky=N + S + E + W)
         row += 1
         # Legende de l'astérisque, placee sous « Application » : explique que la
         # rubrique marquee d'un « * » est propre au mode selectionne.
@@ -1329,7 +1329,7 @@ class Ortho4XP_Config(tk.Toplevel):
         self._cfg_mode = "tile"
         self.button_toggle = _ctk_button(
             self.frame_mode,
-            text=_L("Mode : Config Tuile", "Mode: Tile Config") + "  \u21c4",
+            text=_L("Mode : Config Tuile", "Mode: Tile Config") + "  ⇄",
             command=self._toggle_mode,
         )
         # Bouton Mode agrandi (plus visible en haut de la fenetre).
@@ -1434,7 +1434,7 @@ class Ortho4XP_Config(tk.Toplevel):
                 else _L("Mode : Config Globale", "Mode: Global Config")
             )
             try:
-                self.button_toggle.configure(text=label + "  \u21c4")
+                self.button_toggle.configure(text=label + "  ⇄")
             except Exception:
                 pass
         # Identification visuelle du mode actif : titres du mode courant en
@@ -1909,7 +1909,7 @@ class Ortho4XP_Config(tk.Toplevel):
                 errors.append(var)
         if errors:
             error_text = (
-                "The following variables had wrong type\nand were reset " + 
+                "The following variables had wrong type\nand were reset " +
                 "to their default value!\n\n* "
                 + "\n* ".join(errors)
             )

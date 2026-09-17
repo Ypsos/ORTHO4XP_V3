@@ -279,8 +279,25 @@ class Ortho4XP_GUI(tk.Tk):
 
         # ── Fenêtre ───────────────────────────────────────────────────
         self.title("Ortho4XP V3.0 - sRGB Roland Edition (Mars 2026)")
-        self.geometry(f"{int(1320*s)}x{int(860*s)}")
-        self.minsize(1320, 860)
+        # ── Taille de fenêtre adaptée à l'écran (universel, multi-OS) ──────
+        #  Taille SOUHAITÉE identique à avant (1320 x 860, mise à l'échelle s).
+        #  On la PLAFONNE ensuite à l'écran réellement disponible pour que la
+        #  fenêtre ne déborde jamais (retour forum : écran 2560x1600 à 175 %
+        #  Windows → les boutons du bas passaient sous l'écran). Sur un grand
+        #  écran, min() garde la taille d'origine → aucune régression.
+        _want_w = int(1320 * s)
+        _want_h = int(860 * s)
+        try:
+            _scr_w = self.winfo_screenwidth()
+            _scr_h = self.winfo_screenheight()
+            _win_w = min(_want_w, int(_scr_w * 0.95))
+            _win_h = min(_want_h, int(_scr_h * 0.90))
+        except Exception:
+            _win_w, _win_h = _want_w, _want_h
+        self.geometry(f"{_win_w}x{_win_h}")
+        # minsize : jamais plus haut que l'écran disponible (permet de
+        # rétrécir la fenêtre ; la console extensible absorbe la réduction).
+        self.minsize(min(1320, _win_w), min(860, _win_h))
         self.protocol("WM_DELETE_WINDOW", self.exit_prg)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)   # console extensible
@@ -2079,7 +2096,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         tk.Label(
             self.frame_left,
             text=(
-                tr('── Navigation ──\nClic + glisser\n   Déplacer la carte\nMolette\n   Zoom avant / arrière\n\n── Tracer une zone ──\nShift + clic\n   Ajouter un point\nCtrl+Shift + clic\n   Point aligné grille\n Sauvegarder la zone\nBackspace  Annuler dernier pt\n\n── Rectangle ZL ──\nCtrl + clic (vide)\n   Créer rectangle\nCtrl + clic (zone)\n   Supprimer rectangle\nd  Supprimer dernière zone')
+                tr('── Navigation ──\nClic + glisser : Déplacer la carte\nMolette : Zoom avant / arrière\n\n── Tracer une zone ──\nShift + clic : Ajouter un point\nCtrl+Shift + clic : Point aligné grille\nn : Sauvegarder la zone\nBackspace : Annuler dernier point\n\n── Rectangle ZL ──\nCtrl + clic (vide) : Créer rectangle\nCtrl + clic (zone) : Supprimer rectangle\nd : Supprimer dernière zone')
             ),
             bg=_BG, fg=_FG2,
             justify=LEFT,

@@ -327,6 +327,9 @@ def install_menubar(window):
     m_tools.add_command(
         label=L("Générer un Extent (pays / région)", "Generate an Extent (country / region)"),
         command=lambda: _open_module(window, "O4_Extent_Generator", "run_extent_generator"))
+    m_tools.add_command(
+        label=L("🗃  Bibliothèque de tuiles", "🗃  Tile library"),
+        command=lambda: _open_module(window, "O4_Tile_Library_Utils", "run_tile_library"))
     m_tools.add_separator()
     _wire(m_tools, window,
           L("Corrections R.G.B., Netteté, saturation…",

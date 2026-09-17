@@ -521,32 +521,69 @@ class Installer:
         self._launch_launcher()
 
     # ── Linux ─────────────────────────────────────────────────────────────────
+    def _linux_pkg_install(self):
+        """Installe Python 3.12 + les paquets système INDISPENSABLES
+        (venv, pip, tkinter, gdal, 7zip) selon le gestionnaire de paquets
+        présent. Idempotent : réinstaller un paquet déjà présent est sans
+        effet, donc cette fonction peut être appelée que Python soit déjà
+        présent ou non."""
+        if shutil.which("apt-get"):
+            run_cmd(["sudo", "apt-get", "update", "-y"], self.log, timeout=300)
+            run_cmd(
+                ["sudo", "apt-get", "install", "-y",
+                 "python3.12", "python3.12-venv", "python3-pip",
+                 "python3-tk", "p7zip-full", "gdal-bin", "libgdal-dev"],
+                self.log, timeout=600
+            )
+        elif shutil.which("dnf"):
+            run_cmd(
+                ["sudo", "dnf", "install", "-y",
+                 "python3.12", "python3-tkinter", "gdal", "gdal-devel"],
+                self.log, timeout=600
+            )
+        elif shutil.which("pacman"):
+            run_cmd(
+                ["sudo", "pacman", "-S", "--noconfirm",
+                 "python", "tk", "gdal"],
+                self.log, timeout=600
+            )
+        else:
+            self.log("⚠️  Aucun gestionnaire de paquets connu (apt/dnf/pacman).")
+
+    def _linux_support_missing(self):
+        """Retourne True si le module ensurepip (fourni par python3.12-venv)
+        OU tkinter (fourni par python3-tk) manque pour le Python cible.
+
+        Cas réel Ubuntu 24.04 : python3.12 est présent par défaut, mais
+        python3.12-venv, python3-pip et python3-tk ne le sont PAS. La
+        création du venv échoue alors silencieusement. On teste donc la
+        présence réelle des modules, pas seulement du binaire python."""
+        py = self.python312 or find_python312()
+        if not py:
+            return True
+        # ensurepip = fourni par python3.x-venv ; couvre venv + pip
+        # tkinter   = fourni par python3-tk ; requis par l'interface
+        for probe in ("import ensurepip", "import tkinter"):
+            try:
+                r = subprocess.run(
+                    [py, "-c", probe],
+                    capture_output=True, timeout=8
+                )
+                if r.returncode != 0:
+                    return True
+            except Exception:
+                return True
+        return False
+
     def _install_linux(self):
         self.log("── 🐧 Linux détecté ──────────────────────────")
         self.python312 = find_python312()
+
+        # ── Cas A : Python absent → on installe Python + ses paquets support ──
         if not self.python312:
             self.log("⚠️  Python 3.12/3.11 absent. Installation via gestionnaire de paquets...")
             self.log("   (peut demander votre mot de passe sudo)")
-            if shutil.which("apt-get"):
-                run_cmd(["sudo", "apt-get", "update", "-y"], self.log, timeout=300)
-                run_cmd(
-                    ["sudo", "apt-get", "install", "-y",
-                     "python3.12", "python3.12-venv", "python3-pip",
-                     "python3-tk", "p7zip-full", "gdal-bin", "libgdal-dev"],
-                    self.log, timeout=600
-                )
-            elif shutil.which("dnf"):
-                run_cmd(
-                    ["sudo", "dnf", "install", "-y",
-                     "python3.12", "python3-tkinter", "gdal", "gdal-devel"],
-                    self.log, timeout=600
-                )
-            elif shutil.which("pacman"):
-                run_cmd(
-                    ["sudo", "pacman", "-S", "--noconfirm",
-                     "python", "tk", "gdal"],
-                    self.log, timeout=600
-                )
+            self._linux_pkg_install()
             self.python312 = find_python312()
             if not self.python312:
                 self._finish(
@@ -555,6 +592,19 @@ class Installer:
                     "Installez-le manuellement puis relancez."
                 )
                 return
+        else:
+            self.log("✅ Python trouvé : {}".format(self.python312))
+
+        # ── Vérif support venv/pip/tk (INDÉPENDANT de la présence de Python) ──
+        # Correctif retour forum : sur Ubuntu 24.04, python3.12 présent mais
+        # python3.12-venv / python3-pip / python3-tk absents → venv échoue.
+        # On installe seulement si un module manque réellement, pour ne pas
+        # demander le mot de passe sudo quand tout est déjà en place.
+        if self._linux_support_missing():
+            self.log("⚠️  Paquets système requis manquants (venv / pip / tkinter).")
+            self.log("   Installation... (peut demander votre mot de passe sudo)")
+            self._linux_pkg_install()
+
         self._create_venv()
         if not self._venv_ok():
             return

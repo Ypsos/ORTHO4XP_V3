@@ -2,7 +2,7 @@
 # ============================================================
 #  ORTHO4XP V2 — Lanceur universel Linux
 #  Double-cliquez sur ce fichier pour démarrer
-#  (ou chmod +x LANCER_ORTHO4XP.sh && ./LANCER_ORTHO4XP.sh)
+#  (ou chmod +x LANCEUR_INSTALL_LINUX.sh && ./LANCEUR_INSTALL_LINUX.sh)
 # ============================================================
 cd "$(dirname "$0")"
 if command -v python3.12 &>/dev/null; then

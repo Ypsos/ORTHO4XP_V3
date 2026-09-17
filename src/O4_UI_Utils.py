@@ -28,10 +28,128 @@ cleaning_level = 1
 gui = None
 log = True
 
+# ---------------------------------------------------------------------------
+# Point 3 (V3.6) — Suivi de build detaille en console (temps restant + vitesse)
+#
+# 100 % ADDITIF. progress_bar continue d'etre appelee EXACTEMENT comme avant
+# par le moteur (mesh, masques, textures...). On ajoute seulement, a la fin de
+# progress_bar, un appel a un observateur qui regarde la suite des pourcentages
+# deja transmis et imprime de temps en temps une ligne d'estimation en console.
+# Aucune dependance au GUI, aucun reseau, aucune ecriture disque. Tout est
+# enferme dans des try/except : si quoi que ce soit tourne mal, le suivi
+# echoue en SILENCE et n'impacte jamais le build. Pour desactiver ce suivi,
+# il suffit de mettre _ETA_ENABLED = False ci-dessous (rien d'autre a toucher).
+_ETA_ENABLED = True         # False = plus aucune ligne de suivi, comme avant
+_ETA_INTERVAL = 5.0         # secondes minimum entre deux lignes affichees
+_ETA_MIN_PERCENT = 3        # on attend un peu d'avancee avant d'estimer
+# Libelles bilingues (fr, en) par numero de barre. Une barre absente de cette
+# table n'affiche AUCUN suivi (evite de noyer la console sur les micro-etapes).
+_ETA_BAR_LABELS = {
+    2: ("Mer/masques", "Sea/masks"),
+    3: ("Textures", "Textures"),
+}
+# Etat interne par barre : {nbr: {"t0", "last_print", "p0", "last_p"}}
+_eta_state = {}
+
+
+def _L(fr, en):
+    # Helper bilingue interne, totalement defensif : si la langue ne peut pas
+    # etre lue pour une raison quelconque, on retombe sur le francais.
+    try:
+        code = ""
+        try:
+            import O4_Lang as _lang
+            _fn = getattr(_lang, "current_lang", None)
+            if callable(_fn):
+                code = str(_fn() or "")
+            else:
+                code = str(getattr(_lang, "_current_lang", "") or "")
+        except Exception:
+            code = ""
+        return en if code.lower().startswith("en") else fr
+    except Exception:
+        return fr
+
+
+def _eta_bar_label(nbr):
+    pair = _ETA_BAR_LABELS.get(nbr)
+    if not pair:
+        return None
+    return _L(pair[0], pair[1])
+
+
+def _eta_observe(nbr, percentage):
+    # Appelee depuis progress_bar. 100 % defensive : toute erreur est avalee
+    # pour ne JAMAIS perturber le build.
+    try:
+        if not _ETA_ENABLED:
+            return
+        label = _eta_bar_label(nbr)
+        if label is None:
+            return
+        try:
+            p = int(percentage)
+        except Exception:
+            return
+        now = time.time()
+        st = _eta_state.get(nbr)
+        # (Re)demarrage d'une phase : pas d'etat, ou le pourcentage recule
+        # (nouvelle tuile / nouvelle passe sur la meme barre).
+        if st is None or p < st.get("last_p", 0):
+            _eta_state[nbr] = {
+                "t0": now,
+                "last_print": now,
+                "p0": p,
+                "last_p": p,
+            }
+            return
+        st["last_p"] = p
+        # Fin de phase : une ligne finale nette, puis on oublie l'etat.
+        if p >= 100:
+            elapsed = now - st["t0"]
+            if elapsed >= 1:
+                print(
+                    "      [" + label + "] 100% — "
+                    + _L("termine en ", "done in ")
+                    + nicer_timer(elapsed)
+                )
+            _eta_state.pop(nbr, None)
+            return
+        # Trop tot pour une estimation fiable.
+        if p < _ETA_MIN_PERCENT:
+            return
+        # On n'imprime qu'a intervalle regulier (ne pas noyer la console).
+        if now - st["last_print"] < _ETA_INTERVAL:
+            return
+        elapsed = now - st["t0"]
+        gained = p - st["p0"]
+        if elapsed <= 0 or gained <= 0:
+            return
+        pct_per_sec = gained / elapsed
+        if pct_per_sec <= 0:
+            return
+        remaining = (100 - p) / pct_per_sec
+        speed_per_min = pct_per_sec * 60.0
+        print(
+            "      [" + label + "] " + str(p) + "% — "
+            + _L("vitesse ~", "speed ~")
+            + "{:.0f}".format(speed_per_min)
+            + _L("%/min — reste ~", "%/min — left ~")
+            + nicer_timer(remaining)
+        )
+        st["last_print"] = now
+    except Exception:
+        # Le suivi ne doit JAMAIS casser le build.
+        pass
+
+
 ################################################################################
 def progress_bar(nbr, percentage, message=None):
     if gui:
         gui.pgrbv[nbr].set(percentage)
+    # Point 3 : suivi console non-intrusif (n'affiche rien pour une barre
+    # inconnue, et n'echoue jamais).
+    _eta_observe(nbr, percentage)
 
 
 ################################################################################
