@@ -28,7 +28,7 @@
 > Installation automatique • Sans terminal • Pour X-Plane 12
 >
 > [![TÉLÉCHARGER LA DERNIÈRE VERSION](https://img.shields.io/badge/T%C3%89L%C3%89CHARGER%20LA%20DERNI%C3%88RE%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
-
+> 📥 **Disponible aussi sur X-Plane.org :** [ORTHO4XP V3.5 — page de téléchargement](https://forums.x-plane.org/files/file/101562-ortho4xp-v35-ypsos/)
 ---
 
 ## 🆕 Nouveautés de la version 3.5
@@ -427,7 +427,7 @@ Données altimétriques (relief) : Modèles numériques de terrain LiDAR de Sonn
 > Automatic installation • No terminal required • For X-Plane 12
 >
 > [![DOWNLOAD LATEST VERSION](https://img.shields.io/badge/DOWNLOAD%20LATEST%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
-
+> 📥 **Also available on X-Plane.org:** [ORTHO4XP V3.5 — download page](https://forums.x-plane.org/files/file/101562-ortho4xp-v35-ypsos/)
 ---
 
 ## 🆕 What's new in version 3.5
