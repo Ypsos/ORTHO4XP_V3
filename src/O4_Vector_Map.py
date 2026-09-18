@@ -55,24 +55,25 @@ def build_poly_file(tile):
         return 0
     # <<< fin controle place disque
 
-    # >>> Controle disque externe (CDC V3.6, Point 5 - "le plus sur").
-    # Si un disque externe est configure mais absent (jamais branche au
-    # demarrage, ou debranche depuis), on REFUSE de demarrer le build : ainsi
-    # aucune tuile ne peut partir par erreur sur le disque interne. 100 %
-    # additif, thread principal, AVANT toute creation de dossier. Fail-open :
-    # si le controle lui-meme echoue, on laisse le build demarrer (ne bloque
-    # jamais un build sain). Si aucun disque externe n'est configure, la
-    # fonction renvoie (True, "") et rien ne change.
+    # >>> Controle chemins accessibles AVANT build (CDC V3.6, Point 5).
+    # Verifie que les chemins DEJA choisis par l'utilisateur (custom_dem sur
+    # disque externe / serveur, custom_bathy_dem, dossier de sortie) sont bien
+    # accessibles. Si un disque/serveur n'est pas branche, on REFUSE le build
+    # pour eviter le piege "mesh a altitude zero" (DEM introuvable lu comme du
+    # vide). 100 % additif, thread principal, AVANT toute creation de dossier.
+    # FAIL-OPEN : si le controle echoue, on laisse le build demarrer (ne bloque
+    # jamais un build sain). Voir O4_Mount_Check_Utils.check_paths_before_build.
     try:
-        (_ext_ok, _ext_msg) = FNAMES.external_storage_ready_for_build()
-    except Exception as _ext_e:
-        (_ext_ok, _ext_msg) = (True, "")
-        UI.vprint(2, "External storage pre-check skipped:", _ext_e)
-    if not _ext_ok:
-        UI.vprint(0, _ext_msg)
+        import O4_Mount_Check_Utils as MOUNT
+        (_paths_ok, _paths_msg) = MOUNT.check_paths_before_build(tile)
+    except Exception as _mnt_e:
+        (_paths_ok, _paths_msg) = (True, "")
+        UI.vprint(2, "Path pre-check skipped:", _mnt_e)
+    if not _paths_ok:
+        UI.vprint(0, _paths_msg)
         UI.exit_message_and_bottom_line()
         return 0
-    # <<< fin controle disque externe
+    # <<< fin controle chemins accessibles
 
     timer = time.time()
 

@@ -200,11 +200,6 @@ a particular server.",
         "default": "",
         "hint": "The directory containing the sceneries with the overlays you would like to extract. You need to select the level of directory just _ABOVE_ Earth nav data.",
     },
-    "external_storage_dir": {
-        "type": str,
-        "default": "",
-        "hint": "Optional external disk folder where Ortho4XP stores the large DATA folders (Tiles, Orthophotos, Masks, OSM_data, Elevation_data, Geotiffs, Patches, overlays). Leave EMPTY to keep everything on the internal disk (default behaviour). When set, the disk must be plugged in when Ortho4XP starts; a build is refused if it is missing, so no tile can land on the internal disk by mistake. The software itself (Providers, Extents, Utils) and the tmp folder always stay on the internal disk.",
-    },
     # Vector
     "apt_smoothing_pix": {
         "type": int,
@@ -615,7 +610,6 @@ list_global_cfg = (
     + list_mask_vars
     + list_dsf_vars
     + list_other_vars
-    + ["external_storage_dir"]  # CDC V3.6 Point 5 : reglage global (par installation)
 )
 
 ################################################################################
@@ -1100,7 +1094,7 @@ class Ortho4XP_Config(tk.Toplevel):
             style="O4.TCombobox",
         )
         self.entry_[item].grid(
-            row=0, column=1, padx=(2, 0), pady=8, sticky=N + S + W + E
+            row=0, column=1, padx=(2, 0), pady=2, sticky=N + S + W + E
         )
         dem_button = ttk.Button(
             self.frame_dem,
@@ -1122,7 +1116,7 @@ class Ortho4XP_Config(tk.Toplevel):
             self.frame_dem, textvariable=self.v_[item], width=80
         )
         self.entry_[item].grid(
-            row=1, column=1, padx=(2, 0), pady=8, sticky=N + S + W + E
+            row=1, column=1, padx=(2, 0), pady=2, sticky=N + S + W + E
         )
         ttk.Button(
             self.frame_dem,
@@ -1154,35 +1148,28 @@ class Ortho4XP_Config(tk.Toplevel):
             row=row, column=0, columnspan=8, sticky=N + S + E + W
         )
         row += 1
+        # Seconde passe hauteur (retour domisilasol : fenetre encore un peu
+        # trop haute) : la legende de l'astérisque, qui occupait sa propre
+        # ligne sous « Application », est REPLIEE dans le titre (suggestion
+        # d'origine du testeur). On gagne une ligne complete sans perdre
+        # l'information. _app_legend reste defini (=None) pour que
+        # _update_mode_ui, qui le lit en getattr, ne change pas.
         self._app_title = tk.Label(
             self.frame_cfg,
-            text=_L("Application  *", "Application  *"),
+            text=_L(
+                "Application  *   (rubrique propre au mode selectionne)",
+                "Application  *   (section specific to the selected mode)",
+            ),
             bg="#3b5b49",
             fg="#e8f0ec",
             anchor=W,
             font="TKFixedFont 14",
         )
-        self._app_title.grid(row=row, column=0, columnspan=4, pady=self.pady, sticky=N + S + E + W)
+        self._app_title.grid(row=row, column=0, columnspan=6, pady=self.pady, sticky=N + S + E + W)
         row += 1
-        # Legende de l'astérisque, placee sous « Application » : explique que la
-        # rubrique marquee d'un « * » est propre au mode selectionne.
-        self._app_legend = tk.Label(
-            self.frame_cfg,
-            text=_L(
-                "*  Rubriques propres au mode selectionne "
-                "(grisees dans l'autre mode lorsqu'elles ne s'appliquent pas)",
-                "*  Sections specific to the selected mode "
-                "(greyed in the other mode when they do not apply)",
-            ),
-            bg="#3b5b49",
-            fg="#9fb5ab",
-            anchor=W,
-            font="TKFixedFont 11",
-        )
-        self._app_legend.grid(
-            row=row, column=0, columnspan=6, padx=2, pady=(0, 6), sticky=W
-        )
-        row += 1
+        # Legende repliee dans le titre ci-dessus : plus de widget dedie, mais
+        # l'attribut reste (None) pour la compatibilite de _update_mode_ui.
+        self._app_legend = None
 
         l = ceil((len(gui_app_vars_short)) / 4)
         this_row = row
@@ -1362,61 +1349,6 @@ class Ortho4XP_Config(tk.Toplevel):
             row=0, column=1, padx=10, pady=self.pady, sticky=W + E
         )
 
-        # ── Profils simples (presets) — en haut de la fenetre, sous la
-        #    bascule de mode. 1 clic remplit les champs du compromis
-        #    qualite / vitesse / disque (relief + aeroports). Non destructif :
-        #    rien n'est enregistre tant que l'utilisateur ne clique pas
-        #    « Ecrire cfg ». Tous les autres champs gardent leurs valeurs.
-        self.frame_presets = tk.Frame(self.frame_mode, bg="#3b5b49")
-        self.frame_presets.grid(
-            row=1, column=0, columnspan=2, pady=(6, 0), sticky=W
-        )
-        tk.Label(
-            self.frame_presets,
-            text=_L("Profil :", "Profile:"),
-            bg="#3b5b49", fg="#9fb5ab", anchor=W, font="TKFixedFont 12",
-        ).pack(side="left", padx=(0, 6))
-        for _pk, _pl in (
-            ("fast", _L("🐇 Rapide", "🐇 Fast")),
-            ("balanced", _L("⚖ Équilibré", "⚖ Balanced")),
-            ("quality", _L("💎 Qualité max", "💎 Max quality")),
-        ):
-            _ctk_button(
-                self.frame_presets, text=_pl,
-                command=lambda k=_pk: self._apply_preset(k),
-            ).pack(side="left", padx=3)
-
-        # ── Disque externe (CDC V3.6, Point 5) — sous les presets. Choisir un
-        #    dossier sur un disque externe pour y ranger les grosses donnees
-        #    (tuiles, orthophotos, masques...). Vide = tout reste sur le Mac.
-        #    Non destructif : rien n'est ecrit tant qu'on ne clique pas
-        #    « Ecrire cfg app ». Le disque doit etre branche au demarrage.
-        self.frame_storage = tk.Frame(self.frame_mode, bg="#3b5b49")
-        self.frame_storage.grid(
-            row=2, column=0, columnspan=2, pady=(6, 0), sticky=W + E
-        )
-        tk.Label(
-            self.frame_storage,
-            text=_L("💾 Disque externe :", "💾 External disk:"),
-            bg="#3b5b49", fg="#9fb5ab", anchor=W, font="TKFixedFont 12",
-        ).pack(side="left", padx=(0, 6))
-        self.entry_["external_storage_dir"] = ttk.Entry(
-            self.frame_storage,
-            textvariable=self.v_["external_storage_dir"],
-            width=48,
-        )
-        self.entry_["external_storage_dir"].pack(side="left", padx=(0, 4))
-        _ctk_button(
-            self.frame_storage,
-            text=_L("📁 Choisir…", "📁 Browse…"),
-            command=lambda: self.choose_dir("external_storage_dir"),
-        ).pack(side="left", padx=3)
-        _ctk_button(
-            self.frame_storage,
-            text=_L("Vider", "Clear"),
-            command=lambda: self.v_["external_storage_dir"].set(""),
-        ).pack(side="left", padx=3)
-
         # Groupes de boutons pilotes par le mode courant.
         self._tile_buttons = [self.button1, self.button2, self.button_reset]
         self._global_buttons = [self.button3, self.button4]
@@ -1435,76 +1367,6 @@ class Ortho4XP_Config(tk.Toplevel):
         # coloration des CTkButton pour que les boutons desactives restent
         # visuellement grises au repos.
         self.after_idle(lambda: self._set_mode("tile"))
-
-    # ── Profils simples (presets) ─────────────────────────────────────
-    # Valeurs SURES (plages recommandees d'Ortho4XP). Un profil ne regle
-    # QUE les champs du compromis qualite / vitesse / disque : relief
-    # (limit_tris, iterate) et aeroports (cover_airports_with_highres,
-    # cover_zl). default_zl (nettete des photos) N'EST PAS touche ici : il
-    # reste le choix de la fenetre principale (regle deja appliquee par les
-    # chargements de cfg). Tout le reste garde ses valeurs. Non destructif :
-    # on remplit les champs, on n'ecrit RIEN.
-    _PRESETS = {
-        "fast": {
-            "limit_tris": 1, "iterate": 0,
-            "cover_airports_with_highres": "False", "cover_zl": 17,
-        },
-        "balanced": {
-            "limit_tris": 2, "iterate": 1,
-            "cover_airports_with_highres": "False", "cover_zl": 18,
-        },
-        "quality": {
-            "limit_tris": 3, "iterate": 2,
-            "cover_airports_with_highres": "True", "cover_zl": 18,
-        },
-    }
-
-    def _apply_preset(self, name):
-        """Applique un profil simple : remplit les champs concernes, affiche
-        un message clair bilingue. N'ecrit RIEN dans le cfg (l'utilisateur
-        clique « Ecrire cfg tuile » ou « Ecrire cfg app » pour garder)."""
-        vals = self._PRESETS.get(name)
-        if not vals:
-            return
-        for key, v in vals.items():
-            var = self.v_.get(key)
-            if var is None:
-                continue
-            try:
-                var.set(str(v))
-            except Exception:
-                pass
-        msg = {
-            "fast": _L(
-                "🐇 Profil Rapide : relief plus leger, aeroports en definition normale -> build plus court, moins de disque.",
-                "🐇 Fast profile: lighter relief, standard-definition airports -> shorter build, less disk."),
-            "balanced": _L(
-                "⚖ Profil Equilibre : le compromis conseille (relief moyen, aeroports en definition normale).",
-                "⚖ Balanced profile: the recommended trade-off (medium relief, standard-definition airports)."),
-            "quality": _L(
-                "💎 Profil Qualite max : relief fin, aeroports en haute definition -> build plus long, gros disque.",
-                "💎 Max quality profile: fine relief, high-definition airports -> longer build, large disk."),
-        }.get(name, "")
-        try:
-            self._status(msg)
-        except Exception:
-            pass
-        try:
-            from tkinter import messagebox as _mb
-            _mb.showinfo(
-                _L("Profil applique", "Profile applied"),
-                msg + "\n\n" + _L(
-                    "Les valeurs concernees ont ete changees dans les champs. "
-                    "La nettete des photos (ZL) se regle dans la fenetre "
-                    "principale. Rien n'est encore enregistre : cliquez "
-                    "« Ecrire cfg tuile » (ou « Ecrire cfg app ») pour garder.",
-                    "The relevant values were changed in the fields. Photo "
-                    "sharpness (ZL) is set in the main window. Nothing is saved "
-                    "yet: click “Write Tile Cfg” (or “Write App "
-                    "Cfg”) to keep."),
-                parent=self)
-        except Exception:
-            pass
 
     def _open_simulator(self):
         try:
