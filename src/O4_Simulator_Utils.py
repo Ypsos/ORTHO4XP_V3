@@ -605,6 +605,22 @@ class Ortho4XP_Simulator(tk.Toplevel):
             font=("TkFixedFont", fs(11), "bold"))
         self._mode_lbl.pack(side="left", padx=10)
 
+        # ── Profils simples (presets) : 1 clic remplit les curseurs du
+        #    compromis vitesse / qualité / disque. Non destructif (n'écrit
+        #    PAS le cfg). Tous les réglages experts restent accessibles.
+        tk.Label(mode_fr,
+            text=_sim_help("   Profil :", "   Profile:"),
+            bg=self.BG, fg=self.FG3,
+            font=("TkFixedFont", fs(10))).pack(side="left", padx=(14, 2))
+        for _pk, _plabel in (
+                ("fast",     _sim_help("🐇 Rapide", "🐇 Fast")),
+                ("balanced", _sim_help("⚖ Équilibré", "⚖ Balanced")),
+                ("quality",  _sim_help("💎 Qualité max", "💎 Max quality")),
+        ):
+            _ctk_button(mode_fr, text=_plabel,
+                command=lambda k=_pk: self._apply_preset(k)).pack(
+                    side="left", padx=2)
+
         # ── Chemins (comme Outils Config) : DEM + Application ──
         paths_fr = tk.Frame(self, bg=self.BG)
         paths_fr.grid(row=1, column=0, sticky="ew", padx=8, pady=(2, 4))
@@ -622,6 +638,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             font=("TkFixedFont", fs(10))).pack(side="left", padx=12)
 
         nb = ttk.Notebook(self)
+        self._nb = nb
         nb.grid(row=3, column=0, sticky="nsew", padx=6, pady=4)
 
         try:
@@ -657,6 +674,87 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         # La géométrie est calculée après construction de l'UI dans __init__
         # afin de tenir compte de la hauteur réelle du moniteur.
+
+    # ── Profils simples (presets) ─────────────────────────────────────
+    # Valeurs SÛRES, dans les plages recommandées d'Ortho4XP. Un profil ne
+    # règle QUE les curseurs du compromis vitesse / qualité / disque ; tout
+    # le reste (mer, masques, terrain…) garde les valeurs en cours.
+    _PRESETS = {
+        "fast": {
+            "default_zl": 16, "limit_tris": 1, "iterate": 0,
+            "cover_airports_with_highres": "False", "cover_zl": 17,
+        },
+        "balanced": {
+            "default_zl": 17, "limit_tris": 2, "iterate": 1,
+            "cover_airports_with_highres": "False", "cover_zl": 18,
+        },
+        "quality": {
+            "default_zl": 18, "limit_tris": 3, "iterate": 2,
+            "cover_airports_with_highres": "True", "cover_zl": 18,
+        },
+    }
+
+    def _apply_preset(self, name):
+        """
+        Applique un profil simple : remplit les curseurs concernés,
+        rafraîchit l'aperçu, affiche un message clair bilingue.
+        N'ÉCRIT RIEN dans le cfg (l'utilisateur clique « Écrire cfg »
+        s'il veut garder). Tous les autres réglages restent inchangés.
+        """
+        vals = self._PRESETS.get(name)
+        if not vals:
+            return
+        for key, v in vals.items():
+            var = self._vars.get(key)
+            if var is None:
+                continue
+            try:
+                if isinstance(var, tk.StringVar):
+                    var.set(str(v))
+                else:
+                    var.set(v)
+            except Exception:
+                pass
+        try:
+            self._redraw_all()
+        except Exception:
+            pass
+        msg = {
+            "fast": _sim_help(
+                "🐇 Profil Rapide appliqué : photos moins nettes, relief plus léger, build plus court et moins d'espace disque. Rien n'est encore enregistré — cliquez « ✅ Écrire cfg Tuile » pour garder.",
+                "🐇 Fast profile applied: less sharp photos, lighter relief, shorter build and less disk space. Nothing is saved yet — click “✅ Write Tile cfg” to keep."),
+            "balanced": _sim_help(
+                "⚖ Profil Équilibré appliqué : le compromis conseillé (netteté correcte, build raisonnable). Rien n'est encore enregistré — cliquez « ✅ Écrire cfg Tuile » pour garder.",
+                "⚖ Balanced profile applied: the recommended trade-off (good sharpness, reasonable build). Nothing is saved yet — click “✅ Write Tile cfg” to keep."),
+            "quality": _sim_help(
+                "💎 Profil Qualité max appliqué : photos très nettes, relief fin, aéroports en haute définition → build plus long et gros espace disque. Rien n'est encore enregistré — cliquez « ✅ Écrire cfg Tuile » pour garder.",
+                "💎 Max quality profile applied: very sharp photos, fine relief, high-definition airports → longer build and large disk usage. Nothing is saved yet — click “✅ Write Tile cfg” to keep."),
+        }.get(name, "")
+        # Montrer l'effet : basculer sur l'onglet où le réglage principal
+        # (netteté des photos = default_zl) est visible, pour que
+        # l'utilisateur VOIE un curseur bouger.
+        try:
+            self._nb.select(3)  # 0=Mer 1=Terrain 2=Mesh 3=Imagerie & Aéroports
+        except Exception:
+            pass
+        # Message clair, bilingue, dans la barre de statut…
+        try:
+            self._status.config(text=msg, fg=self.FG2)
+        except Exception:
+            pass
+        # …et un rappel visible (popup) pour que l'utilisateur comprenne
+        # ce qui a changé, même s'il ne regardait pas le bon onglet.
+        try:
+            messagebox.showinfo(
+                _sim_help("Profil appliqué", "Profile applied"),
+                msg + "\n\n" + _sim_help(
+                    "Les curseurs concernés viennent d'être déplacés "
+                    "(onglets « Imagerie & Aéroports » et « Mesh 3D »).",
+                    "The relevant sliders were just moved "
+                    "(tabs “Imagery & Airports” and “Mesh 3D”)."),
+                parent=self)
+        except Exception:
+            pass
 
     def _make_scrollable(self, parent, row=0):
         """Zone défilante verticale (ascenseur à droite) pour les curseurs."""
@@ -987,7 +1085,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ("ratio_water",    "ratio_water",    0, 1,    0.01, float,
              _sim_help('ratio_water : Gauche = photo opaque sur mer. Droite = eau XP12 visible. Recommandé : 0.10.', 'ratio_water: Left = opaque photo on sea. Right = XP12 water visible. Recommended: 0.10.'), None),
             ("ratio_bathy",    "ratio_bathy",    0, 1,    0.05, float,
-             _sim_help('ratio_bathy : intensité du dégradé de profondeur (bathymétrie XP12). 0 = uniforme. 1 = max. Recommandé : 1.', 'ratio_bathy: XP12 depth-color strength. 0 = uniform. 1 = max. Recommended: 1.'), None),
+             _sim_help('ratio_bathy : intensité du dégradé de profondeur de la mer (foncé au large). 0 = couleur uniforme. 1 = max. Recommandé : 1.', 'ratio_bathy: strength of the sea depth gradient (darker offshore). 0 = uniform color. 1 = max. Recommended: 1.'), None),
             ("water_tech",     "water_tech",     0, 0,    1,    str,
              _sim_help('water_tech : moteur d\'eau. XP12 = vagues/reflets natifs. XP11+bathy = ancien mode.', 'water_tech: water engine. XP12 = native waves/reflections. XP11+bathy = legacy.'),
              ["XP12", "XP11+bathy"]),
@@ -1013,7 +1111,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
              _sim_help('masking_mode : style de transition côte. sand = doux (recommandé). rocks = abrupt. 3steps = 3 zones.', 'masking_mode: shore blend style. sand = soft (recommended). rocks = abrupt. 3steps = 3 zones.'),
              ["sand","rocks","3steps"]),
             ("imprint_masks_to_dds","imprint DDS",0,0,   1,    str,
-             _sim_help('imprint DDS : True = masque intégré dans le DDS (recommandé XP12). False = masque PNG externe.', 'imprint DDS: True = mask baked into DDS (recommended for XP12). False = external PNG mask.'),
+             _sim_help('imprint DDS : True = fondu de côte intégré à l\'image (recommandé XP12). False = fondu dans un fichier séparé.', 'imprint DDS: True = coastal blend baked into the image (recommended for XP12). False = blend in a separate file.'),
              ["True","False"]),
         ]
         self._add_group(inner, tr("Masques côtiers"), sliders_cote, exp_lbl, fs,
@@ -1023,7 +1121,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
 
         sliders_inland = [
             ("use_masks_for_inland","use_inland", 0, 0, 1, str,
-             _sim_help('use_inland : True = même type de masque sur lacs/rivières (coûteux VRAM). False = recommandé.', 'use_inland: True = same masks on lakes/rivers (VRAM heavy). False = recommended.'),
+             _sim_help('use_inland : True = même fondu de côte sur lacs/rivières (gourmand en mémoire graphique). False = recommandé.', 'use_inland: True = same coastal blend on lakes/rivers (heavy on graphics memory). False = recommended.'),
              ["False","True"]),
         ]
         self._add_group(inner, tr("Lacs & Rivières"), sliders_inland, exp_lbl, fs,
@@ -1041,34 +1139,18 @@ class Ortho4XP_Simulator(tk.Toplevel):
           normal_map_strength | terrain_casts_shadows | fill_nodata
         puis curseurs.
         """
-        frame = tk.Frame(nb, bg=self.BG2)
-        nb.add(frame, text=tr("⛰ Terrain & Relief"))
-        frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(0, weight=0)
-        frame.rowconfigure(1, weight=1)
-        frame.rowconfigure(2, weight=0)
-
-        cv_frame = tk.Frame(frame, bg=_CON_BG, relief="flat", bd=1)
-        cv_frame.grid(row=0, column=0, sticky="ew", padx=6, pady=(4, 2))
-        cv = tk.Canvas(cv_frame, bg=_CON_BG, highlightthickness=0, height=220)
-        cv.pack(fill="both", expand=True)
-        cv.bind("<Configure>", lambda e: self.after(10, self._redraw_all))
+        # Zone défilante (canvas fixe en haut + ascenseur vertical + molette)
+        # via le helper commun déjà utilisé par Mer & Imagerie : garantit que
+        # les derniers réglages (water_simpl…) restent accessibles même sur un
+        # écran de faible hauteur. Explications affichées sous chaque curseur
+        # (inline_hint=True) → exp_lbl = None.
+        cv, inner, exp_lbl = self._make_tab(
+            nb, tr("⛰ Terrain & Relief"), canvas_height=220, inline=True)
         self._canvases["terrain"] = cv
-
-        inner = tk.Frame(frame, bg=self.BG2)
-        inner.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 1))
-        inner.columnconfigure(0, weight=1)
-
-        exp_fr = tk.Frame(frame, bg=self.BG)
-        exp_fr.grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 2))
-        exp_lbl = tk.Label(exp_fr, text=tr("Survolez un curseur."),
-            bg=self.BG, fg=self.FG3, font=("TkFixedFont", 9),
-            wraplength=900, justify="left", anchor="w")
-        exp_lbl.pack(fill="both", expand=True, padx=4, pady=3)
 
         sliders = [
             ("normal_map_strength","normal_map",  0, 2,   0.1,  float,
-             _sim_help('normal_map : force des normales du mesh (ombrage pentes). 1.0 = exact (recommandé). <1 = moins d\'ombrage.', 'normal_map: mesh normal strength (slope shading). 1.0 = exact (recommended). <1 = less shading.'), None),
+             _sim_help('normal_map : force de l\'ombrage des pentes du relief. 1.0 = exact (recommandé). <1 = moins d\'ombrage.', 'normal_map: strength of slope shading on the relief. 1.0 = exact (recommended). <1 = less shading.'), None),
             ("terrain_casts_shadows","ombres terrain",0,0,1,str,
              _sim_help('ombres terrain : True = le sol projette des ombres (si ombres XP activées). Recommandé : True.', 'terrain shadows: True = ground casts shadows (if XP shadows on). Recommended: True.'),
              ["True","False"]),
@@ -1076,10 +1158,10 @@ class Ortho4XP_Simulator(tk.Toplevel):
              _sim_help('décals sol : True = texture de détail au sol (visible très bas). Peut distraire en altitude.', 'ground decals: True = close-range ground detail. Can distract at higher altitude.'),
              ["True","False"]),
             ("fill_nodata",    "fill_nodata",    0, 0,    1,    str,
-             _sim_help('fill_nodata : True = comble les trous du fichier altitude (DEM). Utile si le DEM a des manques.', 'fill_nodata: True = fill holes in the elevation file (DEM). Useful if the DEM has gaps.'),
+             _sim_help('fill_nodata : True = comble les trous du fichier d\'altitude. Utile s\'il a des manques.', 'fill_nodata: True = fill holes in the elevation file. Useful if it has gaps.'),
              ["True","False"]),
             ("min_area",       "min_area (°²)",  0.00001,0.01,0.00001,float,
-             _sim_help('min_area : taille mini (km²) d\'un plan d\'eau OSM pour qu\'il existe dans le mesh. Recommandé : 0.001.', 'min_area: min size (km²) of an OSM water body to keep in the mesh. Recommended: 0.001.'), None),
+             _sim_help('min_area : taille mini d\'un plan d\'eau pour qu\'il apparaisse dans le décor. Recommandé : 0.001.', 'min_area: minimum size of a water body for it to appear in the scenery. Recommended: 0.001.'), None),
             ("max_area",       "max_area (°²)",  1,200,  5,    float,
              _sim_help('max_area : au-delà de cette taille (km²), un plan d\'eau est traité comme la mer (masqué). Recommandé : 200.', 'max_area: above this size (km²), a water body is treated as sea (masked). Recommended: 200.'), None),
             ("water_simplification","water_simpl",1,0,  0.05, float,
@@ -1103,37 +1185,27 @@ class Ortho4XP_Simulator(tk.Toplevel):
     # ══════════════════════════════════════════════════════════════════
     def _tab_mesh(self, nb, fs):
         """Canvas + curseurs avec mini-animations à droite de chaque option."""
-        frame = tk.Frame(nb, bg=self.BG2)
-        nb.add(frame, text=tr("🗺 Mesh 3D"))
-        frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(0, weight=0)
-        frame.rowconfigure(1, weight=1)
-
-        cv_frame = tk.Frame(frame, bg=_CON_BG, relief="flat", bd=1)
-        cv_frame.grid(row=0, column=0, sticky="ew", padx=6, pady=(4, 2))
-        cv = tk.Canvas(cv_frame, bg=_CON_BG, highlightthickness=0, height=240)
-        cv.pack(fill="both", expand=True)
-        cv.bind("<Configure>", lambda e: self.after(10, self._redraw_all))
+        # Zone défilante (canvas fixe + ascenseur vertical + molette) via le
+        # helper commun, comme Terrain / Mer / Imagerie : les réglages du bas
+        # restent accessibles sur un écran de faible hauteur. Explications
+        # affichées sous chaque curseur (inline_hint=True) → exp_lbl = None.
+        cv, inner, exp_lbl = self._make_tab(
+            nb, tr("🗺 Mesh 3D"), canvas_height=240, inline=True)
         self._canvases["mesh"] = cv
-
-        inner = tk.Frame(frame, bg=self.BG2)
-        inner.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 1))
-        inner.columnconfigure(0, weight=1)
-        exp_lbl = None
 
         sliders = [
             ("mesh_zl",        "mesh_zl",        14,20,  1,    int,
-             _sim_help('mesh_zl : ZL max pour lequel le mesh est préparé. Doit être ≥ au ZL des photos. Recommandé : 19.', 'mesh_zl: max ZL the mesh is built for. Must be ≥ your photo ZL. Recommended: 19.'), None),
+             _sim_help('mesh_zl : niveau de détail max préparé pour le relief. Doit être ≥ à la netteté des photos. Recommandé : 19.', 'mesh_zl: max detail level prepared for the relief. Must be ≥ your photo sharpness. Recommended: 19.'), None),
             ("curvature_tol",  "curvature_tol",  30,1,   0.5,  float,
              _sim_help('curvature_tol : Gauche = grands triangles, relief grossier. Droite = petits triangles, relief précis.', 'curvature_tol: Left = large triangles, coarse relief. Right = small triangles, precise relief.'), None),
             ("limit_tris",     "limit_tris (M)", 1,50,   1,    float,
-             _sim_help('limit_tris : Gauche = peu de triangles (mesh incomplet). Droite = budget large. Recommandé : 1–3 M.', 'limit_tris: Left = few triangles (incomplete mesh). Right = large budget. Recommended: 1–3 M.'), None),
+             _sim_help('limit_tris : Gauche = peu de triangles (relief incomplet). Droite = budget large. Recommandé : 1–3 M.', 'limit_tris: Left = few triangles (incomplete relief). Right = large budget. Recommended: 1–3 M.'), None),
             ("min_angle",      "min_angle (°)",  0.1,2,  0.1,  float,
-             _sim_help('min_angle : angle mini des triangles (°). Évite les triangles trop pointus. Recommandé : ~10.', 'min_angle: min triangle angle (°). Avoids skinny triangles. Recommended: ~10.'), None),
+             _sim_help('min_angle : évite les défauts de relief là où le maillage est déformé. Recommandé : ~10.', 'min_angle: avoids relief defects where the mesh is distorted. Recommended: ~10.'), None),
             ("iterate",        "iterate",        0, 3,   1,    int,
              _sim_help('iterate : Gauche = 1 passe rapide (côte grossière). Droite = plusieurs passes (côte fine, plus long).', 'iterate: Left = 1 fast pass (coarse coast). Right = more passes (fine coast, slower).'), None),
             ("clean_bad_geometries","clean_geom",0,0,   1,    str,
-             _sim_help('clean_bad_geometries : True = répare les géométries OSM invalides avant le mesh. Recommandé : True.', 'clean_bad_geometries: True = fix invalid OSM geometries before meshing. Recommended: True.'),
+             _sim_help('clean_bad_geometries : True = répare les données de carte défectueuses avant de fabriquer le relief. Recommandé : True.', 'clean_bad_geometries: True = fix faulty map data before building the relief. Recommended: True.'),
              ["True","False"]),
         ]
         self._add_group(inner, tr("Paramètres Mesh"), sliders[:4], exp_lbl, fs,
@@ -1157,7 +1229,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ("default_zl",     "default_zl",     14,20,  1,    int,
              _sim_help('default_zl : Gauche = photo basse définition. Droite = haute définition (plus lourd). Recommandé : 16–17.', 'default_zl: Left = low-res photo. Right = high-res (heavier). Recommended: 16–17.'), None),
             ("cover_zl",       "cover_zl airports",14,20,1,   int,
-             _sim_help('cover_zl : zoom des photos UNIQUEMENT autour des aéroports (si HiRes activé). Recommandé : 18.', 'cover_zl: photo zoom ONLY around airports (if HiRes on). Recommended: 18.'), None),
+             _sim_help('cover_zl : zoom des photos UNIQUEMENT autour des aéroports (si la haute définition est activée). Recommandé : 18.', 'cover_zl: photo zoom ONLY around airports (if high-definition is on). Recommended: 18.'), None),
             ("cover_extent",   "cover_extent (km)",0,5, 0.5,  float,
              _sim_help('cover_extent : rayon (km) de la zone aéroport en haute résolution. Recommandé : 1.0.', 'cover_extent: radius (km) of the airport high-res zone. Recommended: 1.0.'), None),
             ("cover_airports_with_highres","HiRes airports",0,0,1,str,
@@ -1168,7 +1240,7 @@ class Ortho4XP_Simulator(tk.Toplevel):
             ("apt_curv_tol",   "apt_curv_tol",   5,0.5, 0.5,  float,
              _sim_help('apt_curv_tol : Gauche = contour aéroport grossier. Droite = contour précis (suit les virages).', 'apt_curv_tol: Left = coarse airport outline. Right = precise (follows curves).'), None),
             ("apt_curv_ext",   "apt_curv_ext (km)",0.5,3,0.5, float,
-             _sim_help('apt_curv_ext : rayon (km) où apt_curv_tol s\'applique autour de l\'aéroport. Recommandé : 0.5–1.0.', 'apt_curv_ext: radius (km) where apt_curv_tol applies around the airport. Recommended: 0.5–1.0.'), None),
+             _sim_help('apt_curv_ext : rayon (km) autour de l\'aéroport où cette précision de contour s\'applique. Recommandé : 0.5–1.0.', 'apt_curv_ext: radius (km) around the airport where this outline precision applies. Recommended: 0.5–1.0.'), None),
             ("road_level",     "road_level",     0, 5,   1,    int,
              _sim_help('road_level : Gauche = aucune route aplatie. Droite = toutes catégories de routes aplaties (0→5).', 'road_level: Left = no roads leveled. Right = all road types leveled (0→5).'), None),
             ("max_levelled_segs","levelled_segs",0,500000,10000,int,

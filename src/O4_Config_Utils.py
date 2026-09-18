@@ -1356,6 +1356,30 @@ class Ortho4XP_Config(tk.Toplevel):
             row=0, column=1, padx=10, pady=self.pady, sticky=W + E
         )
 
+        # ── Profils simples (presets) — en haut de la fenetre, sous la
+        #    bascule de mode. 1 clic remplit les champs du compromis
+        #    qualite / vitesse / disque (relief + aeroports). Non destructif :
+        #    rien n'est enregistre tant que l'utilisateur ne clique pas
+        #    « Ecrire cfg ». Tous les autres champs gardent leurs valeurs.
+        self.frame_presets = tk.Frame(self.frame_mode, bg="#3b5b49")
+        self.frame_presets.grid(
+            row=1, column=0, columnspan=2, pady=(6, 0), sticky=W
+        )
+        tk.Label(
+            self.frame_presets,
+            text=_L("Profil :", "Profile:"),
+            bg="#3b5b49", fg="#9fb5ab", anchor=W, font="TKFixedFont 12",
+        ).pack(side="left", padx=(0, 6))
+        for _pk, _pl in (
+            ("fast", _L("🐇 Rapide", "🐇 Fast")),
+            ("balanced", _L("⚖ Équilibré", "⚖ Balanced")),
+            ("quality", _L("💎 Qualité max", "💎 Max quality")),
+        ):
+            _ctk_button(
+                self.frame_presets, text=_pl,
+                command=lambda k=_pk: self._apply_preset(k),
+            ).pack(side="left", padx=3)
+
         # Groupes de boutons pilotes par le mode courant.
         self._tile_buttons = [self.button1, self.button2, self.button_reset]
         self._global_buttons = [self.button3, self.button4]
@@ -1374,6 +1398,76 @@ class Ortho4XP_Config(tk.Toplevel):
         # coloration des CTkButton pour que les boutons desactives restent
         # visuellement grises au repos.
         self.after_idle(lambda: self._set_mode("tile"))
+
+    # ── Profils simples (presets) ─────────────────────────────────────
+    # Valeurs SURES (plages recommandees d'Ortho4XP). Un profil ne regle
+    # QUE les champs du compromis qualite / vitesse / disque : relief
+    # (limit_tris, iterate) et aeroports (cover_airports_with_highres,
+    # cover_zl). default_zl (nettete des photos) N'EST PAS touche ici : il
+    # reste le choix de la fenetre principale (regle deja appliquee par les
+    # chargements de cfg). Tout le reste garde ses valeurs. Non destructif :
+    # on remplit les champs, on n'ecrit RIEN.
+    _PRESETS = {
+        "fast": {
+            "limit_tris": 1, "iterate": 0,
+            "cover_airports_with_highres": "False", "cover_zl": 17,
+        },
+        "balanced": {
+            "limit_tris": 2, "iterate": 1,
+            "cover_airports_with_highres": "False", "cover_zl": 18,
+        },
+        "quality": {
+            "limit_tris": 3, "iterate": 2,
+            "cover_airports_with_highres": "True", "cover_zl": 18,
+        },
+    }
+
+    def _apply_preset(self, name):
+        """Applique un profil simple : remplit les champs concernes, affiche
+        un message clair bilingue. N'ecrit RIEN dans le cfg (l'utilisateur
+        clique « Ecrire cfg tuile » ou « Ecrire cfg app » pour garder)."""
+        vals = self._PRESETS.get(name)
+        if not vals:
+            return
+        for key, v in vals.items():
+            var = self.v_.get(key)
+            if var is None:
+                continue
+            try:
+                var.set(str(v))
+            except Exception:
+                pass
+        msg = {
+            "fast": _L(
+                "🐇 Profil Rapide : relief plus leger, aeroports en definition normale -> build plus court, moins de disque.",
+                "🐇 Fast profile: lighter relief, standard-definition airports -> shorter build, less disk."),
+            "balanced": _L(
+                "⚖ Profil Equilibre : le compromis conseille (relief moyen, aeroports en definition normale).",
+                "⚖ Balanced profile: the recommended trade-off (medium relief, standard-definition airports)."),
+            "quality": _L(
+                "💎 Profil Qualite max : relief fin, aeroports en haute definition -> build plus long, gros disque.",
+                "💎 Max quality profile: fine relief, high-definition airports -> longer build, large disk."),
+        }.get(name, "")
+        try:
+            self._status(msg)
+        except Exception:
+            pass
+        try:
+            from tkinter import messagebox as _mb
+            _mb.showinfo(
+                _L("Profil applique", "Profile applied"),
+                msg + "\n\n" + _L(
+                    "Les valeurs concernees ont ete changees dans les champs. "
+                    "La nettete des photos (ZL) se regle dans la fenetre "
+                    "principale. Rien n'est encore enregistre : cliquez "
+                    "« Ecrire cfg tuile » (ou « Ecrire cfg app ») pour garder.",
+                    "The relevant values were changed in the fields. Photo "
+                    "sharpness (ZL) is set in the main window. Nothing is saved "
+                    "yet: click “Write Tile Cfg” (or “Write App "
+                    "Cfg”) to keep."),
+                parent=self)
+        except Exception:
+            pass
 
     def _open_simulator(self):
         try:
