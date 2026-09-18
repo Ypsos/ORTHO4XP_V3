@@ -2,7 +2,7 @@
 
 **[🇫🇷 Français](#ortho4xp-v3--version-officielle) | [🇬🇧 English](#ortho4xp-v3--official-version)**
 
-![Version](https://img.shields.io/badge/version-3.5-1f6feb?style=flat-square) ![Statut](https://img.shields.io/badge/statut%20%7C%20status-stable-2ea043?style=flat-square) ![Plateformes](https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square) ![X-Plane](https://img.shields.io/badge/X--Plane-12-ff8c00?style=flat-square) ![Licence](https://img.shields.io/badge/licence%20%7C%20license-GPL%20v3-yellow?style=flat-square)
+![Version](https://img.shields.io/badge/version-3.6-1f6feb?style=flat-square) ![Statut](https://img.shields.io/badge/statut%20%7C%20status-stable-2ea043?style=flat-square) ![Plateformes](https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square) ![X-Plane](https://img.shields.io/badge/X--Plane-12-ff8c00?style=flat-square) ![Licence](https://img.shields.io/badge/licence%20%7C%20license-GPL%20v3-yellow?style=flat-square)
 
 ---
 
@@ -29,6 +29,24 @@
 >
 > [![TÉLÉCHARGER LA DERNIÈRE VERSION](https://img.shields.io/badge/T%C3%89L%C3%89CHARGER%20LA%20DERNI%C3%88RE%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
 > 📥 **Disponible aussi sur X-Plane.org :** [ORTHO4XP V3.5 — page de téléchargement](https://forums.x-plane.org/files/file/101562-ortho4xp-v35-ypsos/)
+---
+
+## 🆕 Nouveautés de la version 3.6
+
+Ergonomie et sécurité de build. **Toutes les nouveautés sont 100 % additives** : le moteur (mer / mesh / masques / DSF) n'est pas touché, et le comportement d'origine est conservé si l'option n'est pas utilisée.
+
+- 💽 **Garde-fou « place disque » avant chaque build** — Ortho4XP estime l'espace nécessaire avant de démarrer et refuse de lancer un build voué à manquer de place, avec un message clair « il manque X Go ». Ne bloque jamais un build sain.
+- 🧭 **Contrôle des chemins avant build (disque externe / serveur)** — vérifie que tes chemins déjà choisis (altimétrie `custom_dem`, bathymétrie, dossier de sortie) sont bien accessibles ; si un disque ou un serveur n'est pas branché, le build est refusé avec un message bilingue nommant le chemin manquant → **fini les tuiles plates à altitude zéro** par SSD oublié.
+- ⏱️ **Suivi de build détaillé** — pendant la construction, une ligne s'affiche régulièrement en console : **temps restant estimé + vitesse**.
+- 🗣️ **Réglages en langage clair + 3 profils en 1 clic** — aides du simulateur réécrites sans jargon (FR + EN), onglets défilants sur petits écrans, et 3 profils 🐇 **Rapide** / ⚖ **Équilibré** / 💎 **Qualité max** qui remplissent les réglages d'un clic (non destructif : rien n'est enregistré tant que tu ne cliques pas « Écrire cfg »).
+- 🗺️ **Carte → coordonnées** — un double-clic sur une tuile de la carte du monde (🌍) remplit automatiquement Latitude / Longitude ; la saisie manuelle reste possible.
+- 🗂️ **Bibliothèque de tuiles** — deux listes côte à côte (**Activées** / **Désactivées**) pour voir d'un coup d'œil l'état de tes sceneries `zOrtho4XP_` ; boutons **Activer** / **Désactiver**, plus **Supprimer** (sans danger pour les liens symboliques) et **Vider le cache**, sans jamais éditer `scenery_packs.ini` à la main.
+
+**Corrections issues des retours forum :**
+- 🖥️ **Affichage sur écrans Windows « scaled »** (haute densité) — fenêtres plafonnées à l'écran réel, zones longues rendues défilantes ; aucune régression sur grand écran.
+- 🐧 **Installateur Linux (Ubuntu 24.04)** — détection réelle des modules manquants (`ensurepip`, `tkinter`) avant installation.
+- ⛰️ **Altimétrie — sources `.asc` sans projection** — à « Préparer les données », si un fichier n'a pas de système de coordonnées, Ortho4XP demande le **code EPSG** (universel, tout pays) au lieu de forcer Lambert-93 → corrige les `.tif` noirs hors métropole (Réunion, Guadeloupe…).
+
 ---
 
 ## 🆕 Nouveautés de la version 3.5
@@ -432,6 +450,24 @@ Données altimétriques (relief) : Modèles numériques de terrain LiDAR de Sonn
 >
 > [![DOWNLOAD LATEST VERSION](https://img.shields.io/badge/DOWNLOAD%20LATEST%20VERSION-00C853?style=for-the-badge&logo=download&logoColor=white)](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)
 > 📥 **Also available on X-Plane.org:** [ORTHO4XP V3.5 — download page](https://forums.x-plane.org/files/file/101562-ortho4xp-v35-ypsos/)
+---
+
+## 🆕 What's new in version 3.6
+
+Build ergonomics and safety. **All additions are 100 % additive**: the engine (sea / mesh / masks / DSF) is untouched, and default behaviour is unchanged when an option is not used.
+
+- 💽 **Disk-space guard before each build** — Ortho4XP estimates the required space before starting and refuses to launch a build doomed to run out of space, with a clear "X GB missing" message. Never blocks a healthy build.
+- 🧭 **Path check before build (external disk / server)** — verifies that the paths you already chose (elevation `custom_dem`, bathymetry, output folder) are actually reachable; if a disk or server is not plugged in, the build is refused with a bilingual message naming the missing path → **no more flat, zero-altitude tiles** from a forgotten SSD.
+- ⏱️ **Detailed build progress** — during the build, a console line regularly shows **estimated time remaining + speed**.
+- 🗣️ **Plain-language settings + 3 one-click profiles** — simulator help texts rewritten without jargon (FR + EN), scrolling tabs on small screens, and 3 profiles 🐇 **Fast** / ⚖ **Balanced** / 💎 **Max quality** that fill the settings in one click (non-destructive: nothing is saved until you click "Write cfg").
+- 🗺️ **Map → coordinates** — double-clicking a tile on the world map (🌍) automatically fills Latitude / Longitude; manual entry still works.
+- 🗂️ **Tile Library** — two side-by-side lists (**Enabled** / **Disabled**) to see the state of your `zOrtho4XP_` sceneries at a glance; **Enable** / **Disable** buttons, plus **Delete** (symlink-safe) and **Clear cache**, without ever editing `scenery_packs.ini` by hand.
+
+**Fixes from forum feedback:**
+- 🖥️ **Display on "scaled" (high-DPI) Windows screens** — windows capped to the real screen size, long areas made scrollable; no regression on large screens.
+- 🐧 **Linux installer (Ubuntu 24.04)** — real detection of missing modules (`ensurepip`, `tkinter`) before installing.
+- ⛰️ **Elevation — `.asc` sources without projection** — at "Prepare data", if a file has no coordinate system, Ortho4XP asks for the **EPSG code** (universal, any country) instead of forcing Lambert-93 → fixes black `.tif` outside mainland France (Réunion, Guadeloupe…).
+
 ---
 
 ## 🆕 What's new in version 3.5

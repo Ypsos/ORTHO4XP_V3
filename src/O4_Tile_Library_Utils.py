@@ -368,7 +368,7 @@ def run_tile_library(parent=None):
     FONT = ("Helvetica", 12) if ("dar" in __import__("sys").platform) \
         else ("Segoe UI", 10)
 
-    state = {"ini": guess_ini_path(), "tiles": []}
+    state = {"ini": guess_ini_path(), "rows_on": [], "rows_off": []}
 
     root_ref = None
     try:
@@ -464,22 +464,52 @@ def run_tile_library(parent=None):
              insertbackground=FG, font=FONT, width=24).pack(
              side=tk.LEFT, padx=(6, 0))
 
-    # --- liste ---
+    # --- 2 listes cote a cote : ACTIVEES (gauche) et DESACTIVEES (droite) ---
+    # Deux rubriques VISIBLES en meme temps : on voit d'un coup d'oeil lesquelles
+    # sont actives et lesquelles reactiver, sans defiler sous les autres. On
+    # selectionne une tuile dans une liste, l'autre liste se deselectionne pour
+    # que le bouton agisse sans ambiguite. height basse (retour forum petit
+    # ecran) : le nombre de lignes visibles suit la taille reelle (expand=True).
     mid = tk.Frame(win, bg=BG)
     mid.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
-    sb = tk.Scrollbar(mid)
-    sb.pack(side=tk.RIGHT, fill=tk.Y)
-    # height demandee volontairement basse (8) : la liste est deja en
-    # expand=True avec scrollbar, donc le nombre de lignes VISIBLES suit la
-    # taille reelle de la fenetre (inchange sur grand ecran). Une height basse
-    # abaisse seulement la taille MINIMALE requise -> la fenetre peut retrecir
-    # sur petit ecran (retour forum : boutons du bas hors ecran), le debordement
-    # passant dans le defilement.
-    lb = tk.Listbox(mid, bg="#05140a", fg=FG, selectbackground=SEL_BG,
-                    selectforeground=FG, font=FONT, height=8,
-                    yscrollcommand=sb.set, activestyle="none")
-    lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    sb.config(command=lb.yview)
+    mid.grid_columnconfigure(0, weight=1, uniform="cols")
+    mid.grid_columnconfigure(1, weight=1, uniform="cols")
+    mid.grid_rowconfigure(1, weight=1)
+
+    hdr_on = tk.StringVar(value=_L("ACTIVEES", "ENABLED"))
+    hdr_off = tk.StringVar(value=_L("DESACTIVEES", "DISABLED"))
+    tk.Label(mid, textvariable=hdr_on, bg=BG, fg=FG2, font=FONT,
+             anchor="w").grid(row=0, column=0, sticky="w", padx=(0, 4))
+    tk.Label(mid, textvariable=hdr_off, bg=BG, fg=FG2, font=FONT,
+             anchor="w").grid(row=0, column=1, sticky="w", padx=(4, 0))
+
+    left = tk.Frame(mid, bg=BG)
+    left.grid(row=1, column=0, sticky="nsew", padx=(0, 4))
+    sb_on = tk.Scrollbar(left)
+    sb_on.pack(side=tk.RIGHT, fill=tk.Y)
+    lb_on = tk.Listbox(left, bg="#05140a", fg=FG, selectbackground=SEL_BG,
+                       selectforeground=FG, font=FONT, height=8,
+                       yscrollcommand=sb_on.set, activestyle="none",
+                       exportselection=False)
+    lb_on.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    sb_on.config(command=lb_on.yview)
+
+    right = tk.Frame(mid, bg=BG)
+    right.grid(row=1, column=1, sticky="nsew", padx=(4, 0))
+    sb_off = tk.Scrollbar(right)
+    sb_off.pack(side=tk.RIGHT, fill=tk.Y)
+    lb_off = tk.Listbox(right, bg="#05140a", fg=FG, selectbackground=SEL_BG,
+                        selectforeground=FG, font=FONT, height=8,
+                        yscrollcommand=sb_off.set, activestyle="none",
+                        exportselection=False)
+    lb_off.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    sb_off.config(command=lb_off.yview)
+
+    # Selection exclusive : cliquer dans une liste vide la selection de l'autre.
+    lb_on.bind("<<ListboxSelect>>",
+               lambda e: lb_off.selection_clear(0, tk.END))
+    lb_off.bind("<<ListboxSelect>>",
+                lambda e: lb_on.selection_clear(0, tk.END))
 
     status = tk.Label(win, text="", bg=BG, fg=FG, font=("TkFixedFont", 10),
                       anchor="w")
@@ -489,10 +519,18 @@ def run_tile_library(parent=None):
         status.config(text=msg)
 
     def _refresh():
-        lb.delete(0, tk.END)
-        state["tiles"] = []
+        # Remplit les DEUX listes : actives a gauche, desactivees a droite.
+        # Les numeros de tuiles sont conserves. Chaque liste a son propre
+        # tableau parallele (rows_on / rows_off) pour retrouver la tuile
+        # selectionnee.
+        lb_on.delete(0, tk.END)
+        lb_off.delete(0, tk.END)
+        state["rows_on"] = []
+        state["rows_off"] = []
         ini = state["ini"]
         if not ini or not os.path.isfile(ini):
+            hdr_on.set(_L("ACTIVEES", "ENABLED"))
+            hdr_off.set(_L("DESACTIVEES", "DISABLED"))
             _set_status(_L("Choisis d'abord le fichier scenery_packs.ini.",
                            "Please choose scenery_packs.ini first."))
             return
@@ -503,26 +541,37 @@ def run_tile_library(parent=None):
             return
         tiles = list_ortho_tiles(text)
         flt = filter_var.get().strip().lower()
-        shown = 0
+        n_on = 0
+        n_off = 0
         for tinfo in tiles:
             name = tinfo["path"].rstrip("/").split("/")[-1]
             if flt and flt not in name.lower():
                 continue
-            mark = _L("[ACTIVE]   ", "[ON ]  ") if tinfo["enabled"] \
-                else _L("[DESACTIVEE]", "[OFF]  ")
-            lb.insert(tk.END, mark + " " + name)
-            state["tiles"].append(tinfo)
-            shown += 1
-        _set_status(_L("%d tuile(s) affichee(s).", "%d tile(s) shown.") % shown)
+            if tinfo["enabled"]:
+                lb_on.insert(tk.END, " " + name)
+                state["rows_on"].append(tinfo)
+                n_on += 1
+            else:
+                lb_off.insert(tk.END, " " + name)
+                state["rows_off"].append(tinfo)
+                n_off += 1
+
+        hdr_on.set(_L("ACTIVEES (%d)", "ENABLED (%d)") % n_on)
+        hdr_off.set(_L("DESACTIVEES (%d)", "DISABLED (%d)") % n_off)
+        _set_status(_L("%d activee(s) / %d desactivee(s).",
+                       "%d enabled / %d disabled.") % (n_on, n_off))
 
     def _selected():
-        sel = lb.curselection()
-        if not sel:
-            messagebox.showinfo(win.title(),
-                                _L("Selectionne une tuile dans la liste.",
-                                   "Select a tile in the list."))
-            return None
-        return state["tiles"][sel[0]]
+        sel = lb_on.curselection()
+        if sel:
+            return state["rows_on"][sel[0]]
+        sel = lb_off.curselection()
+        if sel:
+            return state["rows_off"][sel[0]]
+        messagebox.showinfo(win.title(),
+                            _L("Selectionne une tuile dans une des deux listes.",
+                               "Select a tile in one of the two lists."))
+        return None
 
     def _choose_ini():
         p = filedialog.askopenfilename(
@@ -608,9 +657,9 @@ def run_tile_library(parent=None):
          _choose_ini).grid(row=0, column=0, padx=4, pady=3, sticky="ew")
     _btn(bot, _L("Rafraichir", "Refresh"),
          _refresh).grid(row=0, column=1, padx=4, pady=3, sticky="ew")
-    _btn(bot, _L("Activer dans X-Plane", "Enable in X-Plane"),
+    _btn(bot, _L("Activer", "Enable"),
          lambda: _enable(True)).grid(row=1, column=0, padx=4, pady=3, sticky="ew")
-    _btn(bot, _L("Retirer de X-Plane", "Disable in X-Plane"),
+    _btn(bot, _L("Desactiver", "Disable"),
          lambda: _enable(False)).grid(row=1, column=1, padx=4, pady=3, sticky="ew")
     _btn(bot, _L("Supprimer la tuile", "Delete tile"),
          _delete_tile).grid(row=2, column=0, padx=4, pady=3, sticky="ew")

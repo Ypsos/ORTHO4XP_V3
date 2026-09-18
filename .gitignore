@@ -159,6 +159,7 @@ gitignore
 *.7z
 Thumbs.db
 _ortho_launch.sh
+.tile_library_ini
 
 # ── Lanceurs générés automatiquement ────────────────────────
 ORTHO4XP_V2_Lanceur.app/
