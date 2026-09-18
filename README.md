@@ -287,7 +287,8 @@ Choix de l'application de retouche (exemple : GIMP) :
 
 ![Gestion cache OSM Local](https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc)
 
-<img width="1430" height="1152" alt="Capture d’écran 7" src="https://github.com/user-attachments/assets/6f52f574-bd64-4dbf-93be-6f8df9e1a0ad" />
+<img width="1430" height="1152" alt="Capture d’écran 7" src="https://github.com/user-attachments/assets/0c6cefea-1ffe-403b-aa05-79f8858032d1" />
+
 
 
 ---
@@ -714,7 +715,8 @@ Choosing the image editor (example: GIMP):
 ![Local OSM cache management](https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc)
 
 
-<img width="1424" height="1152" alt="Capture d’écran 6" src="https://github.com/user-attachments/assets/6d31dd03-8d8d-45c1-9439-e2b52d9ed334" />
+<img width="1424" height="1152" alt="Capture d’écran 6" src="https://github.com/user-attachments/assets/eaa1185a-0b28-44ff-a900-a6024d7d31f7" />
+
 
 
 ---
