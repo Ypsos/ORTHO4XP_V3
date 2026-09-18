@@ -200,6 +200,11 @@ a particular server.",
         "default": "",
         "hint": "The directory containing the sceneries with the overlays you would like to extract. You need to select the level of directory just _ABOVE_ Earth nav data.",
     },
+    "external_storage_dir": {
+        "type": str,
+        "default": "",
+        "hint": "Optional external disk folder where Ortho4XP stores the large DATA folders (Tiles, Orthophotos, Masks, OSM_data, Elevation_data, Geotiffs, Patches, overlays). Leave EMPTY to keep everything on the internal disk (default behaviour). When set, the disk must be plugged in when Ortho4XP starts; a build is refused if it is missing, so no tile can land on the internal disk by mistake. The software itself (Providers, Extents, Utils) and the tmp folder always stay on the internal disk.",
+    },
     # Vector
     "apt_smoothing_pix": {
         "type": int,
@@ -610,6 +615,7 @@ list_global_cfg = (
     + list_mask_vars
     + list_dsf_vars
     + list_other_vars
+    + ["external_storage_dir"]  # CDC V3.6 Point 5 : reglage global (par installation)
 )
 
 ################################################################################
@@ -1379,6 +1385,37 @@ class Ortho4XP_Config(tk.Toplevel):
                 self.frame_presets, text=_pl,
                 command=lambda k=_pk: self._apply_preset(k),
             ).pack(side="left", padx=3)
+
+        # ── Disque externe (CDC V3.6, Point 5) — sous les presets. Choisir un
+        #    dossier sur un disque externe pour y ranger les grosses donnees
+        #    (tuiles, orthophotos, masques...). Vide = tout reste sur le Mac.
+        #    Non destructif : rien n'est ecrit tant qu'on ne clique pas
+        #    « Ecrire cfg app ». Le disque doit etre branche au demarrage.
+        self.frame_storage = tk.Frame(self.frame_mode, bg="#3b5b49")
+        self.frame_storage.grid(
+            row=2, column=0, columnspan=2, pady=(6, 0), sticky=W + E
+        )
+        tk.Label(
+            self.frame_storage,
+            text=_L("💾 Disque externe :", "💾 External disk:"),
+            bg="#3b5b49", fg="#9fb5ab", anchor=W, font="TKFixedFont 12",
+        ).pack(side="left", padx=(0, 6))
+        self.entry_["external_storage_dir"] = ttk.Entry(
+            self.frame_storage,
+            textvariable=self.v_["external_storage_dir"],
+            width=48,
+        )
+        self.entry_["external_storage_dir"].pack(side="left", padx=(0, 4))
+        _ctk_button(
+            self.frame_storage,
+            text=_L("📁 Choisir…", "📁 Browse…"),
+            command=lambda: self.choose_dir("external_storage_dir"),
+        ).pack(side="left", padx=3)
+        _ctk_button(
+            self.frame_storage,
+            text=_L("Vider", "Clear"),
+            command=lambda: self.v_["external_storage_dir"].set(""),
+        ).pack(side="left", padx=3)
 
         # Groupes de boutons pilotes par le mode courant.
         self._tile_buttons = [self.button1, self.button2, self.button_reset]

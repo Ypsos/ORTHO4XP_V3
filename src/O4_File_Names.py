@@ -25,6 +25,132 @@ Tile_dir = os.path.join(Ortho4XP_dir, "Tiles")
 Tmp_dir = os.path.join(Ortho4XP_dir, "tmp")
 os.makedirs(Tmp_dir, exist_ok=True)
 Overlay_dir = os.path.join(Ortho4XP_dir, "yOrtho4XP_Overlays")
+
+##############################################################################
+# STOCKAGE EXTERNE (CDC V3.6, Point 5)
+#
+# Roland peut choisir, dans la fenetre Config, un dossier sur un disque
+# externe (cle "external_storage_dir" dans Ortho4XP.cfg). Quand ce disque est
+# choisi ET branche, les GROS dossiers de DONNEES (tuiles, orthophotos,
+# masques, OSM, altitude, geotiffs, patches, overlays) sont ranges dessus.
+# Le LOGICIEL lui-meme (Providers, Extents, Utils, Filters, Previews) et le
+# dossier temporaire "tmp" restent TOUJOURS sur le Mac : ainsi Ortho4XP
+# demarre normalement meme si le disque est debranche.
+#
+# 100 % ADDITIF : si la cle est vide, les dossiers ci-dessus gardent EXACTEMENT
+# leur valeur d'origine (comportement d'aujourd'hui, rien ne change). La
+# lecture se fait ici, au tout demarrage, pour que TOUT le logiciel utilise
+# le meme dossier des la premiere seconde (pas de tuiles eparpillees).
+##############################################################################
+
+
+def _read_cfg_value(key):
+    """Lecture minimale d'une cle dans Ortho4XP.cfg.
+
+    Volontairement autonome (aucun import de O4_Config_Utils) pour eviter tout
+    import circulaire au demarrage. Retourne la valeur (str) ou "" si absente.
+    """
+    try:
+        cfg_path = os.path.join(Ortho4XP_dir, "Ortho4XP.cfg")
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line[0] == "#" or "=" not in line:
+                    continue
+                (k, v) = line.split("=", 1)
+                if k.strip() != key:
+                    continue
+                v = v.strip()
+                if v and v[0] in ('"', "'"):
+                    v = v[1:]
+                if v and v[-1] in ('"', "'"):
+                    v = v[:-1]
+                return v.strip()
+    except Exception:
+        pass
+    return ""
+
+
+# Etat du stockage externe, calcule une seule fois au demarrage.
+external_storage_dir = _read_cfg_value("external_storage_dir")
+external_storage_active = False   # disque configure ET present au demarrage
+external_storage_missing = False  # disque configure mais absent au demarrage
+if external_storage_dir:
+    if os.path.isdir(external_storage_dir):
+        external_storage_active = True
+    else:
+        external_storage_missing = True
+
+if external_storage_active:
+    _ext = external_storage_dir
+    Tile_dir = os.path.join(_ext, "Tiles")
+    OSM_dir = os.path.join(_ext, "OSM_data")
+    Mask_dir = os.path.join(_ext, "Masks")
+    Imagery_dir = os.path.join(_ext, "Orthophotos")
+    Elevation_dir = os.path.join(_ext, "Elevation_data")
+    Geotiff_dir = os.path.join(_ext, "Geotiffs")
+    Patch_dir = os.path.join(_ext, "Patches")
+    Overlay_dir = os.path.join(_ext, "yOrtho4XP_Overlays")
+    for _d in (
+        Tile_dir, OSM_dir, Mask_dir, Imagery_dir,
+        Elevation_dir, Geotiff_dir, Patch_dir, Overlay_dir,
+    ):
+        try:
+            os.makedirs(_d, exist_ok=True)
+        except Exception:
+            pass
+
+# Avertissement au demarrage (non bloquant) si un disque est configure mais
+# absent. Le vrai blocage se fait avant chaque build (voir la fonction
+# external_storage_ready_for_build ci-dessous), appelee au debut de l'Etape 1.
+if external_storage_missing:
+    try:
+        print("*" * 64)
+        print("  ATTENTION - DISQUE EXTERNE NON DETECTE / EXTERNAL DISK NOT FOUND")
+        print("  Disque configure / configured disk : " + str(external_storage_dir))
+        print("  Il n'est pas branche ou pas monte.")
+        print("  Les nouvelles tuiles NE pourront PAS etre construites tant")
+        print("  qu'il n'est pas la. Branche-le puis relance Ortho4XP.")
+        print("  ---")
+        print("  This disk is not plugged in / not mounted. New tiles CANNOT")
+        print("  be built until it is back. Plug it in, then restart Ortho4XP.")
+        print("*" * 64)
+    except Exception:
+        pass
+
+
+def external_storage_ready_for_build():
+    """Garde-fou 'le plus sur' (CDC V3.6, Point 5).
+
+    Autorise un build seulement si le disque externe configure est bien
+    present. Retourne (ok, message). Si AUCUN disque externe n'est configure,
+    retourne (True, "") : comportement d'aujourd'hui, rien ne change.
+    """
+    if not external_storage_dir:
+        return (True, "")
+    if not external_storage_active:
+        # Disque configure mais absent au demarrage d'Ortho.
+        return (
+            False,
+            "\n*** DISQUE EXTERNE NON DETECTE / EXTERNAL DISK NOT FOUND ***\n"
+            "Disque configure : " + str(external_storage_dir) + "\n"
+            "Il n'etait pas branche au demarrage d'Ortho4XP. Branche-le puis\n"
+            "RELANCE Ortho4XP avant de construire une tuile.\n"
+            "It was not plugged in when Ortho4XP started. Plug it in, then\n"
+            "RESTART Ortho4XP before building a tile.\n",
+        )
+    if not os.path.isdir(external_storage_dir):
+        # Disque present au demarrage mais debranche depuis.
+        return (
+            False,
+            "\n*** DISQUE EXTERNE DEBRANCHE / EXTERNAL DISK UNPLUGGED ***\n"
+            "Disque : " + str(external_storage_dir) + "\n"
+            "Il a ete debranche. Rebranche-le avant de construire une tuile.\n"
+            "It has been unplugged. Plug it back in before building a tile.\n",
+        )
+    return (True, "")
+
+
 ##############################################################################
 def short_latlon(lat, lon):
     strlat = "{:+.0f}".format(lat).zfill(3)

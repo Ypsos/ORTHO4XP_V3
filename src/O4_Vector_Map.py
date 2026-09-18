@@ -55,6 +55,25 @@ def build_poly_file(tile):
         return 0
     # <<< fin controle place disque
 
+    # >>> Controle disque externe (CDC V3.6, Point 5 - "le plus sur").
+    # Si un disque externe est configure mais absent (jamais branche au
+    # demarrage, ou debranche depuis), on REFUSE de demarrer le build : ainsi
+    # aucune tuile ne peut partir par erreur sur le disque interne. 100 %
+    # additif, thread principal, AVANT toute creation de dossier. Fail-open :
+    # si le controle lui-meme echoue, on laisse le build demarrer (ne bloque
+    # jamais un build sain). Si aucun disque externe n'est configure, la
+    # fonction renvoie (True, "") et rien ne change.
+    try:
+        (_ext_ok, _ext_msg) = FNAMES.external_storage_ready_for_build()
+    except Exception as _ext_e:
+        (_ext_ok, _ext_msg) = (True, "")
+        UI.vprint(2, "External storage pre-check skipped:", _ext_e)
+    if not _ext_ok:
+        UI.vprint(0, _ext_msg)
+        UI.exit_message_and_bottom_line()
+        return 0
+    # <<< fin controle disque externe
+
     timer = time.time()
 
     if not os.path.exists(tile.build_dir):

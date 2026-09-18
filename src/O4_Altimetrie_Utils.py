@@ -61,6 +61,37 @@ _CRS_REPLI = "EPSG:2154"
 _EXT_RASTER = (".tif", ".tiff", ".vrt", ".asc", ".img", ".hgt", ".dt2")
 
 
+def _normaliser_epsg(saisie):
+    """Transforme une saisie utilisateur en chaîne 'EPSG:xxxx'.
+
+    Accepte « 2154 », « EPSG:2154 », « epsg 32740 »… Vide ou non numérique
+    → repli EPSG:2154 (comportement historique conservé). La validation
+    stricte du code (existence) est faite AU MIEUX : si rasterio est présent
+    et rejette le code, on retombe sur le repli ; s'il est absent (ex.
+    simulation headless), on fait confiance à la saisie numérique.
+
+    Retour forum domisilasol : un fichier .asc (ESRI ASCII grid) ne déclare
+    aucun CRS. Le repli 2154 (Lambert-93) ne convient qu'à la métropole ;
+    Réunion (UTM40S), Guadeloupe (UTM20N)… donnaient un .tif noir. On laisse
+    donc l'utilisateur préciser le code EPSG source pour ces fichiers.
+    """
+    if not saisie:
+        return _CRS_REPLI
+    import re as _re
+    m = _re.search(r"(\d{4,6})", str(saisie))
+    if not m:
+        return _CRS_REPLI
+    code = m.group(1)
+    try:
+        from rasterio.crs import CRS as _CRS
+        _CRS.from_epsg(int(code))  # lève si le code est invalide
+    except ImportError:
+        pass  # pas de rasterio (simulation) : on fait confiance à la saisie
+    except Exception:
+        return _CRS_REPLI  # rasterio présent mais code rejeté → repli sûr
+    return "EPSG:%s" % code
+
+
 def _est_fichier_raster(chemin):
     """Vrai si le fichier porte une extension raster — OU si c'est un lien
     symbolique dont la CIBLE réelle porte une extension raster.
@@ -2864,6 +2895,74 @@ def open_altimetrie_window(gui):
             _remonter()
             return
 
+        # ── CRS des sources sans projection déclarée (retour forum) ──────
+        # Un .asc (ESRI ASCII grid) ne déclare AUCUN CRS. Jusqu'ici le repli
+        # 2154 (Lambert-93) était forcé : correct pour la métropole, mais
+        # FAUX pour la Réunion (UTM40S), la Guadeloupe (UTM20N)… → terre
+        # reprojetée hors emprise → .tif noir. Si au moins un fichier source
+        # n'a pas de CRS, on demande le code EPSG à l'utilisateur. Vide /
+        # inconnu → repli EPSG:2154 (comportement historique conservé). Les
+        # fichiers qui déclarent déjà leur CRS (.tif) ne sont pas concernés :
+        # preparer_pays lit le CRS de chaque fichier et n'utilise crs_repli
+        # que pour ceux qui n'en ont pas.
+        crs_repli = _CRS_REPLI
+        _sans_crs = False
+        try:
+            import rasterio as _rio_chk
+            for rep, _d, fs in os.walk(src, followlinks=True):
+                _fait = False
+                for f in sorted(fs):
+                    if f.startswith(".") or \
+                            not f.lower().endswith(_EXT_RASTER):
+                        continue
+                    try:
+                        with _rio_chk.open(os.path.join(rep, f)) as _ds:
+                            if _ds.crs is None:
+                                _sans_crs = True
+                    except Exception:
+                        pass
+                    _fait = True
+                    break  # un fichier échantillon par dossier suffit
+                if _sans_crs:
+                    break
+                if _fait:
+                    continue
+        except Exception:
+            _sans_crs = False
+        if _sans_crs:
+            _rep_epsg = _saisie(
+                _tr("Altimétrie / DEM"),
+                _L("Ces fichiers (.asc) ne déclarent aucun système de "
+                   "coordonnees (CRS).\n\n"
+                   "Entrez le code EPSG de la projection SOURCE :\n"
+                   "  - 2154  = Lambert-93 (France metropole)\n"
+                   "  - 32740 = UTM 40S (Reunion)\n"
+                   "  - 32620 = UTM 20N (Guadeloupe, St-Barthelemy)\n"
+                   "  - 32621 = UTM 21N (Martinique)\n"
+                   "  - 2972  = UTM 22N RGFG95 (Guyane)\n\n"
+                   "Ce code est indique sur la page de telechargement de vos "
+                   "donnees (RGE ALTI, etc.), ou cherchez le nom de votre "
+                   "zone sur epsg.io.\n\n"
+                   "Si vous ne savez pas, laissez vide : Lambert-93 (2154) "
+                   "sera utilise par defaut.",
+                   "These files (.asc) declare no coordinate system (CRS).\n\n"
+                   "Enter the EPSG code of the SOURCE projection:\n"
+                   "  - 2154  = Lambert-93 (mainland France)\n"
+                   "  - 32740 = UTM 40S (Reunion)\n"
+                   "  - 32620 = UTM 20N (Guadeloupe, St-Barthelemy)\n"
+                   "  - 32621 = UTM 21N (Martinique)\n"
+                   "  - 2972  = UTM 22N RGFG95 (French Guiana)\n\n"
+                   "This code is shown on your data provider's download page "
+                   "(RGE ALTI, etc.), or search your area name on epsg.io."
+                   "\n\n"
+                   "If you don't know, leave empty: Lambert-93 (2154) is "
+                   "used by default."),
+                parent=win, initialvalue="2154")
+            _remonter()
+            crs_repli = _normaliser_epsg(_rep_epsg)
+            _log(_L("CRS source retenu pour les fichiers sans CRS : ",
+                    "Source CRS used for files without CRS: ") + crs_repli)
+
         # L'utilisateur choisit la RÉSOLUTION VOULUE en sortie (en mètres),
         # PAS un pourcentage : une source 1 m, 3 m, 27 m… donne toujours la
         # même sortie (ex. 4 m). Le ratio se calcule tout seul :
@@ -2975,6 +3074,7 @@ def open_altimetrie_window(gui):
         def _tache():
             try:
                 _res["ok"] = preparer_pays(src, dest, ratio=ratio,
+                                           crs_repli=crs_repli,
                                            cible_m=cible_m, log=_log)
             except Exception as _e:
                 _res["err"] = str(_e)
