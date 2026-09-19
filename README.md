@@ -287,6 +287,10 @@ Choix de l'application de retouche (exemple : GIMP) :
 
 ![Gestion cache OSM Local](https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc)
 
+<img width="1430" height="1152" alt="Capture d’écran 7" src="https://github.com/user-attachments/assets/0c6cefea-1ffe-403b-aa05-79f8858032d1" />
+
+
+
 ---
 
 ## 10. Provider PCRS_IGN & Générateur .lay
@@ -709,6 +713,11 @@ Choosing the image editor (example: GIMP):
 ### 9.7 Local OSM Cache Management Multi-file
 
 ![Local OSM cache management](https://github.com/user-attachments/assets/9d5a9f19-aa61-46c1-aada-fa823b170ddc)
+
+
+<img width="1424" height="1152" alt="Capture d’écran 6" src="https://github.com/user-attachments/assets/eaa1185a-0b28-44ff-a900-a6024d7d31f7" />
+
+
 
 ---
 
