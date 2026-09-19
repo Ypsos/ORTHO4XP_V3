@@ -34,9 +34,46 @@ available_sources = (
     'NED 1/3" (from USGS) - USA',
     "ALOS",
     "ALOS 3W30 (from OpenTopography) - NOW REQUIRES MANUAL DOWNLOAD",
+    # AJOUT ADDITIF (Copernicus GLO-30) — nouvelle source d'élévation mondiale.
+    # Téléchargement direct et libre depuis le bucket public AWS Open Data
+    # (aucune clé API). Le code court "COP30" sert au routage interne ; la
+    # description ci-dessous est celle affichée dans le menu de l'interface
+    # (peuplé par available_sources[1::2]). Rien d'autre n'est modifié : si
+    # cette source n'est pas sélectionnée, le comportement reste identique.
+    "COP30",
+    "Copernicus GLO-30 (from AWS Open Data) - worldwide",
 )
 
 global_sources = ("View", "SRTM", "ALOS")
+
+
+# ---------------------------------------------------------------------------
+# Copernicus GLO-30 — chemin de rangement du fichier téléchargé.
+#
+# elevation_data() (dans O4_File_Names.py) est une chaîne if/elif SANS else :
+# pour une source qu'elle ne connaît pas, elle renvoie None. Comme le cahier
+# des charges impose de ne modifier QUE O4_DEM_Utils.py, on fabrique ici le
+# chemin du fichier Copernicus avec le helper public FNAMES.base_file_name(),
+# exactement la convention de nommage qu'utilise elevation_data elle-même
+# (..._ALOS3W30.tif, ..._NED1.tif → ..._COP30.tif). Le fichier se range donc
+# à côté des autres données d'élévation, sans nouveau dossier ni chemin en dur.
+# ---------------------------------------------------------------------------
+def cop30_file_name(lat, lon):
+    return FNAMES.base_file_name(lat, lon) + "_COP30.tif"
+
+
+def _L_dem(fr, en):
+    """Message dans la langue active du lanceur — même principe que les
+    modules de Roland (_L via O4_Lang.current_lang). EN si la langue active
+    est l'anglais, FR sinon. Import paresseux et défensif : si O4_Lang est
+    indisponible, on retombe sur le français (repli garanti). Aucun fichier
+    O4_Lang_* n'est touché."""
+    try:
+        from O4_Lang import current_lang
+        return en if (current_lang() or "FR").upper() == "EN" else fr
+    except Exception:
+        return fr
+
 
 # Plage d'altitude physiquement plausible sur Terre, utilisee pour neutraliser
 # les valeurs aberrantes laissees par certains outils (warp GDAL, etc.) :
@@ -114,7 +151,30 @@ class DEM:
                     short_source, self.lat, self.lon, info_only
                 )
             else:
+                # ALERTE JOINTURE — Copernicus GLO-30 est une source PAR DALLE
+                # UNIQUE (comme NED) : contrairement à View/SRTM/ALOS, elle ne
+                # bénéficie pas de la marge de raccord 3×3 (build_combined_raster).
+                # Une légère couture peut donc apparaître au bord des tuiles.
+                # On prévient l'utilisateur dans le log dès qu'une tuile utilise
+                # cette source (message bilingue, non bloquant, aucun build gâché).
+                if short_source == "COP30":
+                    UI.lvprint(
+                        1,
+                        _L_dem(
+                            "    ATTENTION : Copernicus GLO-30 est une source "
+                            "par dalle unique (sans marge de raccord) — une "
+                            "legere jointure peut apparaitre au bord des "
+                            "tuiles.",
+                            "    WARNING: Copernicus GLO-30 is a single-tile "
+                            "source (no overlap margin) — a slight seam may "
+                            "appear at tile edges.",
+                        ),
+                    )
                 if ensure_elevation(short_source, self.lat, self.lon):
+                    # elevation_data() renvoie None pour une source qu'elle ne
+                    # connaît pas (ex. COP30) : on retombe alors sur le chemin
+                    # Copernicus fabriqué localement. Les sources existantes
+                    # (NED…) restent inchangées.
                     (
                         self.epsg,
                         self.x0,
@@ -126,7 +186,8 @@ class DEM:
                         self.nydem,
                         self.alt_dem,
                     ) = read_elevation_from_file(
-                        FNAMES.elevation_data(short_source, self.lat, self.lon),
+                        FNAMES.elevation_data(short_source, self.lat, self.lon)
+                        or cop30_file_name(self.lat, self.lon),
                         self.lat,
                         self.lon,
                         info_only,
@@ -690,7 +751,7 @@ def read_elevation_from_file(
 ##############################################################################
 def ensure_elevation(source, lat, lon, verbose=True):
     if source == "View":
-        # Viewfinderpanorama grouping of files and resolutions is a 
+        # Viewfinderpanorama grouping of files and resolutions is a
         # bit complicated...
         if (lat, lon) in (
             (44, 5),
@@ -817,7 +878,7 @@ def ensure_elevation(source, lat, lon, verbose=True):
                 if ("W" in fname) or ("w" in fname):
                     lon0 *= -1
                 out_filename = FNAMES.viewfinderpanorama(lat0, lon0)
-                # we don't wish to overwrite a 1" version by downloading 
+                # we don't wish to overwrite a 1" version by downloading
                 # the whole archive of a nearby 3" one
                 if (
                     not os.path.exists(out_filename)
@@ -839,7 +900,7 @@ def ensure_elevation(source, lat, lon, verbose=True):
             "    WARNING : This elevation source has no longer direct downloads !"
         )
         return 0
-        # TODO : is there a way to get it back (worth it ?) 
+        # TODO : is there a way to get it back (worth it ?)
         url = "https://cloud.sdsc.edu/v1/AUTH_opentopography/Raster/"
         if source == "SRTM":
             url += "SRTM_GL1/SRTM_GL1_srtm/"
@@ -873,6 +934,49 @@ def ensure_elevation(source, lat, lon, verbose=True):
                 os.path.dirname(FNAMES.elevation_data(source, lat, lon))
             )
         with open(FNAMES.elevation_data(source, lat, lon), "wb") as out:
+            try:
+                out.write(r.content)
+            except:
+                return 0
+    elif source == "COP30":
+        # AJOUT ADDITIF — Copernicus GLO-30 (30 m), source mondiale libre.
+        #
+        # Téléchargement direct depuis le bucket public AWS Open Data
+        # (aucune clé API, aucun compte). Une dalle = un GeoTIFF (COG) de
+        # 1°×1° en EPSG:4326, nommé d'après le coin SUD-OUEST de la dalle,
+        # exactement la convention (lat, lon) d'Ortho4XP (ex. +46-003 →
+        # N46 / W003). Le fichier est rangé et relu comme les autres sources
+        # (via cop30_file_name), et read_elevation_from_file le lit par la
+        # branche rasterio, comme un .tif ALOS/NED déjà validé.
+        #
+        # Comme SRTM/ALOS/NED : une dalle absente (ex. pleine mer, aucune
+        # donnée Copernicus) renvoie 0 → le moteur retombe sur son
+        # comportement habituel (altitude zéro), sans planter.
+        cop_path = cop30_file_name(lat, lon)
+        if os.path.exists(cop_path):
+            UI.vprint(2, "   Recycling ", cop_path)
+            return 1
+        UI.vprint(
+            1,
+            "    Downloading ",
+            cop_path,
+            "from Copernicus GLO-30 (AWS Open Data).",
+        )
+        ns = "N" if lat >= 0 else "S"
+        ew = "E" if lon >= 0 else "W"
+        cop_name = "Copernicus_DSM_COG_10_%s%02d_00_%s%03d_00_DEM" % (
+            ns, abs(lat), ew, abs(lon)
+        )
+        url = (
+            "https://copernicus-dem-30m.s3.amazonaws.com/"
+            + cop_name + "/" + cop_name + ".tif"
+        )
+        r = http_request(url, source, verbose)
+        if not r:
+            return 0
+        if not os.path.isdir(os.path.dirname(cop_path)):
+            os.makedirs(os.path.dirname(cop_path))
+        with open(cop_path, "wb") as out:
             try:
                 out.write(r.content)
             except:

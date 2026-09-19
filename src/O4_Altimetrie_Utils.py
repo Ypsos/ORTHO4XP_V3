@@ -92,6 +92,63 @@ def _normaliser_epsg(saisie):
     return "EPSG:%s" % code
 
 
+# Correspondance nom de fichier → code EPSG (convention IGN / GIS : le nom
+# porte toujours la projection). Codes OFFICIELS IGN/EPSG, aucun deviné.
+# Testés dans l'ordre, du plus spécifique au plus général.
+_EPSG_PAR_TOKEN = (
+    ("RGR92UTM40S", 2975),   # Réunion            — RGR92  / UTM 40 S
+    ("RGAF09UTM20", 5490),   # Antilles (GP/MQ/SB/SM) — RGAF09 / UTM 20 N
+    ("RGFG95UTM22", 2972),   # Guyane             — RGFG95 / UTM 22 N
+    ("RGM04UTM38S", 4471),   # Mayotte            — RGM04  / UTM 38 S
+    ("RGSPM06U21",  4467),   # St-Pierre-et-Miquelon — RGSPM06 / UTM 21 N
+    ("RGSPM06",     4467),   # variante sans « U21 »
+    ("LAMB93",      2154),   # métropole          — RGF93  / Lambert-93
+)
+
+
+def _epsg_depuis_nom(nom):
+    """Déduit le code EPSG d'un fichier d'après SON NOM (convention IGN :
+    « RGR92UTM40S », « RGAF09UTM20 », « LAMB93 », « WGS84UTM20 »…).
+
+    Retourne « EPSG:xxxx » ou None si le nom ne permet AUCUNE déduction
+    fiable. Dans ce cas, aucun code n'est inventé : l'appelant retombe sur
+    le code fourni par l'utilisateur. Table fondée sur les codes officiels
+    IGN/EPSG. Pour WGS84/UTM : règle EPSG universelle (326zz Nord, 327zz
+    Sud), donc n'importe quelle zone, n'importe quel pays."""
+    if not nom:
+        return None
+    up = str(nom).upper()
+    for motif, code in _EPSG_PAR_TOKEN:
+        if motif in up:
+            return "EPSG:%d" % code
+    import re as _re
+    m = _re.search(r"WGS84[ _-]?UTM[ _-]?(\d{1,2})\s*([NS])?", up)
+    if m:
+        zone = int(m.group(1))
+        if 1 <= zone <= 60:
+            base = 32700 if (m.group(2) or "N") == "S" else 32600
+            return "EPSG:%d" % (base + zone)
+    return None
+
+
+def _choisir_crs(nom_origine, crs_repli, log=None):
+    """Choisit le CRS d'une source qui n'en déclare aucun (.asc IGN…).
+    Priorité, du plus fiable au dernier recours :
+      1) EPSG déduit du NOM du fichier (aucun code inventé) ;
+      2) code fourni par l'utilisateur (crs_repli).
+    Retourne une chaîne « EPSG:xxxx » et journalise le choix + sa raison,
+    pour que l'utilisateur voie toujours quelle projection a été retenue."""
+    deduit = _epsg_depuis_nom(nom_origine)
+    if deduit:
+        if log:
+            log("      CRS deduit du nom (%s) : %s" % (deduit, nom_origine))
+        return deduit
+    if log:
+        log("      CRS non deductible du nom — code fourni %s : %s"
+            % (crs_repli, nom_origine))
+    return crs_repli
+
+
 def _est_fichier_raster(chemin):
     """Vrai si le fichier porte une extension raster — OU si c'est un lien
     symbolique dont la CIBLE réelle porte une extension raster.
@@ -660,20 +717,98 @@ def _source_assainie(src_path, tmp_dir, marque, log=None):
     return tmp_path, tmp_path
 
 
-def _reprojeter(src_path, dst_path, log=None):
+# Nombre MAX de fichiers ouverts simultanément lors d'une fusion. Bien en
+# dessous de la limite système (« Too many open files »). Un département
+# entier = plusieurs milliers de dalles : on fusionne par paquets.
+_MERGE_LOT_MAX = 200
+
+
+def _fusion_par_lots(chemins, tmp_dir, rasterio, merge, log=None,
+                     bounds=None):
+    """Fusionne une longue liste de rasters SANS jamais ouvrir plus de
+    _MERGE_LOT_MAX fichiers à la fois. Évite « Too many open files » sur un
+    département entier (9000+ dalles). Les dalles IGN étant adjacentes et
+    NON superposées, la fusion par paquets donne un résultat identique à
+    une fusion en un seul bloc (chaque pixel n'a de valeur que dans une
+    seule dalle). `bounds`, s'il est fourni, n'est appliqué qu'à la fusion
+    FINALE — comportement identique à l'ancien merge(..., bounds=...).
+
+    Retourne (mosaic, out_transform, profil_de_base), exactement comme
+    l'ancien bloc : mosaic[0] est la bande, profil est le profile brut de
+    la première source (l'appelant fait ensuite son profil.update habituel)."""
+    def _ouvrir_fusionner_ecrire(lot, cible, **kw):
+        ouverts = [rasterio.open(p) for p in lot]
+        try:
+            mos, tr = merge(ouverts, nodata=_NODATA, **kw)
+            prof = ouverts[0].profile.copy()
+        finally:
+            for o in ouverts:
+                try:
+                    o.close()
+                except Exception:
+                    pass
+        if cible is None:
+            return mos, tr, prof
+        prof.update(driver="GTiff", height=mos.shape[1], width=mos.shape[2],
+                    transform=tr, count=1, dtype="float32", nodata=_NODATA,
+                    compress="DEFLATE")
+        prof.pop("blockxsize", None)
+        prof.pop("blockysize", None)
+        prof["tiled"] = (mos.shape[1] >= 256 and mos.shape[2] >= 256)
+        with rasterio.open(cible, "w", **prof) as d:
+            d.write(mos[0].astype("float32"), 1)
+        return cible
+
+    niveau = list(chemins)
+    interm_crees = []
+    passe = 0
+    # Tant qu'il y a trop de fichiers pour une seule fusion, on réduit par
+    # paquets (les paquets intermédiaires ne prennent JAMAIS bounds).
+    while len(niveau) > _MERGE_LOT_MAX:
+        passe += 1
+        suivant = []
+        for j in range(0, len(niveau), _MERGE_LOT_MAX):
+            lot = niveau[j:j + _MERGE_LOT_MAX]
+            interm = os.path.join(tmp_dir, "lot_%02d_%06d.tif" % (passe, j))
+            _ouvrir_fusionner_ecrire(lot, interm)
+            interm_crees.append(interm)
+            suivant.append(interm)
+        if log:
+            log("      fusion par lots — passe %d : %d -> %d fichier(s)"
+                % (passe, len(niveau), len(suivant)))
+        niveau = suivant
+    # Dernier niveau (<= _MERGE_LOT_MAX) : fusion finale, bounds appliqué ici.
+    kw = {} if bounds is None else {"bounds": bounds}
+    mosaic, out_transform, profil = _ouvrir_fusionner_ecrire(
+        niveau, None, **kw)
+    for p in interm_crees:
+        try:
+            os.remove(p)
+        except Exception:
+            pass
+    return mosaic, out_transform, profil
+
+
+def _reprojeter(src_path, dst_path, log=None, nom_origine=None):
     """Reprojette en EPSG:4326 et impose le NoData de sortie.
-    Équivaut à : gdalwarp -t_srs EPSG:4326 -dstnodata -99999"""
+    Équivaut à : gdalwarp -t_srs EPSG:4326 -dstnodata -99999
+
+    nom_origine : nom du fichier SOURCE d'origine (avant assainissement),
+    car src_path peut être une copie temporaire dont le nom a perdu le
+    jeton de projection. Sert à déduire le CRS quand le fichier n'en
+    déclare aucun."""
     (rasterio, calculate_default_transform, reproject,
      Resampling, merge, CRS) = _import_rasterio()
 
     with rasterio.open(src_path) as src:
         src_crs = src.crs
         if src_crs is None:
-            # Aucun CRS déclaré (cas des .asc IGN bruts) → repli Lambert-93.
-            src_crs = CRS.from_string(_CRS_REPLI)
-            if log:
-                log("      CRS absent — repli %s : %s"
-                    % (_CRS_REPLI, os.path.basename(src_path)))
+            # Aucun CRS déclaré (cas des .asc IGN bruts). On DÉDUIT d'abord
+            # le CRS du nom (RGR92UTM40S, RGAF09UTM20, LAMB93…) ; à défaut
+            # seulement, repli Lambert-93. _choisir_crs journalise le choix.
+            src_crs = CRS.from_string(
+                _choisir_crs(nom_origine or os.path.basename(src_path),
+                             _CRS_REPLI, log))
 
         dst_crs = CRS.from_epsg(4326)
         transform, width, height = calculate_default_transform(
@@ -690,14 +825,19 @@ def _reprojeter(src_path, dst_path, log=None):
         else:
             profil["tiled"] = False
 
+        # CORRECTIF NOIR (prouvé) : source lue en TABLEAU numpy (src.read),
+        # jamais rasterio.band — sinon un .asc sans CRS ressort 100 % nodata.
+        import numpy as _np
+        _dst_arr = _np.full((height, width), _NODATA, dtype="float32")
+        reproject(source=src.read(1),
+                  destination=_dst_arr,
+                  src_transform=src.transform, src_crs=src_crs,
+                  src_nodata=src.nodata,
+                  dst_transform=transform, dst_crs=dst_crs,
+                  dst_nodata=_NODATA,
+                  resampling=Resampling.bilinear)
         with rasterio.open(dst_path, "w", **profil) as dst:
-            reproject(source=rasterio.band(src, 1),
-                      destination=rasterio.band(dst, 1),
-                      src_transform=src.transform, src_crs=src_crs,
-                      src_nodata=src.nodata,
-                      dst_transform=transform, dst_crs=dst_crs,
-                      dst_nodata=_NODATA,
-                      resampling=Resampling.bilinear)
+            dst.write(_dst_arr, 1)
     return dst_path
 
 
@@ -876,7 +1016,7 @@ def assembler_tuile(lat, lon, dossier_tuile, debord=DEBORD_DEFAUT,
                 src_reel, a_effacer = _source_assainie(s, tmp, "a%03d" % i,
                                                        log=_log)
                 try:
-                    _reprojeter(src_reel, dst, log=_log)
+                    _reprojeter(src_reel, dst, log=_log, nom_origine=nom)
                 except Exception as e:
                     ignorees.append((nom, "reprojection : %s" % e))
                     _log("      IGNORÉ (reprojection) : %s" % nom)
@@ -914,17 +1054,11 @@ def assembler_tuile(lat, lon, dossier_tuile, debord=DEBORD_DEFAUT,
 
         # ── 3 : fusion bornée à l'emprise élargie ─────────────────────
         _log("   [DEM] Fusion de %d source(s)…" % len(reprojetes))
-        ouverts = [rasterio.open(p) for p in reprojetes]
-        try:
-            mosaic, out_transform = merge(ouverts, bounds=bornes,
-                                          nodata=_NODATA)
-            profil = ouverts[0].profile.copy()
-        finally:
-            for o in ouverts:
-                try:
-                    o.close()
-                except Exception:
-                    pass
+        # Fusion par paquets : n'ouvre jamais plus de _MERGE_LOT_MAX
+        # fichiers à la fois (évite « Too many open files »). bounds n'est
+        # appliqué qu'à la fusion finale, comme avant.
+        mosaic, out_transform, profil = _fusion_par_lots(
+            reprojetes, tmp, rasterio, merge, log=_log, bounds=bornes)
 
         profil.update(driver="GTiff", height=mosaic.shape[1],
                       width=mosaic.shape[2], transform=out_transform,
@@ -1073,7 +1207,12 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
                 with rasterio.open(src_reel) as src:
                     src_crs = src.crs
                     if src_crs is None:
-                        src_crs = CRS.from_string(crs_repli)
+                        # .asc IGN sans CRS : on DÉDUIT le code du nom du
+                        # fichier d'origine (nom), pas du fichier assaini
+                        # temporaire dont le nom a perdu le jeton. À défaut,
+                        # code fourni par l'utilisateur (crs_repli).
+                        src_crs = CRS.from_string(
+                            _choisir_crs(nom, crs_repli, _log))
                     transform, width, height = calculate_default_transform(
                         src_crs, dst_crs, src.width, src.height,
                         *src.bounds)
@@ -1092,19 +1231,28 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
                     profil.pop("blockysize", None)
                     profil["tiled"] = (w2 >= 256 and h2 >= 256)
                     dst_path = os.path.join(tmp, "p%05d.tif" % i)
+                    # CORRECTIF NOIR (prouvé par diagnostic) : la source DOIT
+                    # être lue en TABLEAU numpy (src.read), jamais passée en
+                    # flux via rasterio.band. Sur un .asc sans CRS, band()
+                    # ignore src_crs → sortie 100 % nodata (tuile noire) ;
+                    # en tableau, src_crs est honoré. On reprojette dans un
+                    # tableau puis on l'écrit (configuration validée = B).
+                    import numpy as _np
+                    _dst_arr = _np.full((h2, w2), _NODATA, dtype="float32")
+                    reproject(
+                        source=src.read(1),
+                        destination=_dst_arr,
+                        src_transform=src.transform, src_crs=src_crs,
+                        src_nodata=src.nodata,
+                        dst_transform=t2, dst_crs=dst_crs,
+                        dst_nodata=_NODATA,
+                        # average : moyenne des pixels regroupés.
+                        # Sur un MNT c'est nettement meilleur que le
+                        # plus proche voisin, qui crée des marches.
+                        resampling=(Resampling.average if ratio < 1.0
+                                    else Resampling.bilinear))
                     with rasterio.open(dst_path, "w", **profil) as dst:
-                        reproject(
-                            source=rasterio.band(src, 1),
-                            destination=rasterio.band(dst, 1),
-                            src_transform=src.transform, src_crs=src_crs,
-                            src_nodata=src.nodata,
-                            dst_transform=t2, dst_crs=dst_crs,
-                            dst_nodata=_NODATA,
-                            # average : moyenne des pixels regroupés.
-                            # Sur un MNT c'est nettement meilleur que le
-                            # plus proche voisin, qui crée des marches.
-                            resampling=(Resampling.average if ratio < 1.0
-                                        else Resampling.bilinear))
+                        dst.write(_dst_arr, 1)
                 reduits.append(dst_path)
             except Exception as e:
                 ignorees.append((nom, str(e)))
@@ -1134,16 +1282,11 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
 
         _log("   [PREP] Assemblage de %d dalle(s) réduite(s)…"
              % len(reduits))
-        ouverts = [rasterio.open(p) for p in reduits]
-        try:
-            mosaic, out_transform = merge(ouverts, nodata=_NODATA)
-            profil = ouverts[0].profile.copy()
-        finally:
-            for o in ouverts:
-                try:
-                    o.close()
-                except Exception:
-                    pass
+        # Fusion par paquets : n'ouvre jamais plus de _MERGE_LOT_MAX
+        # fichiers à la fois (évite « Too many open files » sur un
+        # département entier de plusieurs milliers de dalles).
+        mosaic, out_transform, profil = _fusion_par_lots(
+            reduits, tmp, rasterio, merge, log=_log)
 
         profil.update(driver="GTiff", height=mosaic.shape[1],
                       width=mosaic.shape[2], transform=out_transform,
