@@ -193,6 +193,21 @@ class DEM:
                         info_only,
                         3601,
                     )
+                    # CORRECTIF hautes latitudes (Canada, Écosse, Scandinavie,
+                    # Baltique, Russie, Alaska…) : Copernicus GLO-30 sert
+                    # MOINS de colonnes par degré de longitude au-delà de ~50°.
+                    # La grille n'est plus carrée — c'est NORMAL. On accepte
+                    # la taille réelle lue dans le GeoTIFF et on journalise.
+                    # Ne JAMAIS refuser la tuile pour nxdem != nydem.
+                    if short_source == "COP30" and self.nxdem and self.nydem:
+                        if self.nxdem != self.nydem:
+                            UI.vprint(
+                                1,
+                                "    INFO: Copernicus GLO-30 non-square DEM "
+                                "at lat=%d (%d cols × %d rows) — expected "
+                                "above ~50° (fewer longitude samples)."
+                                % (self.lat, self.nxdem, self.nydem),
+                            )
                 else:
                     (
                         self.epsg,
@@ -320,8 +335,11 @@ class DEM:
         return
 
     def create_normal_map(self, pixx, pixy):
-        dx = numpy.zeros((self.nxdem, self.nydem))
-        dy = numpy.zeros((self.nxdem, self.nydem))
+        # alt_dem is always (nydem, nxdem) — same layout as rasterio / numpy.
+        # At high latitudes Copernicus GLO-30 is NON-SQUARE (fewer columns):
+        # allocating (nxdem, nydem) would crash or corrupt the normals.
+        dx = numpy.zeros((self.nydem, self.nxdem), dtype=numpy.float64)
+        dy = numpy.zeros((self.nydem, self.nxdem), dtype=numpy.float64)
         dx[:, 1:-1] = (self.alt_dem[:, 2:] - self.alt_dem[:, 0:-2]) / (2 * pixx)
         dx[:, 0] = (self.alt_dem[:, 1] - self.alt_dem[:, 0]) / (pixx)
         dx[:, -1] = (self.alt_dem[:, -1] - self.alt_dem[:, -2]) / (pixx)
