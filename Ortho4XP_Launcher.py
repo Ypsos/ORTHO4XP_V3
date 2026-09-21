@@ -355,6 +355,32 @@ class Launcher(tk.Tk):
         self._log(f"📍 Dossier : {BASE_DIR}")
         self.check_integrity()
         self._run_security_check()
+        # ── Première fois : créer automatiquement le lanceur natif manquant ──
+        # Sur macOS, Lanceur ORTHO4XP.app n'était créé que via le menu
+        # Installation — d'où l'absence au premier lancement. Idem Linux/Windows.
+        self._ensure_daily_launcher()
+
+    def _ensure_daily_launcher(self):
+        """Crée le lanceur natif (app / desktop / vbs) s'il est absent.
+        Non bloquant, anti-écrasement déjà géré dans chaque _create_*."""
+        try:
+            if SYSTEM == "Darwin":
+                app = BASE_DIR / "Lanceur ORTHO4XP.app"
+                if not app.exists():
+                    self._log("🔧 Première fois — création de Lanceur ORTHO4XP.app…")
+                    self._create_mac_daily_launcher()
+            elif SYSTEM == "Windows":
+                vbs = BASE_DIR / "Lanceur ORTHO4XP.vbs"
+                if not vbs.exists():
+                    self._log("🔧 Première fois — création de Lanceur ORTHO4XP.vbs…")
+                    self._create_windows_daily_launcher()
+            elif SYSTEM == "Linux":
+                desktop = BASE_DIR / "Lanceur ORTHO4XP.desktop"
+                if not desktop.exists():
+                    self._log("🔧 Première fois — création de Lanceur ORTHO4XP.desktop…")
+                    self._create_linux_daily_launcher()
+        except Exception as e:
+            self._log(f"⚠️  Création lanceur natif : {e}")
 
     # ====================== IDENTIFICATION LANGUE ======================
     def _add_banner(self):
@@ -799,8 +825,28 @@ class Launcher(tk.Tk):
         y = self.winfo_y() + (self.winfo_height() - win.winfo_height()) // 2
         win.geometry(f"+{x}+{y}")
 
+    def _venv_modules_ok(self):
+        """True si les modules essentiels sont déjà importables dans le venv."""
+        if not VENV_PY.exists():
+            return False
+        code = (
+            "import psutil, numpy, requests, shapely, customtkinter; "
+            "from PIL import Image"
+        )
+        try:
+            r = subprocess.run(
+                [str(VENV_PY), "-c", code],
+                capture_output=True, timeout=10
+            )
+            return r.returncode == 0
+        except Exception:
+            return False
+
     def _run_pip_install(self, modules, extra_msg=""):
-        """Installe une liste de modules dans le venv via pip."""
+        """Installe modules dans le venv. Securite : skip si deja OK."""
+        if self._venv_modules_ok():
+            self._log("♻️  Modules déjà présents dans venv/ — non réinstallés.")
+            return
         pip = str(VENV_PIP)
         try:
             self._log("📦 Mise à jour pip...")
@@ -815,25 +861,25 @@ class Launcher(tk.Tk):
         self._log("── 🍎 Installation macOS ──────────────────")
         import shutil
 
-        # 1. Homebrew deps (sans gdal — rasterio est autonome dans venv)
-        brew = shutil.which("brew") or "/opt/homebrew/bin/brew" or "/usr/local/bin/brew"
-        brew_pkgs = ["python@3.12", "python-tk@3.12",
-                     "spatialindex", "p7zip", "proj", "libspatialite"]
-        self._log(f"📦 Homebrew : {' '.join(brew_pkgs)}")
-        try:
-            subprocess.run([brew, "install"] + brew_pkgs, check=True)
-            self._log("✅ Dépendances Homebrew installées.")
-        except Exception as e:
-            self._log(f"⚠ Homebrew : {e}")
+        if self._venv_modules_ok():
+            self._log("♻️  Environnement déjà prêt — Homebrew et pip non relancés.")
+        else:
+            brew = shutil.which("brew") or "/opt/homebrew/bin/brew" or "/usr/local/bin/brew"
+            brew_pkgs = ["python@3.12", "python-tk@3.12",
+                         "spatialindex", "p7zip", "proj", "libspatialite"]
+            self._log(f"📦 Homebrew : {' '.join(brew_pkgs)}")
+            try:
+                subprocess.run([brew, "install"] + brew_pkgs, check=True)
+                self._log("✅ Dépendances Homebrew installées.")
+            except Exception as e:
+                self._log(f"⚠ Homebrew : {e}")
 
-        # 2. Pip dans venv — rasterio remplace gdal (autonome, pas de dépendance système)
-        pip_modules = ["pyproj", "numpy", "shapely", "rtree", "Pillow",
-                       "requests", "scikit-fmm", "certifi", "urllib3",
-                       "psutil", "fiona", "scipy", "customtkinter", "rasterio"]
-        self._run_pip_install(pip_modules, " (venv macOS)")
-        self._log("✅ rasterio installé — lecture TIF altimétrie autonome dans venv/")
+            pip_modules = ["pyproj", "numpy", "shapely", "rtree", "Pillow",
+                           "requests", "scikit-fmm", "certifi", "urllib3",
+                           "psutil", "fiona", "scipy", "customtkinter", "rasterio"]
+            self._run_pip_install(pip_modules, " (venv macOS)")
+            self._log("✅ rasterio installé — lecture TIF altimétrie autonome dans venv/")
 
-        # 4. Créer Lanceur ORTHO4XP.app
         self._log("🔧 Création de Lanceur ORTHO4XP.app...")
         self._create_mac_launcher()
 
@@ -871,6 +917,12 @@ class Launcher(tk.Tk):
     def _install_linux(self):
         self._log("── 🐧 Installation Linux ──────────────────")
         import shutil
+
+        if self._venv_modules_ok():
+            self._log("♻️  Environnement déjà prêt — paquets système et pip non relancés.")
+            self._log("🔧 Création de Lanceur ORTHO4XP.desktop...")
+            self._create_linux_launcher()
+            return
 
         # Détecter le gestionnaire de paquets
         if shutil.which("apt-get"):
@@ -917,6 +969,11 @@ class Launcher(tk.Tk):
 
     def _install_windows(self):
         self._log("── 🪟 Installation Windows ──────────────────")
+        if self._venv_modules_ok():
+            self._log("♻️  Environnement déjà prêt — pip non relancé.")
+            self._log("🔧 Création de Lanceur ORTHO4XP.vbs...")
+            self._create_windows_launcher()
+            return
         pip_modules = [
             "psutil", "numpy", "Pillow", "requests", "shapely",
             "pyproj", "fiona", "scipy", "customtkinter",
@@ -1002,11 +1059,13 @@ int main(int argc, char **argv) {
 </dict></plist>"""
 
         app_path = BASE_DIR / "Lanceur ORTHO4XP.app"
+        # SECURITE ANTI-ECRASEMENT : si le .app existe, on ne touche a RIEN
+        if app_path.exists():
+            self._log("♻️  Lanceur ORTHO4XP.app déjà présent — non réinstallé (icône préservée).")
+            return
+
         macos_dir = app_path / "Contents" / "MacOS"
         res_dir   = app_path / "Contents" / "Resources"
-
-        if app_path.exists():
-            shutil.rmtree(str(app_path))
 
         macos_dir.mkdir(parents=True)
         res_dir.mkdir(parents=True)
@@ -1078,13 +1137,15 @@ int main(int argc, char **argv) {
     # ── Création des lanceurs natifs ────────────────────────────────────
 
     def _create_mac_launcher(self):
-        """Crée Lanceur ORTHO4XP.app — double-clic pour ouvrir le Launcher."""
+        """Crée Lanceur ORTHO4XP.app — double-clic pour ouvrir le Launcher.
+        SECURITE ANTI-ECRASEMENT : si le .app existe, on ne touche a RIEN."""
         import shutil, stat as st_mod
         app_path  = BASE_DIR / "Lanceur ORTHO4XP.app"
+        if app_path.exists():
+            self._log("♻️  Lanceur ORTHO4XP.app déjà présent — non réinstallé (icône préservée).")
+            return
         macos_dir = app_path / "Contents" / "MacOS"
         res_dir   = app_path / "Contents" / "Resources"
-        if app_path.exists():
-            shutil.rmtree(str(app_path))
         macos_dir.mkdir(parents=True)
         res_dir.mkdir(parents=True)
 

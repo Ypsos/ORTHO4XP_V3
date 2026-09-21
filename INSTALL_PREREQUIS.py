@@ -613,8 +613,9 @@ class Installer:
         self._launch_launcher()
 
     def _create_venv(self):
+        # Sécurité : venv déjà présent → on ne le recrée PAS
         if VENV_DIR.exists():
-            self.log("♻️  Venv existant trouvé : {}".format(VENV_DIR))
+            self.log("♻️  Venv existant trouvé : {} — non réinstallé.".format(VENV_DIR))
             return
         self.log("🔧 Création du venv Python...")
         rc = run_cmd(
@@ -631,6 +632,10 @@ class Installer:
         return True
 
     def _install_requirements(self):
+        # Sécurité : modules essentiels déjà OK → on ne réinstalle PAS
+        if _check_modules_ok():
+            self.log("♻️  Modules essentiels déjà présents dans le venv — non réinstallés.")
+            return
         req_file = BASE_DIR / "requirements.txt"
         self.log("📦 Mise à jour pip...")
         run_cmd(
@@ -864,9 +869,14 @@ if HAS_TK:
                 self._log("   Vérifiez que l'archive est bien décompressée.", tag="warn")
 
         def _create_mac_launcher_app(self):
-            """Crée Lanceur ORTHO4XP.app — binaire C universel arm64+x86_64."""
+            """Crée Lanceur ORTHO4XP.app — binaire C universel arm64+x86_64.
+            Sécurité : si le .app existe déjà à la racine, on ne le recrée PAS."""
             import shutil as _shutil
             import stat as st
+            app_path = BASE_DIR / "Lanceur ORTHO4XP.app"
+            if app_path.exists():
+                self._log("♻️  Lanceur ORTHO4XP.app déjà présent — non réinstallé.", tag="ok")
+                return
             self._log("🔧 Création de Lanceur ORTHO4XP.app...", tag=None)
             LAUNCHER_C = r"""
 #include <stdio.h>
@@ -921,11 +931,8 @@ int main(int argc, char **argv) {
     <key>LSMinimumSystemVersion</key><string>12.0</string>
     <key>NSHighResolutionCapable</key><true/>
 </dict></plist>"""
-            app_path  = BASE_DIR / "Lanceur ORTHO4XP.app"
             macos_dir = app_path / "Contents" / "MacOS"
             res_dir   = app_path / "Contents" / "Resources"
-            if app_path.exists():
-                _shutil.rmtree(str(app_path))
             macos_dir.mkdir(parents=True)
             res_dir.mkdir(parents=True)
             (app_path / "Contents" / "Info.plist").write_text(INFO_PLIST, encoding="utf-8")

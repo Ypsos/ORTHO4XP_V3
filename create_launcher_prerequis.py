@@ -400,17 +400,19 @@ WshShell.Run Chr(34) & pyExe & Chr(34) & " " & Chr(34) & bootstrap & Chr(34), 1,
 
 
 def create_mac_app():
-    """Crée Lanceur_Installation_Prerequis.app avec binaire C autonome."""
+    """Crée Lanceur_Installation_Prerequis.app avec binaire C autonome.
+    Sécurité : si le .app existe déjà, on ne le recrée PAS."""
     import shutil
 
     app_path  = HERE / "Lanceur_Installation_Prerequis.app"
+    # Sécurité anti-écrasement
+    if app_path.exists():
+        print("  ♻️  Lanceur_Installation_Prerequis.app déjà présent — non réinstallé.")
+        return app_path
+
     contents  = app_path / "Contents"
     macos_dir = contents / "MacOS"
     res_dir   = contents / "Resources"
-
-    if app_path.exists():
-        shutil.rmtree(str(app_path))
-        print("  ♻️  Ancien .app supprimé.")
 
     macos_dir.mkdir(parents=True)
     res_dir.mkdir(parents=True)
@@ -570,6 +572,10 @@ PYTHONPATH="$ROOT_DIR/src" "$PY_USE" "$BOOTSTRAP" &
 
 def create_windows_launcher():
     vbs_path = HERE / "Lanceur_Installation_Prerequis.vbs"
+    # Sécurité anti-écrasement
+    if vbs_path.exists():
+        print("  ♻️  Lanceur_Installation_Prerequis.vbs déjà présent — non réinstallé.")
+        return vbs_path
     vbs_path.write_text(VBS_SCRIPT, encoding="utf-8")
     print(f"  ✅ VBS créé : {vbs_path.name}")
     try:
@@ -594,8 +600,14 @@ def create_windows_launcher():
 def create_linux_launcher():
     import shutil
     sh_path = HERE / "Lanceur_Installation_Prerequis.sh"
-    sh_path.write_text(
-        f"""#!/bin/bash
+    desktop_path = HERE / "Lanceur_Installation_Prerequis.desktop"
+    # Sécurité anti-écrasement
+    if sh_path.exists() and desktop_path.exists():
+        print("  ♻️  Lanceur_Installation_Prerequis déjà présent — non réinstallé.")
+        return desktop_path
+    if not sh_path.exists():
+        sh_path.write_text(
+            f"""#!/bin/bash
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BOOTSTRAP="$ROOT_DIR/INSTALL_PREREQUIS.py"
 PYTHON=$(which python3.12 2>/dev/null || which python3 2>/dev/null)
@@ -610,16 +622,16 @@ fi
 cd "$ROOT_DIR"
 PYTHONPATH="$ROOT_DIR/src" "$PYTHON" "$BOOTSTRAP" &
 """, encoding="utf-8")
-    sh_path.chmod(sh_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        sh_path.chmod(sh_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-    desktop_path = HERE / "Lanceur_Installation_Prerequis.desktop"
-    desktop_path.write_text(
-        f"[Desktop Entry]\nVersion=2.0\nName=Lanceur Installation Prerequis\n"
-        f"Comment=Installation Ortho4XP V3.0\nExec={sh_path}\nPath={HERE}\n"
-        f"Terminal=false\nType=Application\nCategories=Utility;\nStartupNotify=true\n",
-        encoding="utf-8")
-    desktop_path.chmod(
-        desktop_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    if not desktop_path.exists():
+        desktop_path.write_text(
+            f"[Desktop Entry]\nVersion=2.0\nName=Lanceur Installation Prerequis\n"
+            f"Comment=Installation Ortho4XP V3.0\nExec={sh_path}\nPath={HERE}\n"
+            f"Terminal=false\nType=Application\nCategories=Utility;\nStartupNotify=true\n",
+            encoding="utf-8")
+        desktop_path.chmod(
+            desktop_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     try:
         apps = Path.home() / ".local" / "share" / "applications"
         apps.mkdir(parents=True, exist_ok=True)
