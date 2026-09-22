@@ -75,4 +75,103 @@ jobs:
           cd "$APP"
           python create_launcher_prerequis.py
           L="$APP/Lanceur_Installation_Prerequis.app"
-          test -x
+          test -x "$L/Contents/MacOS/launch"
+          ARCHS="$(lipo -archs "$L/Contents/MacOS/launch")"
+          echo "Architectures : $ARCHS"
+          echo "$ARCHS" | grep -q arm64
+          echo "$ARCHS" | grep -q x86_64
+          test -f "$L/Contents/Resources/AppIcon.icns"
+          codesign --verify --deep --strict "$L"
+          # Même lanceur COMPLET (icône + signature intacte) à la racine du DMG
+          ditto "$L" "$RUNNER_TEMP/stage/Lanceur_Installation_Prerequis.app"
+          codesign --verify --deep --strict "$RUNNER_TEMP/stage/Lanceur_Installation_Prerequis.app"
+
+      - name: Écrire le LISEZ-MOI
+        run: |
+          cat > "$RUNNER_TEMP/stage/LISEZ-MOI_README.txt" <<'TXT'
+          ============================================================
+          ORTHO4XP V3 — Installation macOS
+          ============================================================
+
+          FRANÇAIS
+          --------
+          1. Double-cliquez sur « Lanceur_Installation_Prerequis »
+             (ici, à côté de ce fichier).
+          2. Si macOS refuse de l'ouvrir (première fois seulement) :
+             Réglages Système → Confidentialité et sécurité →
+             en bas : « Ouvrir quand même », puis confirmez.
+             (macOS 13-14 : clic droit sur le lanceur → Ouvrir → Ouvrir)
+          3. Choisissez le disque ou le dossier où installer Ortho4XP.
+             Disque au format Mac obligatoire (APFS ou Mac OS étendu).
+             Un dossier « ORTHO4XP_V3 » y sera créé.
+          4. Laissez l'installation se terminer
+             (Python + modules + lanceur final).
+          5. Ensuite, éjectez ce disque « ORTHO4XP V3 » :
+             Ortho4XP se lance depuis le dossier installé.
+
+          ENGLISH
+          -------
+          1. Double-click « Lanceur_Installation_Prerequis »
+             (here, next to this file).
+          2. If macOS refuses to open it (first time only):
+             System Settings → Privacy & Security →
+             at the bottom: « Open Anyway », then confirm.
+             (macOS 13-14: right-click the launcher → Open → Open)
+          3. Choose the disk or folder where Ortho4XP will be installed.
+             Mac-formatted disk required (APFS or Mac OS Extended).
+             An « ORTHO4XP_V3 » folder will be created there.
+          4. Wait until the installation finishes
+             (Python + modules + final launcher).
+          5. Then eject this « ORTHO4XP V3 » disk:
+             Ortho4XP runs from the installed folder.
+
+          ============================================================
+          Site officiel / Official site :
+          https://github.com/Ypsos/ORTHO4XP_V3
+          ============================================================
+          TXT
+          sed -i '' 's/^          //' "$RUNNER_TEMP/stage/LISEZ-MOI_README.txt"
+
+      - name: Créer le DMG
+        run: |
+          set -euo pipefail
+          NAME="ORTHO4XP_V3_Mac"
+          echo "DMG_NAME=$NAME" >> "$GITHUB_ENV"
+          hdiutil create -volname "ORTHO4XP V3" -srcfolder "$RUNNER_TEMP/stage" \
+                         -fs APFS -format UDZO -ov "$RUNNER_TEMP/$NAME.dmg"
+          hdiutil verify "$RUNNER_TEMP/$NAME.dmg"
+
+      - name: Contrôle du DMG monté (comme chez l'utilisateur)
+        run: |
+          set -euo pipefail
+          MNT="$RUNNER_TEMP/mnt"; mkdir -p "$MNT"
+          hdiutil attach "$RUNNER_TEMP/$DMG_NAME.dmg" -nobrowse -readonly -mountpoint "$MNT"
+          test -f "$MNT/LISEZ-MOI_README.txt"
+          test -f "$MNT/ORTHO4XP_V3/INSTALL_PREREQUIS.py"
+          test -x "$MNT/Lanceur_Installation_Prerequis.app/Contents/MacOS/launch"
+          codesign --verify --deep --strict "$MNT/Lanceur_Installation_Prerequis.app"
+          codesign --verify --deep --strict "$MNT/ORTHO4XP_V3/Lanceur_Installation_Prerequis.app"
+          # Le lanceur reconnaît le DMG parce qu'il est en lecture seule : on le vérifie
+          if touch "$MNT/.test_ecriture" 2>/dev/null; then echo "ERREUR : DMG inscriptible"; exit 1; fi
+          echo "DMG en lecture seule : OK"
+          hdiutil detach "$MNT"
+
+      - name: Mettre le DMG à disposition (onglet Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DMG_NAME }}
+          path: ${{ runner.temp }}/${{ env.DMG_NAME }}.dmg
+          compression-level: 0
+
+      - name: Remplacer le DMG de la dernière Release publiée
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+          if [ -z "$TAG" ]; then
+            echo "Aucune Release publiée : DMG laissé dans l'onglet Actions seulement."
+            exit 0
+          fi
+          gh release upload "$TAG" "$RUNNER_TEMP/$DMG_NAME.dmg" --clobber
+          echo "DMG mis à jour dans la Release $TAG"
