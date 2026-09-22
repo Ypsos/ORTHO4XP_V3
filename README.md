@@ -41,6 +41,7 @@ Ergonomie et sécurité de build. **Toutes les nouveautés sont 100 % additives*
 - 🗣️ **Réglages en langage clair + 3 profils en 1 clic** — aides du simulateur réécrites sans jargon (FR + EN), onglets défilants sur petits écrans, et 3 profils 🐇 **Rapide** / ⚖ **Équilibré** / 💎 **Qualité max** qui remplissent les réglages d'un clic (non destructif : rien n'est enregistré tant que tu ne cliques pas « Écrire cfg »).
 - 🗺️ **Carte → coordonnées** — un double-clic sur une tuile de la carte du monde (🌍) remplit automatiquement Latitude / Longitude ; la saisie manuelle reste possible.
 - 🗂️ **Bibliothèque de tuiles** — deux listes côte à côte (**Activées** / **Désactivées**) pour voir d'un coup d'œil l'état de tes sceneries `zOrtho4XP_` ; boutons **Activer** / **Désactiver**, plus **Supprimer** (sans danger pour les liens symboliques) et **Vider le cache**, sans jamais éditer `scenery_packs.ini` à la main.
+- 🍎 **Installation Mac en un seul téléchargement (DMG)** — un fichier `.dmg` unique : double-clic sur le lanceur, choix de l'emplacement (disque interne, SSD externe…), et tout s'installe. Fini le 2ᵉ téléchargement du lanceur et la manipulation de dossiers.
 
 **Corrections issues des retours forum :**
 - 🖥️ **Affichage sur écrans Windows « scaled »** (haute densité) — fenêtres plafonnées à l'écran réel, zones longues rendues défilantes ; aucune régression sur grand écran.
@@ -369,14 +370,14 @@ Fichier modifié : `src/O4_Menu_Avance.py` (aucun fichier de langue impacté).
 
 ### 🍎 Mac
 
-> **⚠️ Étape obligatoire avant tout** — Téléchargez d'abord le lanceur pré-nettoyé (sans blocage Gatekeeper) :  
-> **[⬇️ Télécharger le lanceur Mac pré-installé](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)**
+> **Un seul téléchargement :** **[⬇️ Télécharger le DMG macOS](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)** (fichier `ORTHO4XP_V3_…_Mac.dmg`, rubrique *Assets*)
 
-1. Téléchargez l'archive principale **ORTHO4XP_V3** (bouton vert « Code » → « Download ZIP »)
-2. Décompressez l'archive — renommez le dossier en `ORTHO4XP_V3`
-3. Téléchargez le ZIP de la Release ci-dessus et extrayez `Lanceur_Installation_Prerequis.app` directement dans le dossier `ORTHO4XP_V3`
-4. Placez le dossier `ORTHO4XP_V3` dans votre dossier **`Applications`** (`/Users/votre_nom/Applications/`)
-5. Double-cliquez sur `Lanceur_Installation_Prerequis.app`
+1. Double-cliquez sur le fichier `.dmg` téléchargé : le disque **ORTHO4XP V3** s'ouvre
+2. Double-cliquez sur **`Lanceur_Installation_Prerequis`**
+3. **Première ouverture seulement** — si macOS affiche « Apple n'a pas pu confirmer… » : cliquez sur **Terminé**, puis ouvrez **Réglages Système → Confidentialité et sécurité** et cliquez sur **Ouvrir quand même** (tout en bas). *(macOS 13-14 : clic droit sur le lanceur → Ouvrir → Ouvrir)*
+4. Choisissez **où installer** Ortho4XP : disque interne, dossier Applications, SSD externe… Le dossier `ORTHO4XP_V3` y est **créé automatiquement** (disque au format Mac requis : APFS ou Mac OS étendu)
+5. Laissez l'installation se terminer (Python, modules, lanceur final), puis éjectez le disque **ORTHO4XP V3**
+6. Lancez ensuite Ortho4XP avec **`Lanceur ORTHO4XP`**, dans le dossier installé
 
 ### 🪟 Windows
 
@@ -466,6 +467,7 @@ Build ergonomics and safety. **All additions are 100 % additive**: the engine (s
 - 🗣️ **Plain-language settings + 3 one-click profiles** — simulator help texts rewritten without jargon (FR + EN), scrolling tabs on small screens, and 3 profiles 🐇 **Fast** / ⚖ **Balanced** / 💎 **Max quality** that fill the settings in one click (non-destructive: nothing is saved until you click "Write cfg").
 - 🗺️ **Map → coordinates** — double-clicking a tile on the world map (🌍) automatically fills Latitude / Longitude; manual entry still works.
 - 🗂️ **Tile Library** — two side-by-side lists (**Enabled** / **Disabled**) to see the state of your `zOrtho4XP_` sceneries at a glance; **Enable** / **Disable** buttons, plus **Delete** (symlink-safe) and **Clear cache**, without ever editing `scenery_packs.ini` by hand.
+- 🍎 **One-download Mac installation (DMG)** — a single `.dmg` file: double-click the launcher, choose where to install (internal disk, external SSD…), and everything is set up. No more second launcher download or folder juggling.
 
 **Fixes from forum feedback:**
 - 🖥️ **Display on "scaled" (high-DPI) Windows screens** — windows capped to the real screen size, long areas made scrollable; no regression on large screens.
@@ -797,14 +799,14 @@ Modified file: `src/O4_Menu_Avance.py` (no language file impacted).
 
 ### 🍎 Mac
 
-> **⚠️ Mandatory first step** — First download the pre-cleaned launcher (no Gatekeeper block):  
-> **[⬇️ Download the pre-installed Mac launcher](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)**
+> **A single download:** **[⬇️ Download the macOS DMG](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)** (file `ORTHO4XP_V3_…_Mac.dmg`, *Assets* section)
 
-1. Download the main archive **ORTHO4XP_V3** (green "Code" button → "Download ZIP")
-2. Unzip the archive — rename the folder to `ORTHO4XP_V3`
-3. Download the Release ZIP above and extract `Lanceur_Installation_Prerequis.app` directly into the `ORTHO4XP_V3` folder
-4. Place the `ORTHO4XP_V3` folder into your **`Applications`** folder (`/Users/your_name/Applications/`)
-5. Double-click `Lanceur_Installation_Prerequis.app`
+1. Double-click the downloaded `.dmg` file: the **ORTHO4XP V3** disk opens
+2. Double-click **`Lanceur_Installation_Prerequis`**
+3. **First launch only** — if macOS says "Apple could not verify…": click **Done**, then open **System Settings → Privacy & Security** and click **Open Anyway** (at the bottom). *(macOS 13-14: right-click the launcher → Open → Open)*
+4. Choose **where to install** Ortho4XP: internal disk, Applications folder, external SSD… The `ORTHO4XP_V3` folder is **created automatically** (Mac-formatted disk required: APFS or Mac OS Extended)
+5. Let the installation finish (Python, modules, final launcher), then eject the **ORTHO4XP V3** disk
+6. From then on, start Ortho4XP with **`Lanceur ORTHO4XP`** in the installed folder
 
 ### 🪟 Windows
 

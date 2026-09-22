@@ -63,11 +63,58 @@ LAUNCHER_C_SOURCE = r"""
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/statvfs.h>
+#include <dirent.h>
 
 extern int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
 
 static int path_exists(const char *p) {
     struct stat st; return stat(p, &st) == 0;
+}
+
+/* DMG = volume en LECTURE SEULE (un disque externe choisi par
+ * l'utilisateur, lui, est inscriptible). Critère fiable : ne dépend
+ * pas du chemin /Volumes/ (qui contient aussi les disques externes). */
+static int is_readonly_volume(const char *p) {
+    struct statvfs s;
+    if (statvfs(p, &s) != 0) return 0;
+    return (s.f_flag & ST_RDONLY) != 0;
+}
+
+/* macOS « translocation » : une app téléchargée, ouverte la 1re fois,
+ * est lancée depuis une copie cachée (…/AppTranslocation/…) et non
+ * depuis le DMG. Le dossier ORTHO4XP_V3 n'est alors pas à côté du
+ * lanceur : on le retrouve sur le DMG monté dans /Volumes
+ * (volume en lecture seule contenant ORTHO4XP_V3/INSTALL_PREREQUIS.py). */
+static int find_dmg_source_in_volumes(char *out, size_t outsz) {
+    DIR *d = opendir("/Volumes");
+    if (!d) return 0;
+    struct dirent *e;
+    int found = 0;
+    while (!found && (e = readdir(d)) != NULL) {
+        if (e->d_name[0] == '.') continue;
+        char vol[PATH_MAX], probe[PATH_MAX];
+        if (snprintf(vol, sizeof(vol), "/Volumes/%s", e->d_name) >= (int)sizeof(vol)) continue;
+        if (snprintf(probe, sizeof(probe), "%s/ORTHO4XP_V3/INSTALL_PREREQUIS.py", vol) >= (int)sizeof(probe)) continue;
+        if (path_exists(probe) && is_readonly_volume(vol)) {
+            if (snprintf(out, outsz, "%s/ORTHO4XP_V3", vol) < (int)outsz) found = 1;
+        }
+    }
+    closedir(d);
+    return found;
+}
+
+/* Le venv Python a besoin de liens symboliques : absents sur un disque
+ * formaté exFAT/FAT (format Windows) ou si le dossier n'est pas
+ * inscriptible. Test réel : on crée puis on efface un lien. */
+static int dest_is_usable(const char *dir) {
+    char probe[PATH_MAX];
+    if (snprintf(probe, sizeof(probe), "%s/.o4xp_test_lien", dir) >= (int)sizeof(probe))
+        return 0;
+    unlink(probe);
+    if (symlink("o4xp", probe) != 0) return 0;
+    unlink(probe);
+    return 1;
 }
 
 /* Dialog bloquant natif */
@@ -118,6 +165,55 @@ static int run_direct(const char *argv0, char *const argv[], const char *log) {
 }
 
 /* Installe Homebrew via curl+bash — seule exception qui nécessite un shell */
+
+static int choose_destination(char *out, size_t outsz) {
+    FILE *p = popen(
+        "/usr/bin/osascript -e 'POSIX path of (choose folder with prompt \"Choisissez le disque de destination pour ORTHO4XP V3\")' 2>/dev/null",
+        "r"
+    );
+
+    if (!p) return 0;
+
+    if (!fgets(out, (int)outsz, p)) {
+        pclose(p);
+        return 0;
+    }
+
+    int status = pclose(p);
+    if (status != 0) return 0;
+
+    size_t n = strlen(out);
+    while (n > 0 && (out[n - 1] == '\n' || out[n - 1] == '\r'))
+        out[--n] = '\0';
+
+    return n > 0;
+}
+
+static int copy_from_dmg(const char *source, const char *destination) {
+    pid_t pid = fork();
+
+    if (pid < 0)
+        return 0;
+
+    if (pid == 0) {
+        execl(
+            "/usr/bin/ditto",
+            "ditto",
+            source,
+            destination,
+            (char *)NULL
+        );
+        _exit(127);
+    }
+
+    int status = 0;
+
+    if (waitpid(pid, &status, 0) < 0)
+        return 0;
+
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
 static int install_homebrew(const char *log) {
     char *argv[] = {
         "/bin/bash", "-c",
@@ -203,14 +299,167 @@ int main(int argc, char **argv) {
     if (!realpath(exe, real)) strncpy(real, exe, PATH_MAX-1);
 
     char t1[PATH_MAX], t2[PATH_MAX], t3[PATH_MAX], root[PATH_MAX];
-    strncpy(t1, real,         PATH_MAX-1);
-    strncpy(t2, dirname(t1),  PATH_MAX-1);
-    strncpy(t3, dirname(t2),  PATH_MAX-1);
+    strncpy(t1, real, PATH_MAX-1);
+    t1[PATH_MAX-1] = '\0';
+    strncpy(t2, dirname(t1), PATH_MAX-1);
+    t2[PATH_MAX-1] = '\0';
+    strncpy(t3, dirname(t2), PATH_MAX-1);
+    t3[PATH_MAX-1] = '\0';
+
     char tmp[PATH_MAX];
     strncpy(tmp, dirname(t3), PATH_MAX-1);
+    tmp[PATH_MAX-1] = '\0';
     strncpy(root, dirname(tmp), PATH_MAX-1);
+    root[PATH_MAX-1] = '\0';
 
-    chdir(root);
+    /*
+     * Lancement depuis le DMG :
+     * le DMG est la SOURCE et ne doit jamais être modifié.
+     * L'utilisateur choisit le disque/dossier parent.
+     * Le programme crée ensuite ORTHO4XP_V3.
+     */
+    if (is_readonly_volume(root) || strstr(root, "/AppTranslocation/") != NULL) {
+        char destination_parent[PATH_MAX];
+        char destination_root[PATH_MAX];
+
+        if (!choose_destination(destination_parent, sizeof(destination_parent))) {
+            dialog("Ortho4XP — Installation annulée",
+                   "Aucun emplacement de destination n'a été sélectionné.",
+                   "caution");
+            return 1;
+        }
+
+        size_t plen = strlen(destination_parent);
+        while (plen > 1 && destination_parent[plen - 1] == '/')
+            destination_parent[--plen] = '\0';
+
+        if (snprintf(destination_root,
+                     sizeof(destination_root),
+                     "%s/ORTHO4XP_V3",
+                     destination_parent) >= (int)sizeof(destination_root)) {
+            dialog("Ortho4XP — Erreur",
+                   "Le chemin de destination est trop long.",
+                   "caution");
+            return 1;
+        }
+
+        if (strcmp(destination_root, root) == 0) {
+            dialog("Ortho4XP — Erreur",
+                   "La destination ne peut pas être le DMG.",
+                   "stop");
+            return 1;
+        }
+
+        if (!dest_is_usable(destination_parent)) {
+            dialog("Ortho4XP — Emplacement non compatible",
+                   "Impossible d'installer ici.\\n\\n"
+                   "Le disque doit etre au format Mac (APFS ou Mac OS etendu) "
+                   "et autoriser l'ecriture. Un disque au format Windows "
+                   "(exFAT/FAT) ne convient pas.\\n\\n"
+                   "Relancez et choisissez un autre emplacement.",
+                   "caution");
+            return 1;
+        }
+
+        if (path_exists(destination_root)) {
+            char msg[PATH_MAX + 256];
+            snprintf(msg, sizeof(msg),
+                     "Le dossier ORTHO4XP_V3 existe déjà ici :\n\n%s\n\n"
+                     "Choisissez un autre emplacement.",
+                     destination_root);
+            dialog("Ortho4XP — Dossier déjà présent", msg, "caution");
+            return 1;
+        }
+
+        /* Créer ORTHO4XP_V3 dans le dossier choisi.
+         * mkdir -p rend la création robuste sur tous les chemins
+         * accessibles à l'utilisateur.
+         */
+        char mkdir_cmd[PATH_MAX + 64];
+        snprintf(mkdir_cmd, sizeof(mkdir_cmd),
+                 "/bin/mkdir -p \"%s\"",
+                 destination_root);
+
+        if (system(mkdir_cmd) != 0 || !path_exists(destination_root)) {
+            char msg[PATH_MAX + 256];
+            snprintf(msg, sizeof(msg),
+                     "Impossible de créer le dossier :\\n\\n%s",
+                     destination_root);
+            dialog("Ortho4XP — Erreur", msg, "stop");
+            return 1;
+        }
+
+        /* Source : lanceur à la racine du DMG -> sous-dossier ORTHO4XP_V3 ;
+         * lanceur ouvert DANS le dossier ORTHO4XP_V3 du DMG -> ce dossier. */
+        char source_root[PATH_MAX];
+        char probe_src[PATH_MAX];
+        snprintf(probe_src, sizeof(probe_src), "%s/INSTALL_PREREQUIS.py", root);
+        if (path_exists(probe_src)) {
+            strncpy(source_root, root, PATH_MAX - 1);
+            source_root[PATH_MAX - 1] = '\0';
+        } else if (snprintf(source_root, sizeof(source_root), "%s/ORTHO4XP_V3", root) >= (int)sizeof(source_root)) {
+            fprintf(stderr, "❌ Chemin source trop long.\n");
+            rmdir(destination_root);
+            return 1;
+        }
+        /* Dossier absent à côté du lanceur (translocation) -> chercher le DMG */
+        {
+            char probe_sub[PATH_MAX];
+            snprintf(probe_sub, sizeof(probe_sub), "%s/INSTALL_PREREQUIS.py", source_root);
+            if (!path_exists(probe_sub) &&
+                !find_dmg_source_in_volumes(source_root, sizeof(source_root))) {
+                rmdir(destination_root);
+                dialog("Ortho4XP — DMG introuvable",
+                       "Le dossier ORTHO4XP_V3 du DMG est introuvable.\\n\\n"
+                       "Laissez le DMG ouvert (disque ORTHO4XP V3) "
+                       "et relancez le lanceur.",
+                       "caution");
+                return 1;
+            }
+        }
+
+        if (!copy_from_dmg(source_root, destination_root)) {
+            char msg[PATH_MAX + 256];
+            snprintf(msg, sizeof(msg),
+                     "La copie depuis le DMG a échoué.\n\nDestination :\n%s",
+                     destination_root);
+            rmdir(destination_root);
+            dialog("Ortho4XP — Erreur de copie", msg, "stop");
+            return 1;
+        }
+
+        /* La copie ne doit pas garder l'étiquette « téléchargé d'internet »,
+         * sinon macOS bloquerait à nouveau chaque élément copié. */
+        {
+            char *xq[] = { "/usr/bin/xattr", "-dr", "com.apple.quarantine",
+                           destination_root, NULL };
+            run_direct("/usr/bin/xattr", xq, "/dev/null");
+        }
+
+        strncpy(root, destination_root, PATH_MAX - 1);
+        root[PATH_MAX - 1] = '\0';
+
+        char installed_launcher[PATH_MAX];
+        if (snprintf(installed_launcher, sizeof(installed_launcher), "%s/Lanceur_Installation_Prerequis.app/Contents/MacOS/launch", root) >= (int)sizeof(installed_launcher)) {
+            dialog("Ortho4XP — Erreur", "Le chemin du lanceur installé est trop long.", "stop");
+            return 1;
+        }
+        if (!path_exists(installed_launcher)) {
+            dialog("Ortho4XP — Erreur", "Le Lanceur_Installation_Prerequis.app n'a pas été trouvé dans l'installation.", "stop");
+            return 1;
+        }
+        char *launcher_args[] = { installed_launcher, NULL };
+        execv(installed_launcher, launcher_args);
+        dialog("Ortho4XP — Erreur", "Impossible de lancer le Lanceur_Installation_Prerequis installé.", "stop");
+        return 1;
+    } else {
+        if (chdir(root) != 0) {
+            dialog("Ortho4XP — Erreur",
+                   "Impossible d'accéder au dossier ORTHO4XP_V3.",
+                   "stop");
+            return 1;
+        }
+    }
 
     char log[PATH_MAX], bootstrap[PATH_MAX], venv_py[PATH_MAX], venv_dir[PATH_MAX];
     snprintf(log,       sizeof(log),       "%s/ortho4xp_install.log", root);
