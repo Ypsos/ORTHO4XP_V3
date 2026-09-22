@@ -23,10 +23,13 @@ Shapely>=2.0.7
 urllib3>=2.3.0
 rasterio
 
-# GDAL — installation spéciale selon plateforme :
-# macOS   : brew install gdal
-#           puis lien symbolique dans venv :
-#           ln -s $(brew --prefix gdal)/lib/python3.12/site-packages/osgeo \
-#                 venv/lib/python3.12/site-packages/osgeo
-# Linux   : sudo apt install python3-gdal  ou  pip install gdal==$(gdal-config --version)
-# Windows : pip install gdal (wheel précompilée depuis https://www.lfd.uci.edu/~gohlke/)
+# GDAL — compatibilité future
+# DÉSACTIVÉ POUR LA V3 ACTUELLE — en attente d'une future compatibilité GDAL/osgeo.
+# La voie normale V3 utilise rasterio dans le venv.
+#
+# Linux / Windows : anciennes méthodes conservées ci-dessous,
+# désactivées en attendant une future compatibilité GDAL/osgeo.
+#
+# Linux : sudo apt install python3-gdal
+#          ou pip install gdal==$(gdal-config --version)
+# Windows : pip install gdal

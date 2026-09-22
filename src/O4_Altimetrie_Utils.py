@@ -61,20 +61,6 @@ _CRS_REPLI = "EPSG:2154"
 _EXT_RASTER = (".tif", ".tiff", ".vrt", ".asc", ".img", ".hgt", ".dt2")
 
 
-# Codes COMPOUND (2D + vertical) → équivalent HORIZONTAL 2D pur.
-# Les .asc / DEM sont des grilles 2D : seule la partie planimétrique
-# compte pour la reprojection. Un Compound CRS (ex. 10498) peut faire
-# échouer calculate_default_transform / reproject sur certaines versions
-# de PROJ/rasterio. On normalise donc vers le 2D horizontal équivalent.
-# Table minimale, codes officiels EPSG uniquement — aucun pays inventé.
-_COMPOUND_VERS_2D = {
-    10497: 9793,   # RGF93 v2 / Lambert-93 + NGF-IGN69  → horizontal 9793
-    10498: 9793,   # RGF93 v2 / Lambert-93 + NGF-IGN78  → horizontal 9793 (Corse)
-    10499: 9794,   # RGF93 v2b / Lambert-93 + NGF-IGN69 → horizontal 9794
-    10500: 9794,   # RGF93 v2b / Lambert-93 + NGF-IGN78 → horizontal 9794
-}
-
-
 def _normaliser_epsg(saisie):
     """Transforme une saisie utilisateur en chaîne 'EPSG:xxxx'.
 
@@ -83,13 +69,6 @@ def _normaliser_epsg(saisie):
     stricte du code (existence) est faite AU MIEUX : si rasterio est présent
     et rejette le code, on retombe sur le repli ; s'il est absent (ex.
     simulation headless), on fait confiance à la saisie numérique.
-
-    Sécurité Compound CRS : si l'utilisateur saisit un code composé
-    (ex. 10498 = planimétrique + vertical), on le remplace par son
-    équivalent horizontal 2D pur. Les DEM sont des grilles 2D ; seule la
-    partie planimétrique est nécessaire pour la reprojection vers 4326.
-    Cela évite des erreurs critiques plus loin dans le pipeline
-    (calculate_default_transform / reproject).
 
     Retour forum domisilasol : un fichier .asc (ESRI ASCII grid) ne déclare
     aucun CRS. Le repli 2154 (Lambert-93) ne convient qu'à la métropole ;
@@ -102,18 +81,15 @@ def _normaliser_epsg(saisie):
     m = _re.search(r"(\d{4,6})", str(saisie))
     if not m:
         return _CRS_REPLI
-    code = int(m.group(1))
-    # Normalisation Compound → 2D horizontal (sécurité pipeline).
-    if code in _COMPOUND_VERS_2D:
-        code = _COMPOUND_VERS_2D[code]
+    code = m.group(1)
     try:
         from rasterio.crs import CRS as _CRS
-        _CRS.from_epsg(code)  # lève si le code est invalide
+        _CRS.from_epsg(int(code))  # lève si le code est invalide
     except ImportError:
         pass  # pas de rasterio (simulation) : on fait confiance à la saisie
     except Exception:
         return _CRS_REPLI  # rasterio présent mais code rejeté → repli sûr
-    return "EPSG:%d" % code
+    return "EPSG:%s" % code
 
 
 # Correspondance nom de fichier → code EPSG (convention IGN / GIS : le nom
@@ -155,43 +131,29 @@ def _epsg_depuis_nom(nom):
     return None
 
 
-def _choisir_crs(nom_origine, crs_repli, log=None):
+def _choisir_crs(nom_origine, crs_repli, log=None, crs_force=None):
     """Choisit le CRS d'une source qui n'en déclare aucun (.asc IGN…).
-
-    Priorité STRICTE (universelle, aucun pays codé en dur) :
-      1) Si crs_repli est une saisie utilisateur EXPLICITE (différente du
-         simple repli par défaut) → on l'utilise toujours.
-      2) Sinon (repli par défaut ou vide) → on tente une déduction depuis
-         le NOM du fichier (aide, aucun code inventé).
-      3) Dernier recours : crs_repli ou _CRS_REPLI.
-
-    Ainsi un 10498 saisi n'est JAMAIS écrasé par un « LAMB93 » présent
-    dans le nom du fichier. La déduction de nom reste utile quand
-    l'utilisateur n'a rien précisé.
-    Retourne une chaîne « EPSG:xxxx » et journalise le choix + sa raison.
-    """
-    # Normalisation douce pour comparer au repli par défaut.
-    _repli = (crs_repli or "").strip().upper().replace("EPSG:", "")
-    _defaut = _CRS_REPLI.upper().replace("EPSG:", "")
-    _explicite = bool(crs_repli) and _repli != _defaut
-
-    if _explicite:
+    Priorité, du plus fiable au dernier recours :
+      0) crs_force = code EXPLICITEMENT imposé par l'utilisateur (il a saisi
+         un code différent de celui déduit) → prioritaire sur tout ;
+      1) EPSG déduit du NOM du fichier (aucun code inventé) ;
+      2) code de repli (crs_repli).
+    Retourne une chaîne « EPSG:xxxx » et journalise le choix + sa raison,
+    pour que l'utilisateur voie toujours quelle projection a été retenue."""
+    if crs_force:
         if log:
-            log("      CRS fourni par l'utilisateur : %s  (%s)"
-                % (crs_repli, nom_origine))
-        return crs_repli
-
-    # Pas de saisie explicite → aide par le nom du fichier.
+            log("      CRS force par l'utilisateur (%s) : %s"
+                % (crs_force, nom_origine))
+        return crs_force
     deduit = _epsg_depuis_nom(nom_origine)
     if deduit:
         if log:
             log("      CRS deduit du nom (%s) : %s" % (deduit, nom_origine))
         return deduit
-
     if log:
-        log("      CRS non deductible — repli %s : %s"
-            % (crs_repli or _CRS_REPLI, nom_origine))
-    return crs_repli or _CRS_REPLI
+        log("      CRS non deductible du nom — code fourni %s : %s"
+            % (crs_repli, nom_origine))
+    return crs_repli
 
 
 def _est_fichier_raster(chemin):
@@ -1175,7 +1137,8 @@ def _est_deja_pret(src_path, cible_m, tolerance=0.10):
 
 
 def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
-                  crs_repli=_CRS_REPLI, log=None, stop=None, cible_m=None):
+                  crs_repli=_CRS_REPLI, log=None, stop=None, cible_m=None,
+                  crs_force=None):
     """Chaîne A — prépare le fichier réduit d'un département / pays.
 
     Équivaut à la procédure Terminal :
@@ -1257,7 +1220,8 @@ def preparer_pays(dossier_source, fichier_sortie, ratio=0.25,
                         # temporaire dont le nom a perdu le jeton. À défaut,
                         # code fourni par l'utilisateur (crs_repli).
                         src_crs = CRS.from_string(
-                            _choisir_crs(nom, crs_repli, _log))
+                            _choisir_crs(nom, crs_repli, _log,
+                                         crs_force=crs_force))
                     transform, width, height = calculate_default_transform(
                         src_crs, dst_crs, src.width, src.height,
                         *src.bounds)
@@ -3084,23 +3048,23 @@ def open_altimetrie_window(gui):
             return
 
         # ── CRS des sources sans projection déclarée (retour forum) ──────
-        # Un .asc (ESRI ASCII grid) ne déclare AUCUN CRS. Le code EPSG source
-        # est demandé à l'utilisateur. Comportement universel (monde entier) :
-        #   1) On tente de déduire un code depuis le NOM des fichiers (aide).
-        #   2) On pré-remplit le champ avec ce code s'il existe, sinon vide.
-        #   3) La saisie utilisateur a TOUJOURS la priorité (jamais écrasée
-        #      par une déduction de nom). Champ vide → repli 2154 (sécurité).
-        # Les codes composés (ex. 10498) sont normalisés vers leur partie
-        # horizontale 2D dans _normaliser_epsg. Aucun pays n'est codé en dur.
-        # Les fichiers qui déclarent déjà leur CRS (.tif) ne sont pas
-        # concernés : preparer_pays lit le CRS de chaque fichier et
-        # n'utilise crs_repli que pour ceux qui n'en ont pas.
+        # Un .asc (ESRI ASCII grid) ne déclare AUCUN CRS. Jusqu'ici le repli
+        # 2154 (Lambert-93) était forcé : correct pour la métropole, mais
+        # FAUX pour la Réunion (UTM40S), la Guadeloupe (UTM20N)… → terre
+        # reprojetée hors emprise → .tif noir. Si au moins un fichier source
+        # n'a pas de CRS, on demande le code EPSG à l'utilisateur. Vide /
+        # inconnu → repli EPSG:2154 (comportement historique conservé). Les
+        # fichiers qui déclarent déjà leur CRS (.tif) ne sont pas concernés :
+        # preparer_pays lit le CRS de chaque fichier et n'utilise crs_repli
+        # que pour ceux qui n'en ont pas.
         crs_repli = _CRS_REPLI
+        crs_force = None
         _sans_crs = False
-        _suggestion_epsg = ""          # pré-remplissage éventuel du champ
+        _nom_sans_crs = None   # nom d'un .asc sans CRS → sert à déduire l'EPSG
         try:
             import rasterio as _rio_chk
             for rep, _d, fs in os.walk(src, followlinks=True):
+                _fait = False
                 for f in sorted(fs):
                     if f.startswith(".") or \
                             not f.lower().endswith(_EXT_RASTER):
@@ -3109,63 +3073,77 @@ def open_altimetrie_window(gui):
                         with _rio_chk.open(os.path.join(rep, f)) as _ds:
                             if _ds.crs is None:
                                 _sans_crs = True
-                                # Aide : déduction depuis le nom (universelle).
-                                if not _suggestion_epsg:
-                                    _ded = _epsg_depuis_nom(f)
-                                    if _ded:
-                                        # garder seulement le numéro (ex. 2154)
-                                        _suggestion_epsg = _ded.replace(
-                                            "EPSG:", "").replace("epsg:", "")
+                                _nom_sans_crs = f
                     except Exception:
                         pass
-                    if _sans_crs and _suggestion_epsg:
-                        break
-                if _sans_crs and _suggestion_epsg:
+                    _fait = True
+                    break  # un fichier échantillon par dossier suffit
+                if _sans_crs:
                     break
+                if _fait:
+                    continue
         except Exception:
             _sans_crs = False
         if _sans_crs:
+            # Le champ est PRÉ-REMPLI avec l'EPSG déduit du nom du fichier
+            # (ex. LAMB93 → 2154). Si le nom ne permet aucune déduction →
+            # champ VIDE (l'utilisateur saisit ou laisse vide).
+            _deduit = _epsg_depuis_nom(_nom_sans_crs)  # 'EPSG:xxxx' ou None
+            _init = _deduit.split(":")[-1] if _deduit else ""
             _rep_epsg = _saisie(
                 _tr("Altimétrie / DEM"),
                 _L("Ces fichiers (.asc) ne déclarent aucun système de "
                    "coordonnees (CRS).\n\n"
-                   "Entrez le code EPSG de la projection SOURCE "
-                   "(universel, tout pays) :\n"
-                   "  Exemples courants :\n"
-                   "  - 2154  = Lambert-93 (France metropole)\n"
-                   "  - 10498 = Lambert-93 + IGN78 (Corse)\n"
-                   "  - 32740 = UTM 40S (Reunion)\n"
-                   "  - 32620 = UTM 20N (Guadeloupe, St-Barthelemy)\n"
-                   "  - 2972  = UTM 22N RGFG95 (Guyane)\n\n"
-                   "Ce code est indique sur la page de telechargement de vos "
-                   "donnees, ou cherchez le nom de votre zone sur epsg.io.\n\n"
-                   "• Si un code a pu etre deduit du nom des fichiers, "
-                   "il est propose ci-dessous.\n"
-                   "• Vous pouvez le modifier librement.\n"
-                   "• Si vous laissez vide : Lambert-93 (2154) sera utilise "
-                   "par defaut.",
+                   "Le code EPSG est deduit automatiquement du nom du fichier "
+                   "quand c'est possible (il apparait deja dans le champ). "
+                   "Dans la plupart des cas, rien a changer.\n"
+                   "Vous pouvez le corriger, en saisir un autre, ou laisser "
+                   "vide (Ortho4XP choisira alors le plus adapte, fichier par "
+                   "fichier).\n\n"
+                   "Codes EPSG source courants (IGN) :\n"
+                   "  - 2154 = Lambert-93 (France metropole)\n"
+                   "  - 2975 = RGR92 / UTM 40S (Reunion)\n"
+                   "  - 5490 = RGAF09 / UTM 20N (Guadeloupe, Martinique, "
+                   "St-Barthelemy, St-Martin)\n"
+                   "  - 2972 = RGFG95 / UTM 22N (Guyane)\n"
+                   "  - 4471 = RGM04 / UTM 38S (Mayotte)\n"
+                   "  - 4467 = RGSPM06 / UTM 21N (St-Pierre-et-Miquelon)\n\n"
+                   "Ce code figure aussi sur la page de telechargement de vos "
+                   "donnees (RGE ALTI, etc.) ou sur epsg.io.",
                    "These files (.asc) declare no coordinate system (CRS).\n\n"
-                   "Enter the EPSG code of the SOURCE projection "
-                   "(universal, any country):\n"
-                   "  Common examples:\n"
-                   "  - 2154  = Lambert-93 (mainland France)\n"
-                   "  - 10498 = Lambert-93 + IGN78 (Corsica)\n"
-                   "  - 32740 = UTM 40S (Reunion)\n"
-                   "  - 32620 = UTM 20N (Guadeloupe, St-Barthelemy)\n"
-                   "  - 2972  = UTM 22N RGFG95 (French Guiana)\n\n"
-                   "This code is shown on your data provider's download page, "
-                   "or search your area name on epsg.io.\n\n"
-                   "• If a code could be deduced from the file names, "
-                   "it is suggested below.\n"
-                   "• You may change it freely.\n"
-                   "• If you leave empty: Lambert-93 (2154) is used "
-                   "by default."),
-                parent=win, initialvalue=_suggestion_epsg)
+                   "The EPSG code is auto-detected from the file name when "
+                   "possible (it already appears in the field). In most cases "
+                   "there is nothing to change.\n"
+                   "You may correct it, type another one, or leave it empty "
+                   "(Ortho4XP will then pick the best one, file by file).\n\n"
+                   "Common source EPSG codes (IGN) :\n"
+                   "  - 2154 = Lambert-93 (mainland France)\n"
+                   "  - 2975 = RGR92 / UTM 40S (Reunion)\n"
+                   "  - 5490 = RGAF09 / UTM 20N (Guadeloupe, Martinique, "
+                   "St-Barthelemy, St-Martin)\n"
+                   "  - 2972 = RGFG95 / UTM 22N (French Guiana)\n"
+                   "  - 4471 = RGM04 / UTM 38S (Mayotte)\n"
+                   "  - 4467 = RGSPM06 / UTM 21N (St-Pierre-et-Miquelon)\n\n"
+                   "This code is also shown on your data provider's download "
+                   "page (RGE ALTI, etc.) or on epsg.io."),
+                parent=win, initialvalue=_init)
             _remonter()
-            # Priorité absolue à ce que l'utilisateur a saisi (ou laissé vide).
-            crs_repli = _normaliser_epsg(_rep_epsg)
-            _log(_L("CRS source retenu pour les fichiers sans CRS : ",
-                    "Source CRS used for files without CRS: ") + crs_repli)
+            _saisi = (_rep_epsg or "").strip()
+            if _saisi and _saisi != _init:
+                # L'utilisateur a saisi un code DIFFÉRENT du pré-rempli →
+                # il l'impose à tous les fichiers sans CRS (prioritaire).
+                crs_force = _normaliser_epsg(_saisi)
+                crs_repli = crs_force
+                _log(_L("CRS impose par l'utilisateur : ",
+                        "CRS forced by user: ") + crs_force)
+            else:
+                # Champ laissé tel quel (pré-rempli) ou vidé → déduction
+                # automatique par fichier (nom), repli 2154 en dernier recours.
+                crs_force = None
+                crs_repli = _CRS_REPLI
+                _log(_L("CRS deduit automatiquement du nom (fichier par "
+                        "fichier).",
+                        "CRS auto-detected from file name (per file)."))
 
         # L'utilisateur choisit la RÉSOLUTION VOULUE en sortie (en mètres),
         # PAS un pourcentage : une source 1 m, 3 m, 27 m… donne toujours la
@@ -3279,6 +3257,7 @@ def open_altimetrie_window(gui):
             try:
                 _res["ok"] = preparer_pays(src, dest, ratio=ratio,
                                            crs_repli=crs_repli,
+                                           crs_force=crs_force,
                                            cible_m=cible_m, log=_log)
             except Exception as _e:
                 _res["err"] = str(_e)
