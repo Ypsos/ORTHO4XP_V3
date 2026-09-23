@@ -2,6 +2,16 @@
 
 **[🇫🇷 Français](#ortho4xp-v3--version-officielle) | [🇬🇧 English](#ortho4xp-v3--official-version)**
 
+> [!IMPORTANT]
+> ### 🍎 Utilisateurs Mac / Mac users
+> **🇫🇷 Ne téléchargez PAS le ZIP du bouton vert « Code ».** Sur Mac, l'installation se fait avec **un seul fichier DMG**, disponible dans **Releases** (colonne de droite de cette page → *Releases* → rubrique *Assets*).
+> **[⬇️ Télécharger directement ORTHO4XP_V3_Mac.dmg](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest/download/ORTHO4XP_V3_Mac.dmg)** — puis voir [Utilisation rapide → Mac](#-mac).
+>
+> **🇬🇧 Do NOT download the ZIP from the green "Code" button.** On Mac, installation uses **a single DMG file**, available under **Releases** (right-hand column of this page → *Releases* → *Assets* section).
+> **[⬇️ Download ORTHO4XP_V3_Mac.dmg directly](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest/download/ORTHO4XP_V3_Mac.dmg)** — then see [Quick Start → Mac](#-mac-1).
+>
+> 🪟 🐧 Windows / Linux : bouton vert « Code » → « Download ZIP » / green "Code" button → "Download ZIP".
+
 ![Version](https://img.shields.io/badge/version-3.6-1f6feb?style=flat-square) ![Statut](https://img.shields.io/badge/statut%20%7C%20status-stable-2ea043?style=flat-square) ![Plateformes](https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square) ![X-Plane](https://img.shields.io/badge/X--Plane-12-ff8c00?style=flat-square) ![Licence](https://img.shields.io/badge/licence%20%7C%20license-GPL%20v3-yellow?style=flat-square)
 
 ---
@@ -370,7 +380,7 @@ Fichier modifié : `src/O4_Menu_Avance.py` (aucun fichier de langue impacté).
 
 ### 🍎 Mac
 
-> **Un seul téléchargement :** **[⬇️ Télécharger le DMG macOS](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)** (fichier `ORTHO4XP_V3_…_Mac.dmg`, rubrique *Assets*)
+> **Un seul téléchargement :** **[⬇️ Télécharger ORTHO4XP_V3_Mac.dmg](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest/download/ORTHO4XP_V3_Mac.dmg)** — il se trouve aussi dans **Releases** (colonne de droite de la page GitHub → rubrique *Assets*). ⚠️ Ne pas utiliser le ZIP du bouton vert « Code » sur Mac.
 
 1. Double-cliquez sur le fichier `.dmg` téléchargé : le disque **ORTHO4XP V3** s'ouvre
 2. Double-cliquez sur **`Lanceur_Installation_Prerequis`**
@@ -799,7 +809,7 @@ Modified file: `src/O4_Menu_Avance.py` (no language file impacted).
 
 ### 🍎 Mac
 
-> **A single download:** **[⬇️ Download the macOS DMG](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest)** (file `ORTHO4XP_V3_…_Mac.dmg`, *Assets* section)
+> **A single download:** **[⬇️ Download ORTHO4XP_V3_Mac.dmg](https://github.com/Ypsos/ORTHO4XP_V3/releases/latest/download/ORTHO4XP_V3_Mac.dmg)** — it is also under **Releases** (right-hand column of the GitHub page → *Assets* section). ⚠️ Do not use the green "Code" button ZIP on Mac.
 
 1. Double-click the downloaded `.dmg` file: the **ORTHO4XP V3** disk opens
 2. Double-click **`Lanceur_Installation_Prerequis`**
