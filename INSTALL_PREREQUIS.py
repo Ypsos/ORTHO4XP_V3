@@ -302,6 +302,47 @@ def run_cmd(cmd, log_fn=print, env=None, cwd=None, timeout=600):
         return 1
 
 
+def _linux_root_prefix():
+    """Prefixe pour lancer une commande avec les droits administrateur sous
+    Linux. Correctif retour forum (Linux Mint) : lance par double-clic, sans
+    terminal, « sudo » ne peut pas demander le mot de passe (« a terminal is
+    required to read the password ») -> les paquets systeme n'etaient jamais
+    installes. Ordre : deja root -> rien ; terminal present -> sudo
+    (comportement d'origine) ; sinon pkexec (fenetre graphique de mot de
+    passe, presente sur Mint/Ubuntu/Fedora) ; sinon sudo -A si SUDO_ASKPASS ;
+    sinon sudo (echouera proprement, code retour verifie par l'appelant)."""
+    try:
+        if os.geteuid() == 0:
+            return []
+    except Exception:
+        pass
+    try:
+        has_tty = sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        has_tty = False
+    if has_tty:
+        return ["sudo"]
+    if shutil.which("pkexec"):
+        return ["pkexec"]
+    if os.environ.get("SUDO_ASKPASS"):
+        return ["sudo", "-A"]
+    return ["sudo"]
+
+
+def _venv_pip_ok():
+    """True si le venv existant possede un pip utilisable."""
+    if not VENV_PY.exists():
+        return False
+    try:
+        r = subprocess.run(
+            [str(VENV_PY), "-m", "pip", "--version"],
+            capture_output=True, timeout=20
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  LOGIQUE D'INSTALLATION PAR PLATEFORME
 # ══════════════════════════════════════════════════════════════════════════════
@@ -313,6 +354,8 @@ class Installer:
         self.progress = progress_fn
         self.done_fn  = done_fn
         self.python312 = None
+        self._venv_failed = False
+        self._req_failed = False
 
     def _show_tkinter_status_dialog(self, is_present):
         if not HAS_TK:
@@ -527,28 +570,54 @@ class Installer:
         présent. Idempotent : réinstaller un paquet déjà présent est sans
         effet, donc cette fonction peut être appelée que Python soit déjà
         présent ou non."""
+        root = _linux_root_prefix()
+        if root and root[0] == "pkexec":
+            self.log("🔑 Une fenêtre va demander votre mot de passe administrateur.")
         if shutil.which("apt-get"):
-            run_cmd(["sudo", "apt-get", "update", "-y"], self.log, timeout=300)
-            run_cmd(
-                ["sudo", "apt-get", "install", "-y",
-                 "python3.12", "python3.12-venv", "python3-pip",
-                 "python3-tk", "p7zip-full", "gdal-bin", "libgdal-dev"],
-                self.log, timeout=600
+            # Paquet venv assorti a la version de Python REELLEMENT presente
+            # (ex. python3.12-venv) + paquet generique python3-venv.
+            # Python absent : on garde la liste d'origine (python3.12).
+            ver = None
+            py = self.python312 or find_python312()
+            if py:
+                try:
+                    r = subprocess.run(
+                        [py, "-c",
+                         "import sys;print('%d.%d' % sys.version_info[:2])"],
+                        capture_output=True, text=True, timeout=8
+                    )
+                    if r.returncode == 0 and r.stdout.strip():
+                        ver = r.stdout.strip()
+                except Exception:
+                    ver = None
+            if ver:
+                pkgs = ["python{}-venv".format(ver), "python3-venv"]
+            else:
+                pkgs = ["python3.12", "python3.12-venv"]
+            pkgs += ["python3-pip", "python3-tk", "p7zip-full",
+                     "gdal-bin", "libgdal-dev"]
+            # update + install en UNE commande = un seul mot de passe
+            script = (
+                "apt-get update -y; "
+                "DEBIAN_FRONTEND=noninteractive apt-get install -y "
+                + " ".join(pkgs)
             )
+            return run_cmd(root + ["sh", "-c", script], self.log, timeout=900)
         elif shutil.which("dnf"):
-            run_cmd(
-                ["sudo", "dnf", "install", "-y",
+            return run_cmd(
+                root + ["dnf", "install", "-y",
                  "python3.12", "python3-tkinter", "gdal", "gdal-devel"],
                 self.log, timeout=600
             )
         elif shutil.which("pacman"):
-            run_cmd(
-                ["sudo", "pacman", "-S", "--noconfirm",
+            return run_cmd(
+                root + ["pacman", "-S", "--noconfirm",
                  "python", "tk", "gdal"],
                 self.log, timeout=600
             )
         else:
             self.log("⚠️  Aucun gestionnaire de paquets connu (apt/dnf/pacman).")
+            return 1
 
     def _linux_support_missing(self):
         """Retourne True si le module ensurepip (fourni par python3.12-venv)
@@ -604,6 +673,17 @@ class Installer:
             self.log("⚠️  Paquets système requis manquants (venv / pip / tkinter).")
             self.log("   Installation... (peut demander votre mot de passe sudo)")
             self._linux_pkg_install()
+            # Correctif : on ne poursuit plus « a l'aveugle » si l'installation
+            # systeme a echoue (mot de passe refuse/annule, pas de terminal...)
+            if self._linux_support_missing():
+                self._finish(
+                    False,
+                    "❌ Paquets système non installés (venv / pip / tkinter).\n"
+                    "Ouvrez un terminal et tapez (Mint/Ubuntu/Debian) :\n"
+                    "   sudo apt install python3-venv python3-pip python3-tk\n"
+                    "puis relancez LANCEUR_INSTALL_LINUX.sh"
+                )
+                return
 
         self._create_venv()
         if not self._venv_ok():
@@ -613,19 +693,45 @@ class Installer:
         self._launch_launcher()
 
     def _create_venv(self):
-        # Sécurité : venv déjà présent → on ne le recrée PAS
+        # Sécurité : venv déjà présent ET sain → on ne le recrée PAS
         if VENV_DIR.exists():
-            self.log("♻️  Venv existant trouvé : {} — non réinstallé.".format(VENV_DIR))
-            return
+            if _venv_pip_ok():
+                self.log("♻️  Venv existant trouvé : {} — non réinstallé.".format(VENV_DIR))
+                return
+            # Correctif : venv créé autrefois sans pip (paquet venv absent)
+            # -> « No module named pip ». 1) réparation sur place.
+            self.log("⚠️  Venv existant incomplet (pip absent) — réparation...")
+            if VENV_PY.exists():
+                run_cmd(
+                    [str(VENV_PY), "-m", "ensurepip", "--upgrade"],
+                    self.log, timeout=120
+                )
+            if _venv_pip_ok():
+                self.log("✅ Venv réparé.")
+                return
+            # 2) réparation impossible : on le MET DE CÔTÉ (renommé, rien
+            #    n'est effacé) et on en recrée un propre.
+            stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            aside = VENV_DIR.with_name("venv_casse_" + stamp)
+            try:
+                VENV_DIR.rename(aside)
+                self.log("♻️  Ancien venv mis de côté : {}".format(aside))
+            except Exception as e:
+                self._venv_failed = True
+                self._finish(False, "❌ Venv cassé et impossible à renommer : {}".format(e))
+                return
         self.log("🔧 Création du venv Python...")
         rc = run_cmd(
             [self.python312, "-m", "venv", str(VENV_DIR)],
             self.log, timeout=120
         )
-        if rc != 0:
+        if rc != 0 or not _venv_pip_ok():
+            self._venv_failed = True
             self._finish(False, "❌ Échec création du venv.")
 
     def _venv_ok(self):
+        if self._venv_failed:
+            return False
         if not VENV_PY.exists():
             self._finish(False, "❌ Venv introuvable après création.")
             return False
@@ -663,6 +769,15 @@ class Installer:
             self.log("⚠️ Certains modules n'ont pas pu être installés.")
         else:
             self.log("✅ Modules installés.")
+        # Correctif : l'écran affichait « Installation terminée » même quand
+        # pip avait échoué. On vérifie maintenant les modules indispensables.
+        if not _check_modules_ok():
+            self._req_failed = True
+            self._finish(
+                False,
+                "❌ Modules Python indispensables manquants dans le venv "
+                "(voir messages ci-dessus)."
+            )
 
     def _install_gdal_mac(self, brew):
         self.log("── 🗺️ GDAL macOS ───────────────────────────")
@@ -671,6 +786,8 @@ class Installer:
         run_cmd([brew, "install", "gdal"], self.log, timeout=900)
 
     def _launch_launcher(self):
+        if self._req_failed:
+            return
         if not LAUNCHER_PY.exists():
             self._finish(False, "❌ Ortho4XP_Launcher.py introuvable.")
             return
