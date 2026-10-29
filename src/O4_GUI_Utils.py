@@ -183,6 +183,16 @@ _reload_theme()
 OsX = "dar" in sys.platform
 
 
+def _L(fr, en):
+    """Libelle bilingue FR/EN resolu dans le module (langue active du
+    lanceur, repli EN)."""
+    try:
+        from O4_Lang import current_lang
+        return fr if str(current_lang()).upper().startswith("FR") else en
+    except Exception:
+        return en
+
+
 class Ortho4XP_GUI(tk.Tk):
 
     zl_list = ["12", "13", "14", "15", "16", "17", "18"]
@@ -1266,7 +1276,9 @@ class Ortho4XP_GUI(tk.Tk):
             UI.vprint(1, "   WARNING: could not complete tile cfg:", e)
 
     def build_poly_file(self):
+        self._zones_before_build()
         tile = self.tile_from_interface()
+        self._zones_report(tile, allow_raise=True)
         # Le fichier de config tuile fait foi : on le complete/fige des le
         # Step 1 s'il n'est pas deja complet (voir _ensure_tile_cfg_complete).
         self._ensure_tile_cfg_complete(tile)
@@ -1279,7 +1291,9 @@ class Ortho4XP_GUI(tk.Tk):
         threading.Thread(target=_run).start()
 
     def build_mesh(self, event=None):
+        self._zones_before_build()
         tile = self.tile_from_interface()
+        self._zones_report(tile, allow_raise=False)
         _build_timeline.start(tr("Step 2 — Mesh"))
         self._activity_start()
         def _run():
@@ -1297,7 +1311,9 @@ class Ortho4XP_GUI(tk.Tk):
         except: pass
 
     def build_masks(self, event=None):
+        self._zones_before_build()
         tile = self.tile_from_interface()
+        self._zones_report(tile, allow_raise=False)
         _build_timeline.start(tr("Step 2.5 — Masks"))
         self._activity_start()
         def _run():
@@ -1307,7 +1323,9 @@ class Ortho4XP_GUI(tk.Tk):
         threading.Thread(target=_run).start()
 
     def build_sea_patches(self):
+        self._zones_before_build()
         tile = self.tile_from_interface()
+        self._zones_report(tile, allow_raise=False)
         _build_timeline.start(tr("Step 2.1 — Sea Patches"))
         self._activity_start()
         def _run():
@@ -1318,7 +1336,9 @@ class Ortho4XP_GUI(tk.Tk):
         threading.Thread(target=_run).start()
 
     def build_tile(self):
+        self._zones_before_build()
         tile = self.tile_from_interface()
+        self._zones_report(tile, allow_raise=False)
         _build_timeline.start(tr("Step 3 — DSF/Imagery"))
         self._activity_start()
         def _run():
@@ -1329,7 +1349,9 @@ class Ortho4XP_GUI(tk.Tk):
         threading.Thread(target=_run).start()
 
     def build_all(self):
+        self._zones_before_build()
         tile = self.tile_from_interface()
+        self._zones_report(tile, allow_raise=True)
         _build_timeline.start(tr("Build All"))
         self._activity_start()
         def _run():
@@ -1338,6 +1360,61 @@ class Ortho4XP_GUI(tk.Tk):
             self._activity_stop()
             _build_timeline.report()
         threading.Thread(target=_run).start()
+
+    # ── Zones ZL : controles au lancement de la construction ───────────
+    def _zones_before_build(self):
+        """Si la fenetre des zones est ouverte avec des zones non ecrites
+        dans le cfg de la tuile : proposer de les enregistrer (Oui/Non)."""
+        try:
+            w = getattr(self, "custom_zl_window", None)
+            if w is not None and w.winfo_exists():
+                w._ask_save_if_dirty()
+        except Exception as e:
+            UI.vprint(1, "   WARNING zones:", e)
+
+    def _zones_report(self, tile, allow_raise):
+        """Journal : nombre de zones lues dans le cfg et leur ZL. Si une zone
+        a un ZL superieur a mesh_zl : au Step 1 / Build All, mesh_zl est porte
+        a ce ZL et ecrit dans le cfg de la tuile ; aux autres etapes (mesh
+        deja construit) on avertit seulement. Jamais bloquant."""
+        try:
+            zls = [int(z[1]) for z in (tile.zone_list or [])]
+        except Exception:
+            zls = []
+        try:
+            if not zls:
+                UI.vprint(1, _L("Zones ZL lues dans le cfg : aucune",
+                                "ZL zones read from cfg: none"))
+                return
+            detail = ", ".join(
+                "ZL%d x%d" % (zl, zls.count(zl))
+                for zl in sorted(set(zls), reverse=True))
+            UI.vprint(1, _L("Zones ZL lues dans le cfg : ",
+                            "ZL zones read from cfg: ")
+                      + str(len(zls)) + " (" + detail + ")")
+            zmax = max(zls)
+            old = int(tile.mesh_zl)
+            if zmax <= old:
+                return
+            if not allow_raise:
+                UI.vprint(0, _L(
+                    "ATTENTION : une zone a un ZL%d supérieur à mesh_zl (%d)."
+                    " Refaites les étapes 1 et 2 pour que mesh_zl soit relevé."
+                    % (zmax, old),
+                    "WARNING: a zone has ZL%d higher than mesh_zl (%d)."
+                    " Redo steps 1 and 2 so that mesh_zl is raised."
+                    % (zmax, old)))
+                return
+            tile.mesh_zl = zmax
+            _sync_config_window_mesh_zl(self, zmax)
+            if _write_mesh_zl_to_tile_cfg(tile, zmax):
+                UI.vprint(0, _L(
+                    "mesh_zl porté de %d à %d pour les zones ZL%d"
+                    % (old, zmax, zmax),
+                    "mesh_zl raised from %d to %d for the ZL%d zones"
+                    % (old, zmax, zmax)))
+        except Exception as e:
+            UI.vprint(1, "   WARNING zones:", e)
 
     def get_lat_lon(self):
         lat = int(self.lat.get() or 48)
@@ -1869,6 +1946,93 @@ class Ortho4XP_PersonalProvider(tk.Toplevel):
         self.destroy()
 
 
+def _tile_cfg_exists(tile):
+    return (os.path.isfile(os.path.join(
+                tile.build_dir,
+                "Ortho4XP_" + FNAMES.short_latlon(tile.lat, tile.lon) + ".cfg"))
+            or os.path.isfile(os.path.join(tile.build_dir, "Ortho4XP.cfg")))
+
+
+def _write_mesh_zl_to_tile_cfg(tile, new_mesh_zl):
+    """Ecrit mesh_zl dans le cfg de la tuile. Si le cfg existe : on le relit
+    et on ne change QUE mesh_zl. Sinon : on ecrit la tuile telle quelle (avec
+    son mesh_zl deja releve). Retourne True si l'ecriture a reussi."""
+    try:
+        if _tile_cfg_exists(tile):
+            probe = CFG.Tile(tile.lat, tile.lon, tile.custom_build_dir)
+            probe.read_from_config()
+            probe.mesh_zl = int(new_mesh_zl)
+            return bool(probe.write_to_config())
+        os.makedirs(tile.build_dir, exist_ok=True)
+        return bool(tile.write_to_config())
+    except Exception as e:
+        UI.vprint(0, "   WARNING mesh_zl:", e)
+        return False
+
+
+def _airports_from_osm_xml(data):
+    """Liste (lat, lon, libelle, nom) des aerodromes d'un XML OSM (noeuds,
+    chemins et relations aeroway=aerodrome). Lecture seule, sans reseau."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(data)
+    nodes, ways, out = {}, {}, []
+    for n in root.iter("node"):
+        try:
+            nodes[n.get("id")] = (float(n.get("lat")), float(n.get("lon")))
+        except (TypeError, ValueError):
+            pass
+    for w in root.iter("way"):
+        ways[w.get("id")] = [nd.get("ref") for nd in w.iter("nd")]
+
+    def _tags(el):
+        return {t.get("k"): t.get("v") for t in el.iter("tag")}
+
+    def _center(refs):
+        pts = [nodes[r] for r in refs if r in nodes]
+        if not pts:
+            return None
+        return (sum(p[0] for p in pts) / len(pts),
+                sum(p[1] for p in pts) / len(pts))
+
+    for el in list(root.iter("node")) + list(root.iter("way")) \
+            + list(root.iter("relation")):
+        tags = _tags(el)
+        if tags.get("aeroway") != "aerodrome":
+            continue
+        if el.tag == "node":
+            c = nodes.get(el.get("id"))
+        elif el.tag == "way":
+            c = _center(ways.get(el.get("id"), []))
+        else:
+            refs = []
+            for m in el.iter("member"):
+                if m.get("type") == "way":
+                    refs += ways.get(m.get("ref"), [])
+                elif m.get("type") == "node":
+                    refs.append(m.get("ref"))
+            c = _center(refs)
+        if not c:
+            continue
+        name = tags.get("name", "")
+        icao = tags.get("icao") or tags.get("iata") or tags.get("ref") or ""
+        label = icao if icao else (name[:14] if name else "APT")
+        out.append((c[0], c[1], label, name))
+    return out
+
+
+def _sync_config_window_mesh_zl(gui, value):
+    """Si la fenetre Configuration est ouverte en mode tuile, sa case
+    mesh_zl affiche la nouvelle valeur (sinon "Ecrire cfg tuile" remettrait
+    l'ancienne)."""
+    try:
+        win = getattr(gui, "_config_win", None)
+        if (win is not None and win.winfo_exists()
+                and getattr(win, "_cfg_mode", "tile") == "tile"):
+            win.v_["mesh_zl"].set(str(int(value)))
+    except Exception:
+        pass
+
+
 class Ortho4XP_Custom_ZL(tk.Toplevel):
 
     dico_color = {
@@ -1877,6 +2041,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         17: "#7eca7e",   # vert Roland
         18: "#a6d96a",   # vert Roland clair
         19: "#c8e65a",   # vert-jaune Roland très clair
+        20: "#e0c84a",   # jaune-or
     }
     zl_list = ["10", "11", "12", "13"]
     points = []
@@ -1925,7 +2090,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
 
         tk.Toplevel.__init__(self)
         self.configure(bg=_BG)
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.title(tr("Preview / Custom zoomlevels"))
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
@@ -2011,6 +2176,39 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             command=lambda: self.preview_tile(lat, lon),
         ).grid(row=row, padx=5, column=0, sticky=N + S + E + W)
         row += 1
+        # Liste des aeroports (OACI) de la carte : un clic centre la vue
+        # dessus, sans avoir a les chercher par defilement.
+        tk.Label(
+            self.frame_left, anchor=W,
+            text=_L("Aéroports : ", "Airports: "), bg=_BG, fg=_FG,
+        ).grid(row=row, column=0, padx=5, pady=3, sticky=W)
+        self._apt_choice = tk.StringVar()
+        self._apt_choice.set(_L("(après Preview)", "(after Preview)"))
+        self._apt_targets = {}
+        self.apt_combo = ttk.Combobox(
+            self.frame_left,
+            textvariable=self._apt_choice,
+            values=[],
+            width=26,
+            state="readonly",
+        )
+        self.apt_combo.grid(row=row, column=0, padx=5, pady=3, sticky=E)
+        self.apt_combo.bind("<<ComboboxSelected>>", self._goto_airport)
+        row += 1
+        # Loupe haute definition : carre net telecharge autour d'un point
+        # (aeroport choisi ou centre de la vue), en memoire seulement.
+        _ctk_button(
+            self.frame_left,
+            text=_L("🔍 Détail ici", "🔍 Detail here"),
+            command=self._detail_at_view_center,
+        ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
+        row += 1
+        _ctk_button(
+            self.frame_left,
+            text=_L("↩ Carte entière", "↩ Whole map"),
+            command=self._exit_detail,
+        ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
+        row += 1
         tk.Label(
             self.frame_left,
             anchor=W,
@@ -2034,13 +2232,13 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         row += 1
 
         self.frame_zlbtn = tk.Frame(self.frame_left, border=0, bg=_BG)
-        for i in range(5):
+        for i in range(6):
             self.frame_zlbtn.columnconfigure(i, weight=1)
         self.frame_zlbtn.grid(
             row=row, column=0, columnspan=1, sticky=N + S + W + E
         )
         row += 1
-        for zl in range(15, 20):
+        for zl in range(15, 21):
             col = zl - 15
             tk.Radiobutton(
                 self.frame_zlbtn,
@@ -2112,7 +2310,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
         _ctk_button(
-            self.frame_left, text=tr("    Exit     "), command=self.destroy
+            self.frame_left, text=tr("    Exit     "), command=self._on_close
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
         self.canvas = tk.Canvas(self.frame_right, bd=0, height=750, width=750)
@@ -2124,6 +2322,9 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
 
     def preview_tile(self, lat, lon):
+        # Zones modifiees non ecrites : proposer de les enregistrer avant de
+        # recharger celles du cfg (sinon elles seraient perdues).
+        self._ask_save_if_dirty()
         # Recharger les zones depuis le .cfg de la tuile
         try:
             _tile = CFG.Tile(lat, lon,
@@ -2213,6 +2414,20 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             self.canvas.delete(self.boundary)
         except:
             pass
+        for item in getattr(self, "_apt_items", []):
+            try:
+                self.canvas.delete(item)
+            except:
+                pass
+        self._apt_items = []
+        # Nouvel apercu : on quitte la vue detail eventuelle
+        self._in_detail = False
+        self._base_state = None
+        # Les zones vont etre rechargees depuis le cfg (CFG.zone_list) :
+        # on repart d'une liste vide pour ne pas les dupliquer a chaque Preview.
+        self.polygon_list = []
+        self.polyobj_list = []
+        self._zones_loaded = False
         self.image = Image.open(filepreview)
         self._image_orig = self.image.copy()
         self._zoom_scale = 1.0
@@ -2281,9 +2496,16 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 [x, y] = self.latlon_to_xy(latp, lonp, self.zoomlevel)
                 self.points += [int(x), int(y)]
             self.redraw_poly()
-            self.save_zone_cmd()
+            self.save_zone_cmd(_write=False)
+        self._zones_loaded = True
         # ── Overlay aeroports via Overpass ────────────────────────────────
         self._airports_pending = []
+        self._airports_names = []
+        self._airports_fetch_done = False
+        try:
+            self._apt_choice.set(_L("(recherche…)", "(searching…)"))
+        except Exception:
+            pass
         self._airports_drawn   = False
         self._airports_retry   = 0
         threading.Thread(
@@ -2296,6 +2518,40 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         return
 
     def _fetch_airports_overpass(self, lat, lon):
+        # 1) Donnees aeroports deja telechargees par l'etape 1 (cache OSM de
+        #    la tuile) : hors ligne, immediat.
+        # 2) Sinon : telechargement par la fonction OSM d'Ortho (celle de
+        #    l'etape 1, qui fonctionne), avec rotation des serveurs.
+        # 3) Sinon : ancienne requete directe (conservee en dernier recours).
+        try:
+            res = []
+            cached = FNAMES.osm_cached(lat, lon, "airports")
+            if os.path.isfile(cached):
+                import bz2
+                with bz2.open(cached, "rb") as fh:
+                    res = _airports_from_osm_xml(fh.read())
+            if not res:
+                import O4_OSM_Utils as OSM
+                data = OSM.get_overpass_data(
+                    ('node["aeroway"="aerodrome"]',
+                     'way["aeroway"="aerodrome"]',
+                     'rel["aeroway"="aerodrome"]'),
+                    (lat, lon, lat + 1, lon + 1))
+                if data:
+                    res = _airports_from_osm_xml(data)
+            if res:
+                self._airports_names = [r[3] for r in res]
+                self._airports_pending = [(r[0], r[1], r[2]) for r in res]
+                self._airports_fetch_done = True
+                return
+        except Exception as e:
+            UI.vprint(1, "   WARNING airports:", e)
+        try:
+            self._fetch_airports_overpass_direct(lat, lon)
+        finally:
+            self._airports_fetch_done = True
+
+    def _fetch_airports_overpass_direct(self, lat, lon):
         import urllib.request, json
         q = (
             "[out:json][timeout:25];("
@@ -2327,6 +2583,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             print(tr("[OACI] Serveurs Overpass indisponibles — cercles aéroports non affichés."))
             return
         result = []
+        names = []
         for el in data.get("elements", []):
             tags = el.get("tags", {})
             if el["type"] == "node":
@@ -2340,6 +2597,8 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             name  = tags.get("name", "")
             label = icao if icao else (name[:14] if name else "APT")
             result.append((alat, alon, label))
+            names.append(name)
+        self._airports_names = names
         self._airports_pending = result
 
     def _draw_airports_when_ready(self):
@@ -2351,12 +2610,30 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             return
         if not self._airports_pending:
             self._airports_retry += 1
-            if self._airports_retry < 120:  # 60s max (120 × 500ms)
+            # On attend tant que la recherche n'est pas finie (10 min max).
+            if (not getattr(self, "_airports_fetch_done", False)
+                    and self._airports_retry < 1200):
                 self.canvas.after(500, self._draw_airports_when_ready)
+            else:
+                self._apt_targets = {}
+                self._apt_choice.set(_L("(aucun aéroport trouvé)",
+                                        "(no airport found)"))
             return
         self._airports_drawn = True
+        self._draw_airport_items()
+        self._fill_airport_list()
+
+    def _draw_airport_items(self):
+        """Dessine les cercles aeroports (thread principal). Ils sont ranges
+        a part (self._apt_items), PAS dans polyobj_list, pour ne pas decaler
+        la correspondance zone <-> dessin utilisee par les suppressions."""
+        for item in getattr(self, "_apt_items", []):
+            try:
+                self.canvas.delete(item)
+            except Exception:
+                pass
         new_items = []
-        for (alat, alon, label) in self._airports_pending:
+        for (alat, alon, label) in getattr(self, "_airports_pending", []):
             try:
                 px, py = self.latlon_to_xy(alat, alon, self.zoomlevel)
                 r = 13
@@ -2383,7 +2660,206 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 except Exception:
                     pass
         self.canvas.after(0, _raise_all)
-        self.polyobj_list += new_items
+        self._apt_items = new_items
+
+    def _fill_airport_list(self):
+        """Remplit la liste deroulante des aeroports de la carte."""
+        try:
+            names = getattr(self, "_airports_names", [])
+            entries = []
+            for i, (alat, alon, label) in enumerate(self._airports_pending):
+                name = names[i] if i < len(names) else ""
+                txt = label if (not name or name[:14] == label) else (
+                    label + " — " + name)
+                base, k = txt, 2
+                while txt in [e[0] for e in entries]:
+                    txt = base + " (" + str(k) + ")"
+                    k += 1
+                entries.append((txt, alat, alon))
+            entries.sort(key=lambda e: e[0].lower())
+            self._apt_targets = {e[0]: (e[1], e[2]) for e in entries}
+            self.apt_combo.configure(values=[e[0] for e in entries])
+            self._apt_choice.set(
+                _L("Choisir un aéroport…", "Choose an airport…")
+                if entries else _L("(aucun aéroport)", "(no airport)"))
+        except Exception as e:
+            UI.vprint(1, "   WARNING airports list:", e)
+
+    def _goto_airport(self, event=None):
+        """Centre la vue de la carte sur l'aeroport choisi dans la liste."""
+        try:
+            target = self._apt_targets.get(self._apt_choice.get())
+            if not target or not hasattr(self, "map_x_res"):
+                return
+            if getattr(self, "_in_detail", False):
+                self._exit_detail()
+            # Changer d'aeroport termine la zone en cours (mise de cote, sans
+            # ecriture du cfg) pour ne pas la relier a la suivante.
+            if len(self.points) >= 6:
+                self.save_zone_cmd(_write=False)
+            px, py = self.latlon_to_xy(target[0], target[1], self.zoomlevel)
+            cw = max(1, self.canvas.winfo_width())
+            ch = max(1, self.canvas.winfo_height())
+            self.canvas.xview_moveto(max(0.0, (px - cw / 2) / self.map_x_res))
+            self.canvas.yview_moveto(max(0.0, (py - ch / 2) / self.map_y_res))
+            self.canvas.focus_set()
+            self._load_detail(target[0], target[1])
+        except Exception as e:
+            UI.vprint(1, "   WARNING airport view:", e)
+
+    # ── Vue detail haute definition ────────────────────────────────────
+    _DETAIL_TILES = 24   # carre de 24 x 24 images
+    _DETAIL_ZL = 17      # environ 0,8 m par pixel (chemins, routes visibles)
+
+    def _detail_at_view_center(self):
+        try:
+            if not hasattr(self, "map_x_res"):
+                return
+            cx = self.canvas.canvasx(self.canvas.winfo_width() / 2)
+            cy = self.canvas.canvasy(self.canvas.winfo_height() / 2)
+            [la, lo] = self.xy_to_latlon(cx, cy, self.zoomlevel)
+            self._load_detail(la, lo)
+        except Exception as e:
+            UI.vprint(1, "   WARNING vue detail:", e)
+
+    def _load_detail(self, la, lo):
+        """Telecharge (en arriere-plan) un carre net autour de (la, lo) avec
+        la source de l'apercu, puis affiche la vue detail. Memoire seulement :
+        aucun fichier ecrit."""
+        if getattr(self, "_detail_busy", False):
+            return
+        code = self.map_combo.get()
+        provider = IMG.providers_dict.get(code) if isinstance(
+            IMG.providers_dict, dict) else None
+        if not provider:
+            messagebox.showinfo(
+                _L("Vue détail", "Detail view"),
+                _L("La vue détail ne peut pas utiliser la source « %s ».\n"
+                   "Choisissez une source simple (ex. BI) en haut, puis "
+                   "refaites Aperçu." % code,
+                   "The detail view cannot use the source '%s'.\n"
+                   "Choose a simple source (e.g. BI) at the top, then "
+                   "redo Preview." % code),
+                parent=self)
+            return
+        zl = self._DETAIL_ZL
+        try:
+            if "max_zl" in provider:
+                zl = min(zl, int(provider["max_zl"]))
+        except Exception:
+            pass
+        base_zl = (self._base_state["zoomlevel"]
+                   if getattr(self, "_base_state", None) else self.zoomlevel)
+        if zl <= int(base_zl):
+            return
+        n = self._DETAIL_TILES
+        (tx, ty) = GEO.wgs84_to_gtile(la, lo, zl)
+        x0, y0 = int(tx) - n // 2, int(ty) - n // 2
+        self._detail_busy = True
+        UI.vprint(1, _L("Vue détail : téléchargement ZL",
+                        "Detail view: downloading ZL")
+                  + str(zl) + " …")
+
+        def _work():
+            img = None
+            try:
+                if provider.get("grid_type") == "webmercator":
+                    ok, img = IMG.build_texture_from_tilbox(
+                        (x0, y0, x0 + n, y0 + n), zl, provider,
+                        progress={"done": 0, "bar": 1})
+                else:
+                    (latmax, lonmin) = GEO.gtile_to_wgs84(x0, y0, zl)
+                    (latmin, lonmax) = GEO.gtile_to_wgs84(x0 + n, y0 + n, zl)
+                    (xmin, ymax) = GEO.geo_to_webm(lonmin, latmax)
+                    (xmax, ymin) = GEO.geo_to_webm(lonmax, latmin)
+                    ok, img = IMG.build_texture_from_bbox_and_size(
+                        (xmin, ymax, xmax, ymin), "3857",
+                        (n * 256, n * 256), provider)
+            except Exception as e:
+                UI.vprint(1, "   WARNING vue detail:", e)
+                img = None
+
+            def _done():
+                self._detail_busy = False
+                if img is None:
+                    UI.vprint(0, _L("Vue détail : téléchargement impossible.",
+                                    "Detail view: download failed."))
+                    return
+                self._enter_detail(img, x0, y0, n, zl, la, lo)
+            try:
+                self.canvas.after(0, _done)
+            except Exception:
+                self._detail_busy = False
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _set_base_image(self, im_orig, scale):
+        self._image_orig = im_orig
+        self._zoom_scale = scale
+        if scale != 1.0:
+            w = max(1, int(im_orig.width * scale))
+            h = max(1, int(im_orig.height * scale))
+            self.image = im_orig.resize((w, h), Image.LANCZOS)
+        else:
+            self.image = im_orig.copy()
+        self.photo = ImageTk.PhotoImage(self.image)
+        self.map_x_res = self.image.width
+        self.map_y_res = self.image.height
+        self.canvas.itemconfig(self.img_map, image=self.photo)
+        self.canvas.config(scrollregion=self.canvas.bbox(ALL))
+
+    def _center_on(self, la, lo):
+        px, py = self.latlon_to_xy(la, lo, self.zoomlevel)
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        self.canvas.xview_moveto(max(0.0, (px - cw / 2) / self.map_x_res))
+        self.canvas.yview_moveto(max(0.0, (py - ch / 2) / self.map_y_res))
+
+    def _enter_detail(self, img, x0, y0, n, zl, la, lo):
+        """Remplace l'apercu par le carre net (meme systeme de coordonnees :
+        zones, points et aeroports se placent tout seuls)."""
+        try:
+            if not getattr(self, "_in_detail", False):
+                self._base_state = {
+                    "zoomlevel": self.zoomlevel,
+                    "xmin": self.xmin, "ymin": self.ymin,
+                    "image_orig": self._image_orig,
+                    "scale": getattr(self, "_zoom_scale", 1.0),
+                }
+            if img.size != (n * 256, n * 256):
+                img = img.resize((n * 256, n * 256), Image.LANCZOS)
+            self.zoomlevel = zl
+            self.xmin, self.ymin = x0 * 256, y0 * 256
+            self._in_detail = True
+            self._set_base_image(img, 1.0)
+            self._redraw_all(getattr(self, "_preview_lat", None),
+                             getattr(self, "_preview_lon", None))
+            self._center_on(la, lo)
+            self.canvas.focus_set()
+            UI.vprint(1, _L("Vue détail prête (↩ Carte entière pour revenir).",
+                            "Detail view ready (↩ Whole map to go back)."))
+        except Exception as e:
+            UI.vprint(0, "   WARNING vue detail:", e)
+
+    def _exit_detail(self):
+        """Retour a l'apercu de la tuile entiere, zones conservees."""
+        st = getattr(self, "_base_state", None)
+        if not getattr(self, "_in_detail", False) or not st:
+            return
+        try:
+            cx = self.canvas.canvasx(self.canvas.winfo_width() / 2)
+            cy = self.canvas.canvasy(self.canvas.winfo_height() / 2)
+            [la, lo] = self.xy_to_latlon(cx, cy, self.zoomlevel)
+            self.zoomlevel = st["zoomlevel"]
+            self.xmin, self.ymin = st["xmin"], st["ymin"]
+            self._in_detail = False
+            self._set_base_image(st["image_orig"], st["scale"])
+            self._redraw_all(getattr(self, "_preview_lat", None),
+                             getattr(self, "_preview_lon", None))
+            self._center_on(la, lo)
+            self._base_state = None
+        except Exception as e:
+            UI.vprint(0, "   WARNING vue detail:", e)
 
     def scroll_start(self, event):
         self.canvas.focus_set()
@@ -2414,7 +2890,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         if len(self.points) >= 6 and prev_zl is not None and new_zl != prev_zl:
             # On sauve la zone en cours avec SON ZL (prev_zl), pas le nouveau.
             self.zlpol.set(prev_zl)
-            self.save_zone_cmd()        # remet points/coords a zero
+            self.save_zone_cmd(_write=False)  # remet points/coords a zero
             self.zlpol.set(new_zl)      # retablit la selection utilisateur
         self._prev_zlpol = new_zl
         self.redraw_poly()
@@ -2538,6 +3014,15 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
     def newPoint(self, event):
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
+        # Recliquer sur le PREMIER point d'une zone (>= 3 points) la referme :
+        # elle est mise de cote (sans ecriture du cfg) et la suivante peut
+        # commencer, sans trait entre les deux.
+        if len(self.points) >= 6:
+            dx = self.points[0] - x
+            dy = self.points[1] - y
+            if dx * dx + dy * dy <= 12 * 12:
+                self.save_zone_cmd(_write=False)
+                return
         self.points += [x, y]
         [latp, lonp] = self.xy_to_latlon(x, y, self.zoomlevel)
         self.coords += [latp, lonp]
@@ -2583,7 +3068,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             )
             self.points += [int(x), int(y)]
         self.redraw_poly()
-        self.save_zone_cmd()
+        self.save_zone_cmd(_write=False)
         return
 
     def _zoom(self, event):
@@ -2601,7 +3086,9 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             self._zoom_scale = 1.0
         new_scale = self._zoom_scale * factor
         # Limite : 0.25x (zoom arrière max) à 8x (zoom avant max)
-        if new_scale < 0.25 or new_scale > 8.0:
+        # En vue detail l'image est deja tres fine : x2 max (memoire)
+        max_scale = 2.0 if getattr(self, "_in_detail", False) else 8.0
+        if new_scale < 0.25 or new_scale > max_scale:
             return
         self._zoom_scale = new_scale
         # Position du curseur dans le canvas (avant zoom)
@@ -2621,7 +3108,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         # Recalculer coordonnées géo au zoomlevel logique
         lat = getattr(self, '_preview_lat', None)
         lon = getattr(self, '_preview_lon', None)
-        if lat is not None:
+        if lat is not None and not getattr(self, "_in_detail", False):
             zl = self.zoomlevel
             (tilxleft, tilytop) = GEO.wgs84_to_gtile(lat + 1, lon, zl)
             (self.latmax, self.lonmin) = GEO.gtile_to_wgs84(tilxleft, tilytop, zl)
@@ -2660,6 +3147,14 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         old_coords_list = [p[1] for p in old_poly_list]
         old_zl_list     = [p[2] for p in old_poly_list]
         old_src_list    = [p[3] for p in old_poly_list]
+        # Zone en cours de trace : conservee (avant, le zoom l'effacait)
+        cur_coords = list(self.coords)
+        cur_zl = self.zlpol.get()
+        cur_src = self.zmap_combo.get()
+        try:
+            self.canvas.delete(self.poly_curr)
+        except Exception:
+            pass
         for obj in self.polyobj_list:
             try: self.canvas.delete(obj)
             except: pass
@@ -2674,9 +3169,22 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 [x, y] = self.latlon_to_xy(coords[2*i], coords[2*i+1], self.zoomlevel)
                 self.points += [int(x), int(y)]
             self.redraw_poly()
-            self.save_zone_cmd()
+            self.save_zone_cmd(_write=False)
+        self.zlpol.set(cur_zl)
+        self.zmap_combo.set(cur_src)
+        self.coords = cur_coords
         self.points = []
-        self.coords = []
+        for i in range(len(cur_coords) // 2):
+            [x, y] = self.latlon_to_xy(
+                cur_coords[2 * i], cur_coords[2 * i + 1], self.zoomlevel)
+            self.points += [int(x), int(y)]
+        self.poly_curr = None
+        if self.points:
+            self.redraw_poly()
+        # Les aeroports suivent le zoom (redessines a la bonne place)
+        if getattr(self, "_airports_drawn", False):
+            self._draw_airport_items()
+
 
     def _ctrl_click(self, event):
         """Ctrl+clic gauche : supprime la zone si le clic est dedans, sinon crée un rectangle."""
@@ -2759,7 +3267,8 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                     (
                         40000
                         * cos(pi / 180 * polygon[1][0])
-                        / 2 ** (int(self.zl_combo.get()) + 8)
+                        / 2 ** (int(self.zoomlevel) + 8)
+                        / getattr(self, "_zoom_scale", 1.0)
                     )
                     ** 2
                 )
@@ -2769,8 +3278,15 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         self.gb.set("{:.1f}".format(total_size) + "Gb")
         return
 
-    def save_zone_cmd(self):
+    def save_zone_cmd(self, event=None, _write=True):
+        # event : permet l'appel par la touche "n".
+        # _write=True (bouton "Sauv. zone" / touche n) : range la zone en
+        # cours puis ecrit TOUTES les zones dans le cfg en une fois.
+        # _write=False : zone simplement mise de cote (fin de trace, redessin
+        # a l'ouverture ou au zoom) -> pas d'ecriture du cfg.
         if len(self.points) < 6:
+            if _write:
+                self.save_zone_list()
             return
         self.polyobj_list.append(self.poly_curr)
         self.polygon_list.append(
@@ -2780,6 +3296,9 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         self.poly_curr = []
         self.points = []
         self.coords = []
+        if _write:
+            # Aucune zone ne reste seulement en memoire : ecriture du cfg.
+            self.save_zone_list()
         return
 
     def build_geotiffs_ifc(self):
@@ -2862,7 +3381,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             self.coords = []
         return
 
-    def save_zone_list(self):
+    def _current_zone_list(self):
         ordered_list = sorted(
             self.polygon_list, key=lambda item: item[2], reverse=True
         )
@@ -2876,6 +3395,57 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             ]:  # repeat first point for point_in_polygon algo
                 tmp.append(pt)
             zone_list.append([tmp, item[2], item[3]])
+        return zone_list
+
+    def _zone_list_in_cfg(self):
+        """Liste des zones actuellement ECRITE dans le cfg de la tuile
+        ([] si pas de cfg)."""
+        tile = CFG.Tile(self.lat, self.lon,
+                        self.parent.custom_build_dir.get()
+                        if hasattr(self.parent, "custom_build_dir") else "")
+        if not _tile_cfg_exists(tile):
+            return []
+        tile.read_from_config()
+        return list(tile.zone_list or [])
+
+    def _zones_unsaved(self):
+        """True si des zones ne sont pas ecrites dans le cfg : zone en cours
+        de trace (>= 3 points) ou liste en memoire differente du cfg. Avant
+        la premiere Preview (zones pas encore chargees) : False, pour ne
+        jamais proposer d'ecraser le cfg par une liste vide."""
+        if not getattr(self, "_zones_loaded", False):
+            return False
+        if len(self.points) >= 6:
+            return True
+        try:
+            return self._current_zone_list() != self._zone_list_in_cfg()
+        except Exception:
+            return False
+
+    def _ask_save_if_dirty(self):
+        """Message Oui/Non si des zones ne sont pas enregistrees."""
+        try:
+            if not self._zones_unsaved():
+                return
+            if messagebox.askyesno(
+                _L("Zones", "Zones"),
+                _L("Des zones ne sont pas enregistrées. Les enregistrer ?",
+                   "Some zones are not saved. Save them?"),
+                parent=self,
+            ):
+                self.save_zone_list()  # zone en cours comprise
+        except Exception as e:
+            UI.vprint(1, "   WARNING zones:", e)
+
+    def _on_close(self):
+        self._ask_save_if_dirty()
+        self.destroy()
+
+    def save_zone_list(self):
+        # La zone en cours de trace (>= 3 points) est comprise.
+        if len(self.points) >= 6:
+            self.save_zone_cmd(_write=False)
+        zone_list = self._current_zone_list()
         CFG.zone_list = zone_list
         # Sauvegarde dans le fichier .cfg de la tuile
         # → les zones sont rechargées au prochain démarrage
@@ -2884,7 +3454,31 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             tile = CFG.Tile(self.lat, self.lon,
                             self.parent.custom_build_dir.get()
                             if hasattr(self.parent, "custom_build_dir") else "")
+            # Le cfg tuile fait foi : on le relit d'abord pour ne changer QUE
+            # les zones (et mesh_zl si besoin), sans ecraser les autres
+            # reglages de la tuile (custom_dem, etc.) par les valeurs globales.
+            if _tile_cfg_exists(tile):
+                tile.read_from_config()
             tile.zone_list = zone_list
+            # mesh_zl doit couvrir le ZL le plus eleve des zones
+            try:
+                _zmax = max([int(z[1]) for z in zone_list] or [0])
+                _old = int(tile.mesh_zl)
+                if _zmax > _old:
+                    tile.mesh_zl = _zmax
+                    _sync_config_window_mesh_zl(self.parent, _zmax)
+                    UI.vprint(0, _L(
+                        "mesh_zl porté de %d à %d pour les zones ZL%d"
+                        % (_old, _zmax, _zmax),
+                        "mesh_zl raised from %d to %d for the ZL%d zones"
+                        % (_old, _zmax, _zmax)))
+                    if os.path.isfile(FNAMES.mesh_file(
+                            tile.build_dir, self.lat, self.lon)):
+                        UI.vprint(0, _L(
+                            "   Le mesh existe déjà : refaites les étapes 1 et 2.",
+                            "   The mesh already exists: redo steps 1 and 2."))
+            except Exception as _e:
+                UI.vprint(1, "   WARNING mesh_zl:", _e)
             # Créer le dossier build_dir si nécessaire avant d'écrire le cfg
             import os as _os
             _os.makedirs(tile.build_dir, exist_ok=True)

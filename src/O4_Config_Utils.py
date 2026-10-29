@@ -1770,6 +1770,27 @@ class Ortho4XP_Config(tk.Toplevel):
                 build_dir,
                 "Ortho4XP_" + FNAMES.short_latlon(lat, lon) + ".cfg"
             )
+            # Les zones ZL ne sont pas affichees dans cette fenetre : on
+            # conserve celles deja ecrites dans le cfg (sinon elles etaient
+            # effacees du fichier a chaque "Ecrire cfg tuile").
+            kept_zones = []
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, "r", encoding="utf-8") as fz:
+                        for zline in fz:
+                            zline = zline.strip()
+                            if zline.startswith("zone_list="):
+                                kept_zones = list(cfg_parse_value(
+                                    "zone_list", zline.split("=", 1)[1]) or [])
+                            elif "zone_list.append" in zline:
+                                kept_zones.append(cfg_parse_zone_append(zline))
+                except Exception as ez:
+                    UI.vprint(1, "write_tile_cfg: zone_list not kept ->", ez)
+                    kept_zones = []
+            try:
+                zmax = max([int(z[1]) for z in kept_zones] or [0])
+            except Exception:
+                zmax = 0
             if os.path.exists(config_file):
                 os.replace(config_file, config_file + ".bak")
         except Exception as e:
@@ -1784,11 +1805,27 @@ class Ortho4XP_Config(tk.Toplevel):
             # (inclut custom_dem, fill_nodata, default_website, default_zl)
             for var in list_tile_vars:
                 if var == "zone_list":
+                    if kept_zones:
+                        f.write("zone_list=" + str(kept_zones) + "\n")
                     continue
                 try:
                     v = self.v_[var]
                     # Supporte tk.StringVar ou objet parent avec .get()
                     value = v.get().strip() if hasattr(v, "get") else str(v).strip()
+                    # mesh_zl doit couvrir le ZL le plus eleve des zones
+                    if var == "mesh_zl" and zmax:
+                        try:
+                            if zmax > int(value):
+                                UI.vprint(0, _L(
+                                    "mesh_zl porté de %s à %d pour les zones ZL%d"
+                                    % (value, zmax, zmax),
+                                    "mesh_zl raised from %s to %d for the ZL%d zones"
+                                    % (value, zmax, zmax)))
+                                value = str(zmax)
+                                if hasattr(v, "set"):
+                                    v.set(value)
+                        except ValueError:
+                            pass
                     f.write(var + "=" + value + "\n")
                 except Exception as e2:
                     UI.vprint(2, "write_tile_cfg: skipping var", var, "->", e2)
