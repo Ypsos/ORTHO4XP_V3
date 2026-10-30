@@ -1994,15 +1994,25 @@ def _airports_from_osm_xml(data):
         return (sum(p[0] for p in pts) / len(pts),
                 sum(p[1] for p in pts) / len(pts))
 
+    def _bbox(refs):
+        # Emprise du contour de l'aerodrome : (latmin, latmax, lonmin, lonmax)
+        pts = [nodes[r] for r in refs if r in nodes]
+        if len(pts) < 2:
+            return None
+        return (min(p[0] for p in pts), max(p[0] for p in pts),
+                min(p[1] for p in pts), max(p[1] for p in pts))
+
     for el in list(root.iter("node")) + list(root.iter("way")) \
             + list(root.iter("relation")):
         tags = _tags(el)
         if tags.get("aeroway") != "aerodrome":
             continue
+        bb = None
         if el.tag == "node":
             c = nodes.get(el.get("id"))
         elif el.tag == "way":
             c = _center(ways.get(el.get("id"), []))
+            bb = _bbox(ways.get(el.get("id"), []))
         else:
             refs = []
             for m in el.iter("member"):
@@ -2011,12 +2021,13 @@ def _airports_from_osm_xml(data):
                 elif m.get("type") == "node":
                     refs.append(m.get("ref"))
             c = _center(refs)
+            bb = _bbox(refs)
         if not c:
             continue
         name = tags.get("name", "")
         icao = tags.get("icao") or tags.get("iata") or tags.get("ref") or ""
         label = icao if icao else (name[:14] if name else "APT")
-        out.append((c[0], c[1], label, name))
+        out.append((c[0], c[1], label, name, bb))
     return out
 
 
@@ -2035,13 +2046,17 @@ def _sync_config_window_mesh_zl(gui, value):
 
 class Ortho4XP_Custom_ZL(tk.Toplevel):
 
+    # Couleurs vives, sans vert (les verts se fondaient dans la foret et la
+    # carte OSM) ; texte gris-bleu lisible sur chacune (contraste >= 4,5).
+    # Sur la carte, chaque contour a un lisere noir : visible sur fond clair
+    # comme sur fond sombre. Memes couleurs : boutons, contours, pastilles.
     dico_color = {
-        15: "#4a9e8e",   # bleu-vert Roland foncé
-        16: "#5ab88a",   # vert Roland moyen
-        17: "#7eca7e",   # vert Roland
-        18: "#a6d96a",   # vert Roland clair
-        19: "#c8e65a",   # vert-jaune Roland très clair
-        20: "#e0c84a",   # jaune-or
+        15: "#00E5FF",   # cyan
+        16: "#40A0FF",   # bleu vif
+        17: "#FF9100",   # orange
+        18: "#FF5C8A",   # rose-rouge
+        19: "#FFFF00",   # jaune citron
+        20: "#E07BFF",   # violet clair
     }
     zl_list = ["10", "11", "12", "13"]
     points = []
@@ -2203,12 +2218,9 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             command=self._detail_at_view_center,
         ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
         row += 1
-        _ctk_button(
-            self.frame_left,
-            text=_L("↩ Carte entière", "↩ Whole map"),
-            command=self._exit_detail,
-        ).grid(row=row, column=0, padx=5, pady=3, sticky=N + S + E + W)
-        row += 1
+        # Bouton « ↩ Carte entiere » retire de l'affichage : le detail
+        # s'ouvre maintenant dans une fenetre separee, la carte ne change
+        # plus de zoom (methode _exit_detail conservee).
         tk.Label(
             self.frame_left,
             anchor=W,
@@ -2246,8 +2258,10 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 bg=self.dico_color[zl],
                 activebackground=self.dico_color[zl],
                 selectcolor=self.dico_color[zl],
-                fg="#ffffff",
-                activeforeground="#ffffff",
+                # gris-bleu fonce : lisible sur les 6 couleurs (contraste
+                # >= 4,5 ; le blanc etait illisible sur le jaune du ZL19)
+                fg="#1e2a3a",
+                activeforeground="#1e2a3a",
                 font=("Arial", 11, "bold"),
                 relief="flat",
                 height=2,
@@ -2420,9 +2434,22 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             except:
                 pass
         self._apt_items = []
+        self._apt_marks = []
         # Nouvel apercu : on quitte la vue detail eventuelle
         self._in_detail = False
         self._base_state = None
+        # Zones pas encore enregistrees (tracees sur la carte ou venues de la
+        # fenetre detail) : mises de cote pour etre redessinees apres
+        # l'apercu (enregistrement a la fin, rien ne doit se perdre ici).
+        _keep = []
+        try:
+            for _p in (getattr(self, "polygon_list", None) or []):
+                _keep.append((list(_p[1]), _p[2], _p[3]))
+            if len(getattr(self, "coords", None) or []) >= 6:
+                _keep.append((list(self.coords), self.zlpol.get(),
+                              self.zmap_combo.get()))
+        except Exception:
+            _keep = []
         # Les zones vont etre rechargees depuis le cfg (CFG.zone_list) :
         # on repart d'une liste vide pour ne pas les dupliquer a chaque Preview.
         self.polygon_list = []
@@ -2497,10 +2524,42 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 self.points += [int(x), int(y)]
             self.redraw_poly()
             self.save_zone_cmd(_write=False)
+        # Zones non encore enregistrees : redessinees (sauf celles deja
+        # presentes dans le cfg, pour ne pas les doubler).
+        try:
+            _in_cfg = [list(z[0][0:-2]) for z in CFG.zone_list]
+            _sel = (self.zlpol.get(), self.zmap_combo.get())
+            _back = 0
+            for (_c, _zl, _src) in _keep:
+                if _c in _in_cfg:
+                    continue
+                self.coords = list(_c)
+                self.zlpol.set(_zl)
+                self.zmap_combo.set(_src)
+                self.points = []
+                for idxll in range(0, len(self.coords) // 2):
+                    [x, y] = self.latlon_to_xy(self.coords[2 * idxll],
+                                               self.coords[2 * idxll + 1],
+                                               self.zoomlevel)
+                    self.points += [int(x), int(y)]
+                self.redraw_poly()
+                self.save_zone_cmd(_write=False)
+                _back += 1
+            if _back:
+                self.zlpol.set(_sel[0])
+                self.zmap_combo.set(_sel[1])
+                UI.vprint(1, _L("%d zone(s) non enregistrée(s) conservée(s) "
+                                "(enregistrement : Sauv. zone / Appliquer)."
+                                % _back,
+                                "%d unsaved zone(s) kept (save with Save "
+                                "zone / Apply)." % _back))
+        except Exception as e:
+            UI.vprint(1, "   WARNING zones:", e)
         self._zones_loaded = True
         # ── Overlay aeroports via Overpass ────────────────────────────────
         self._airports_pending = []
         self._airports_names = []
+        self._airports_bbox = []
         self._airports_fetch_done = False
         try:
             self._apt_choice.set(_L("(recherche…)", "(searching…)"))
@@ -2542,6 +2601,8 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             if res:
                 self._airports_names = [r[3] for r in res]
                 self._airports_pending = [(r[0], r[1], r[2]) for r in res]
+                self._airports_bbox = [r[4] if len(r) > 4 else None
+                                       for r in res]
                 self._airports_fetch_done = True
                 return
         except Exception as e:
@@ -2633,6 +2694,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             except Exception:
                 pass
         new_items = []
+        self._apt_marks = []
         for (alat, alon, label) in getattr(self, "_airports_pending", []):
             try:
                 px, py = self.latlon_to_xy(alat, alon, self.zoomlevel)
@@ -2643,6 +2705,9 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 new_items.append(self.canvas.create_text(
                     px, py, text="✈",
                     fill="#FFD700", font=("Arial", 11, "bold"), anchor="center"))
+                # pastille + avion : recolores si l'aeroport a une zone
+                self._apt_marks.append((new_items[-2], new_items[-1],
+                                        len(self._apt_marks)))
                 new_items.append(self.canvas.create_text(
                     px+1, py+r+4, text=label,
                     fill="#000000", font=("Arial", 8, "bold"), anchor="n"))
@@ -2661,23 +2726,88 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                     pass
         self.canvas.after(0, _raise_all)
         self._apt_items = new_items
+        self._refresh_airport_colors()
+
+    @staticmethod
+    def _pt_in_latlon_poly(lat, lon, c):
+        """Point (lat, lon) dans le polygone c = [lat0, lon0, lat1, ...]."""
+        n = len(c) // 2
+        inside = False
+        j = n - 1
+        for i in range(n):
+            yi, xi = c[2 * i], c[2 * i + 1]
+            yj, xj = c[2 * j], c[2 * j + 1]
+            if (yi > lat) != (yj > lat) and \
+                    lon < (xj - xi) * (lat - yi) / (yj - yi) + xi:
+                inside = not inside
+            j = i
+        return inside
+
+    def _airport_zone_zl(self, i):
+        """ZL le plus eleve des zones qui couvrent l'aeroport n° i (centre
+        dans la zone, ou zone qui touche son contour OSM), sinon None."""
+        try:
+            (alat, alon, _l) = self._airports_pending[i]
+            bbs = getattr(self, "_airports_bbox", []) or []
+            bb = bbs[i] if i < len(bbs) else None
+        except Exception:
+            return None
+        best = None
+        for poly in getattr(self, "polygon_list", []) or []:
+            c = poly[1]
+            if len(c) < 6:
+                continue
+            hit = self._pt_in_latlon_poly(alat, alon, c)
+            if not hit and bb:
+                (la0, la1, lo0, lo1) = bb
+                hit = any(la0 <= c[2 * k] <= la1 and lo0 <= c[2 * k + 1] <= lo1
+                          for k in range(len(c) // 2)) or any(
+                    self._pt_in_latlon_poly(y, x, c)
+                    for (y, x) in ((la0, lo0), (la0, lo1),
+                                   (la1, lo0), (la1, lo1)))
+            if hit:
+                try:
+                    zl = int(poly[2])
+                except Exception:
+                    continue
+                best = zl if best is None else max(best, zl)
+        return best
+
+    def _refresh_airport_colors(self):
+        """Pastille remplie de la couleur du ZL de la zone si l'aeroport a
+        une zone ; sinon pastille d'origine. Meme regle pour tous."""
+        for (oval, plane, i) in getattr(self, "_apt_marks", []) or []:
+            try:
+                zl = self._airport_zone_zl(i)
+                if zl is None:
+                    self.canvas.itemconfig(oval, fill="#333333",
+                                           outline="#FFD700")
+                    self.canvas.itemconfig(plane, fill="#FFD700")
+                else:
+                    col = self.dico_color.get(zl, "#FFD700")
+                    self.canvas.itemconfig(oval, fill=col, outline="#000000")
+                    self.canvas.itemconfig(plane, fill="#000000")
+            except Exception:
+                continue
 
     def _fill_airport_list(self):
         """Remplit la liste deroulante des aeroports de la carte."""
         try:
             names = getattr(self, "_airports_names", [])
+            bboxes = getattr(self, "_airports_bbox", []) or []
             entries = []
             for i, (alat, alon, label) in enumerate(self._airports_pending):
                 name = names[i] if i < len(names) else ""
+                bb = bboxes[i] if i < len(bboxes) else None
                 txt = label if (not name or name[:14] == label) else (
                     label + " — " + name)
                 base, k = txt, 2
                 while txt in [e[0] for e in entries]:
                     txt = base + " (" + str(k) + ")"
                     k += 1
-                entries.append((txt, alat, alon))
+                entries.append((txt, alat, alon, bb))
             entries.sort(key=lambda e: e[0].lower())
-            self._apt_targets = {e[0]: (e[1], e[2]) for e in entries}
+            self._apt_targets = {e[0]: (e[1], e[2], e[3]) for e in entries}
             self.apt_combo.configure(values=[e[0] for e in entries])
             self._apt_choice.set(
                 _L("Choisir un aéroport…", "Choose an airport…")
@@ -2703,7 +2833,12 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             self.canvas.xview_moveto(max(0.0, (px - cw / 2) / self.map_x_res))
             self.canvas.yview_moveto(max(0.0, (py - ch / 2) / self.map_y_res))
             self.canvas.focus_set()
-            self._load_detail(target[0], target[1])
+            # Fenetre detail separee cadree sur l'aeroport (la carte ne
+            # change pas de zoom).
+            self._open_detail_window(
+                target[0], target[1],
+                target[2] if len(target) > 2 else None,
+                self._apt_choice.get())
         except Exception as e:
             UI.vprint(1, "   WARNING airport view:", e)
 
@@ -2718,7 +2853,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             cx = self.canvas.canvasx(self.canvas.winfo_width() / 2)
             cy = self.canvas.canvasy(self.canvas.winfo_height() / 2)
             [la, lo] = self.xy_to_latlon(cx, cy, self.zoomlevel)
-            self._load_detail(la, lo)
+            self._open_detail_window(la, lo, None, None)
         except Exception as e:
             UI.vprint(1, "   WARNING vue detail:", e)
 
@@ -2755,7 +2890,17 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         n = self._DETAIL_TILES
         (tx, ty) = GEO.wgs84_to_gtile(la, lo, zl)
         x0, y0 = int(tx) - n // 2, int(ty) - n // 2
+        # Images deja telechargees gardees en memoire (aucun fichier) :
+        # revenir sur un aeroport deja vu est immediat.
+        key = (code, zl, x0, y0, n)
+        cached = self._detail_cache_get(key)
+        if cached is not None:
+            UI.vprint(1, _L("Vue détail : images déjà en mémoire.",
+                            "Detail view: images already in memory."))
+            self._enter_detail(cached, x0, y0, n, zl, la, lo)
+            return
         self._detail_busy = True
+        prog = {"done": 0, "bar": 1}
         UI.vprint(1, _L("Vue détail : téléchargement ZL",
                         "Detail view: downloading ZL")
                   + str(zl) + " …")
@@ -2766,7 +2911,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 if provider.get("grid_type") == "webmercator":
                     ok, img = IMG.build_texture_from_tilbox(
                         (x0, y0, x0 + n, y0 + n), zl, provider,
-                        progress={"done": 0, "bar": 1})
+                        progress=prog)
                 else:
                     (latmax, lonmin) = GEO.gtile_to_wgs84(x0, y0, zl)
                     (latmin, lonmax) = GEO.gtile_to_wgs84(x0 + n, y0 + n, zl)
@@ -2781,10 +2926,12 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
 
             def _done():
                 self._detail_busy = False
+                self._detail_bar_clear()
                 if img is None:
                     UI.vprint(0, _L("Vue détail : téléchargement impossible.",
                                     "Detail view: download failed."))
                     return
+                self._detail_cache_put(key, img)
                 self._enter_detail(img, x0, y0, n, zl, la, lo)
             try:
                 self.canvas.after(0, _done)
@@ -2792,6 +2939,574 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 self._detail_busy = False
 
         threading.Thread(target=_work, daemon=True).start()
+        # Barre de telechargement visible sur la carte pendant l'attente
+        self._detail_bar_tick(
+            prog, n * n if provider.get("grid_type") == "webmercator"
+            else None)
+
+    # ── Barre de telechargement de la vue detail (dessin sur la carte) ──
+    def _detail_bar_clear(self, cv=None):
+        try:
+            (cv or self.canvas).delete("detail_dl")
+        except Exception:
+            pass
+
+    def _detail_bar_draw(self, done, total, cv=None):
+        """Dessine un bandeau + barre de progression au centre de la partie
+        visible de la carte. total=None : progression inconnue (texte seul).
+        cv : autre canvas (fenetre detail), sinon la carte."""
+        cv = cv or self.canvas
+        self._detail_bar_clear(cv)
+        vw = max(1, cv.winfo_width())
+        vh = max(1, cv.winfo_height())
+        x0 = cv.canvasx(0)
+        y0 = cv.canvasy(0)
+        bw = max(160, min(380, vw - 40))
+        bh = 58
+        left = x0 + (vw - bw) / 2
+        top = y0 + (vh - bh) / 2
+        cv.create_rectangle(left, top, left + bw, top + bh,
+                            fill=_CON_BG, outline=_ACCENT, width=2,
+                            tags="detail_dl")
+        if total:
+            done = max(0, min(int(done), int(total)))
+            pct = int(100 * done / total)
+            txt = _L("Vue détail : téléchargement %d %%  (%d / %d images)",
+                     "Detail view: downloading %d %%  (%d / %d images)") \
+                % (pct, done, total)
+        else:
+            pct = None
+            txt = _L("Vue détail : téléchargement en cours…",
+                     "Detail view: downloading…")
+        cv.create_text(left + bw / 2, top + 17, text=txt, fill=_CON_FG,
+                       font=("Arial", 11, "bold"), anchor="center",
+                       tags="detail_dl")
+        bx0, by0 = left + 14, top + 34
+        bx1, by1 = left + bw - 14, top + 46
+        cv.create_rectangle(bx0, by0, bx1, by1, fill="", outline=_ACCENT,
+                            width=1, tags="detail_dl")
+        if pct:
+            cv.create_rectangle(bx0 + 1, by0 + 1,
+                                bx0 + 1 + (bx1 - bx0 - 2) * pct / 100,
+                                by1 - 1, fill=_ACCENT, outline="",
+                                tags="detail_dl")
+        cv.tag_raise("detail_dl")
+
+    def _detail_bar_tick(self, prog, total):
+        """Rafraichit la barre toutes les 250 ms tant que le telechargement
+        dure ; s'efface toute seule a la fin (ou si la fenetre est fermee)."""
+        try:
+            if not getattr(self, "_detail_busy", False):
+                self._detail_bar_clear()
+                return
+            self._detail_bar_draw(prog.get("done", 0), total)
+            self.canvas.after(250, lambda: self._detail_bar_tick(prog, total))
+        except Exception:
+            pass
+
+    # Memoire des vues detail : 3 carres maximum (environ 110 Mo chacun),
+    # le plus ancien est oublie en premier. Rien n'est ecrit sur le disque.
+    _DETAIL_CACHE_MAX = 3
+
+    def _detail_cache_get(self, key):
+        try:
+            cache = getattr(self, "_detail_cache", None)
+            if not cache:
+                return None
+            for i, (k, im) in enumerate(cache):
+                if k == key:
+                    cache.append(cache.pop(i))   # le plus recent a la fin
+                    return im
+        except Exception:
+            pass
+        return None
+
+    def _detail_cache_put(self, key, img):
+        try:
+            cache = getattr(self, "_detail_cache", None)
+            if cache is None:
+                cache = self._detail_cache = []
+            cache[:] = [(k, im) for (k, im) in cache if k != key]
+            cache.append((key, img))
+            while len(cache) > self._DETAIL_CACHE_MAX:
+                cache.pop(0)
+        except Exception:
+            pass
+
+    # ══ Fenetre detail separee : detourage d'un aeroport ══════════════════
+    # La carte de la tuile ne change pas. Une fenetre s'ouvre, cadree sur
+    # l'aeroport (contour OSM + 1 km = cover_extent par defaut d'Ortho4XP),
+    # en ZL17 avec la source d'image choisie DANS la fenetre. Le ZL et la
+    # source de la ZONE restent ceux reglés sur la carte. A la fermeture (ou
+    # en recliquant sur le 1er point), la zone rejoint la liste de la carte,
+    # SANS ecrire le cfg (ecriture a la fin : « Sauv. zone » / « Appliquer »).
+    _DETAIL_MARGIN_KM = 1.0    # marge autour du contour de l'aerodrome
+    _DETAIL_DEFAULT_KM = 1.0   # sans contour : carre d'environ 2 km
+    _DETAIL_MAX_TILES = 24     # plafond par cote (tres grands aeroports)
+    _DETAIL_MAX_SCALE = 2.0    # agrandissement max dans la fenetre detail
+
+    @staticmethod
+    def _detail_frame(la, lo, bbox, zl, margin_km, default_km, max_tiles):
+        """Cadre du detail en images ZL : (tx0, ty0, nx, ny). Pur calcul."""
+        if bbox:
+            latmin, latmax, lonmin, lonmax = bbox
+            mk = margin_km
+        else:
+            latmin = latmax = la
+            lonmin = lonmax = lo
+            mk = default_km
+        dlat = mk / 111.32
+        dlon = mk / (111.32 * max(0.05, cos(pi / 180 * (latmin + latmax) / 2)))
+        (tx0, ty0) = GEO.wgs84_to_gtile(latmax + dlat, lonmin - dlon, zl)
+        (tx1, ty1) = GEO.wgs84_to_gtile(latmin - dlat, lonmax + dlon, zl)
+        tx0, ty0, tx1, ty1 = int(tx0), int(ty0), int(tx1), int(ty1)
+        nx, ny = tx1 - tx0 + 1, ty1 - ty0 + 1
+        if nx > max_tiles:
+            tx0, nx = (tx0 + tx1) // 2 - max_tiles // 2, max_tiles
+        if ny > max_tiles:
+            ty0, ny = (ty0 + ty1) // 2 - max_tiles // 2, max_tiles
+        return tx0, ty0, max(1, nx), max(1, ny)
+
+    def _detail_sources(self):
+        """Sources utilisables directement pour l'image detail."""
+        out = []
+        try:
+            for c in self.map_list:
+                if isinstance(IMG.providers_dict, dict) and \
+                        IMG.providers_dict.get(c):
+                    out.append(c)
+        except Exception:
+            pass
+        return out
+
+    def _open_detail_window(self, la, lo, bbox=None, label=None):
+        try:
+            if getattr(self, "_in_detail", False):
+                self._exit_detail()
+            # Une seule fenetre detail : la precedente se termine d'abord
+            self._detail_close()
+            sources = self._detail_sources()
+            if not sources:
+                messagebox.showinfo(
+                    _L("Vue détail", "Detail view"),
+                    _L("Aucune source d'image utilisable pour la vue détail.",
+                       "No imagery source usable for the detail view."),
+                    parent=self)
+                return
+            code = self.map_combo.get()
+            if code not in sources:
+                code = "BI" if "BI" in sources else sources[0]
+            win = tk.Toplevel(self)
+            win.title(_L("Détail — ", "Detail — ")
+                      + (label or _L("position", "position")))
+            try:
+                sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+                win.geometry("%dx%d" % (min(1400, int(sw * 0.8)),
+                                        min(1000, int(sh * 0.8))))
+            except Exception:
+                pass
+            win.configure(bg=_BG)
+            top = tk.Frame(win, bg=_BG)
+            top.pack(side="top", fill="x")
+            tk.Label(top, text=_L("Image : ", "Imagery: "), bg=_BG, fg=_FG
+                     ).pack(side=LEFT, padx=(8, 2), pady=4)
+            src_var = tk.StringVar(value=code)
+            src_combo = ttk.Combobox(top, textvariable=src_var,
+                                     values=sources, width=18,
+                                     state="readonly")
+            src_combo.pack(side=LEFT, padx=2, pady=4)
+            info = tk.Label(top, text="", bg=_BG, fg=_FG2, anchor=W)
+            info.pack(side=LEFT, padx=10, pady=4, fill="x", expand=True)
+            tk.Label(
+                win, anchor=W, bg=_BG, fg=_FG2, justify=LEFT,
+                text=_L("Shift+clic : ajouter un point · recliquer sur le "
+                        "1er point : terminer la zone · ⌫ : retirer le "
+                        "dernier point · molette : zoom · clic droit "
+                        "glissé : déplacer · fermer la fenêtre : la zone "
+                        "rejoint la carte (enregistrement à la fin avec "
+                        "Sauv. zone / Appliquer)",
+                        "Shift+click: add a point · click the 1st point "
+                        "again: finish the zone · ⌫: remove last point · "
+                        "wheel: zoom · right-drag: move · close the window: "
+                        "the zone goes to the map (saved at the end with "
+                        "Save zone / Apply)"),
+            ).pack(side="top", fill="x", padx=8)
+            cv = tk.Canvas(win, bg=_CON_BG, highlightthickness=0)
+            cv.pack(side="top", fill="both", expand=True)
+            dw = {
+                "win": win, "canvas": cv, "info": info, "src": src_var,
+                "la": la, "lo": lo, "bbox": bbox, "coords": [],
+                "img": None, "photo": None, "scale": 1.0, "smin": 1.0,
+                "zl": 17, "tx0": 0, "ty0": 0, "view": None,
+                "render_job": None, "gen": 0, "busy": False,
+                "alive": True, "fitted": False,
+            }
+            dw["img_item"] = cv.create_image(0, 0, anchor=NW)
+            self._dw = dw
+            win.protocol("WM_DELETE_WINDOW", self._detail_close)
+            src_combo.bind("<<ComboboxSelected>>",
+                           lambda e: self._dw_load(dw))
+            cv.bind("<Shift-ButtonPress-1>",
+                    lambda e: self._dw_add_point(dw, e))
+            cv.bind("<ButtonPress-1>", lambda e: cv.focus_set())
+            cv.bind("<BackSpace>", lambda e: self._dw_del_last(dw))
+            cv.bind("<MouseWheel>", lambda e: self._dw_zoom(dw, e))
+            cv.bind("<Button-4>", lambda e: self._dw_zoom(dw, e))
+            cv.bind("<Button-5>", lambda e: self._dw_zoom(dw, e))
+            b = "2" if "dar" in sys.platform else "3"
+            cv.bind("<ButtonPress-%s>" % b,
+                    lambda e: cv.scan_mark(e.x, e.y))
+            cv.bind("<B%s-Motion>" % b, lambda e: self._dw_drag(dw, e))
+            cv.bind("<Configure>", lambda e: self._dw_on_resize(dw))
+            cv.focus_set()
+            self._dw_load(dw)
+        except Exception as e:
+            UI.vprint(0, "   WARNING vue detail:", e)
+
+    def _dw_load(self, dw):
+        """(Re)telecharge l'image du cadre avec la source choisie."""
+        if not dw.get("alive"):
+            return
+        code = dw["src"].get()
+        provider = IMG.providers_dict.get(code) if isinstance(
+            IMG.providers_dict, dict) else None
+        if not provider:
+            return
+        zl = self._DETAIL_ZL
+        try:
+            if "max_zl" in provider:
+                zl = min(zl, int(provider["max_zl"]))
+        except Exception:
+            pass
+        tx0, ty0, nx, ny = self._detail_frame(
+            dw["la"], dw["lo"], dw["bbox"], zl, self._DETAIL_MARGIN_KM,
+            self._DETAIL_DEFAULT_KM, self._DETAIL_MAX_TILES)
+        dw["gen"] += 1
+        gen = dw["gen"]
+        key = (code, zl, tx0, ty0, nx, ny)
+
+        def _show(img):
+            if not dw.get("alive") or dw["gen"] != gen:
+                return
+            dw["busy"] = False
+            self._detail_bar_clear(dw["canvas"])
+            if img is None:
+                dw["info"].configure(text=_L(
+                    "Téléchargement impossible avec cette source.",
+                    "Download failed with this source."))
+                return
+            if img.size != (nx * 256, ny * 256):
+                img = img.resize((nx * 256, ny * 256), Image.LANCZOS)
+            dw["img"], dw["zl"] = img, zl
+            dw["tx0"], dw["ty0"] = tx0, ty0
+            dw["fitted"] = False
+            dw["view"] = None
+            self._dw_fit(dw)
+
+        cached = self._detail_cache_get(key)
+        if cached is not None:
+            _show(cached)
+            return
+        dw["busy"] = True
+        prog = {"done": 0, "bar": 1}
+        UI.vprint(1, _L("Vue détail : téléchargement ZL",
+                        "Detail view: downloading ZL")
+                  + str(zl) + " (" + str(nx * ny) + " images) …")
+
+        def _work():
+            img = None
+            try:
+                if provider.get("grid_type") == "webmercator":
+                    ok, img = IMG.build_texture_from_tilbox(
+                        (tx0, ty0, tx0 + nx, ty0 + ny), zl, provider,
+                        progress=prog)
+                else:
+                    (latmax, lonmin) = GEO.gtile_to_wgs84(tx0, ty0, zl)
+                    (latmin, lonmax) = GEO.gtile_to_wgs84(
+                        tx0 + nx, ty0 + ny, zl)
+                    (xmin, ymax) = GEO.geo_to_webm(lonmin, latmax)
+                    (xmax, ymin) = GEO.geo_to_webm(lonmax, latmin)
+                    ok, img = IMG.build_texture_from_bbox_and_size(
+                        (xmin, ymax, xmax, ymin), "3857",
+                        (nx * 256, ny * 256), provider)
+            except Exception as e:
+                UI.vprint(1, "   WARNING vue detail:", e)
+                img = None
+
+            def _done():
+                if img is not None:
+                    self._detail_cache_put(key, img)
+                _show(img)
+            try:
+                self.canvas.after(0, _done)
+            except Exception:
+                dw["busy"] = False
+
+        threading.Thread(target=_work, daemon=True).start()
+        self._dw_bar_tick(
+            dw, gen, prog,
+            nx * ny if provider.get("grid_type") == "webmercator" else None)
+
+    def _dw_bar_tick(self, dw, gen, prog, total):
+        try:
+            if not dw.get("alive") or dw["gen"] != gen or not dw["busy"]:
+                return
+            self._detail_bar_draw(prog.get("done", 0), total, dw["canvas"])
+            dw["canvas"].after(
+                250, lambda: self._dw_bar_tick(dw, gen, prog, total))
+        except Exception:
+            pass
+
+    # -- coordonnees fenetre detail <-> lat/lon --
+    def _dw_xy(self, dw, lat, lon):
+        s = dw["scale"]
+        (px, py) = GEO.wgs84_to_pix(lat, lon, dw["zl"])
+        return ((px - dw["tx0"] * 256) * s, (py - dw["ty0"] * 256) * s)
+
+    def _dw_latlon(self, dw, x, y):
+        s = dw["scale"]
+        return GEO.pix_to_wgs84(x / s + dw["tx0"] * 256,
+                                y / s + dw["ty0"] * 256, dw["zl"])
+
+    def _dw_fit(self, dw):
+        """Premier affichage : tout le cadre visible dans la fenetre."""
+        img, cv = dw.get("img"), dw["canvas"]
+        if img is None:
+            return
+        try:
+            cv.update_idletasks()
+        except Exception:
+            pass
+        vw = max(1, cv.winfo_width())
+        vh = max(1, cv.winfo_height())
+        if vw < 50 or vh < 50:
+            # fenetre pas encore affichee : l'ajustement se fera a son
+            # premier affichage (evenement <Configure>)
+            return
+        fit = min(1.0, vw / img.width, vh / img.height)
+        dw["smin"] = max(0.05, fit)
+        dw["scale"] = dw["smin"]
+        dw["fitted"] = True
+        cv.config(scrollregion=(0, 0, int(img.width * dw["scale"]),
+                                int(img.height * dw["scale"])))
+        cv.xview_moveto(0)
+        cv.yview_moveto(0)
+        self._dw_render(dw)
+        self._dw_redraw(dw)
+
+    def _dw_on_resize(self, dw):
+        if dw.get("img") is not None and not dw.get("fitted"):
+            self._dw_fit(dw)
+        else:
+            self._dw_schedule(dw)
+
+    def _dw_schedule(self, dw, delay=40):
+        """Un seul rendu a la fois : la molette reste fluide."""
+        try:
+            if dw.get("render_job") is None and dw.get("alive"):
+                dw["render_job"] = dw["canvas"].after(
+                    delay, lambda: self._dw_render(dw))
+        except Exception:
+            pass
+
+    def _dw_render(self, dw):
+        """Ne calcule QUE la partie visible (+ une marge) de l'image."""
+        dw["render_job"] = None
+        img, cv = dw.get("img"), dw["canvas"]
+        if img is None or not dw.get("alive"):
+            return
+        try:
+            s = dw["scale"]
+            W = max(1, int(img.width * s))
+            H = max(1, int(img.height * s))
+            vw = max(1, cv.winfo_width())
+            vh = max(1, cv.winfo_height())
+            vx, vy = cv.canvasx(0), cv.canvasy(0)
+            x0 = int(max(0, vx - vw // 2))
+            y0 = int(max(0, vy - vh // 2))
+            x1 = int(min(W, vx + vw + vw // 2))
+            y1 = int(min(H, vy + vh + vh // 2))
+            if x1 <= x0 or y1 <= y0:
+                return
+            box = (x0 / s, y0 / s, min(img.width, x1 / s),
+                   min(img.height, y1 / s))
+            if abs(s - 1.0) < 1e-9:
+                part = img.crop((x0, y0, x1, y1))
+            else:
+                try:
+                    part = img.resize((x1 - x0, y1 - y0), Image.BILINEAR,
+                                      box=box, reducing_gap=2.0)
+                except TypeError:
+                    part = img.crop(tuple(int(v) for v in box)).resize(
+                        (x1 - x0, y1 - y0), Image.BILINEAR)
+            dw["photo"] = ImageTk.PhotoImage(part)
+            cv.itemconfig(dw["img_item"], image=dw["photo"])
+            cv.coords(dw["img_item"], x0, y0)
+            cv.tag_lower(dw["img_item"])
+            dw["view"] = (x0, y0, x1, y1, s)
+        except Exception as e:
+            UI.vprint(1, "   WARNING vue detail:", e)
+
+    def _dw_view_ok(self, dw):
+        v, cv = dw.get("view"), dw["canvas"]
+        if not v or abs(v[4] - dw["scale"]) > 1e-9:
+            return False
+        vx, vy = cv.canvasx(0), cv.canvasy(0)
+        W = int(dw["img"].width * dw["scale"])
+        H = int(dw["img"].height * dw["scale"])
+        return (vx >= v[0] or v[0] == 0) and (vy >= v[1] or v[1] == 0) \
+            and (vx + cv.winfo_width() <= v[2] or v[2] >= W) \
+            and (vy + cv.winfo_height() <= v[3] or v[3] >= H)
+
+    def _dw_drag(self, dw, e):
+        dw["canvas"].scan_dragto(e.x, e.y, gain=1)
+        if dw.get("img") is not None and not self._dw_view_ok(dw):
+            self._dw_schedule(dw, 15)
+
+    def _dw_zoom(self, dw, event):
+        img, cv = dw.get("img"), dw["canvas"]
+        if img is None:
+            return
+        up = event.num == 4 or getattr(event, "delta", 0) > 0
+        s0 = dw["scale"]
+        s1 = s0 * (1.25 if up else 1 / 1.25)
+        s1 = min(self._DETAIL_MAX_SCALE, max(dw["smin"], s1))
+        if abs(s1 - s0) < 1e-9:
+            return
+        f = s1 / s0
+        cx, cy = cv.canvasx(event.x), cv.canvasy(event.y)
+        dw["scale"] = s1
+        W = max(1, int(img.width * s1))
+        H = max(1, int(img.height * s1))
+        cv.config(scrollregion=(0, 0, W, H))
+        cv.xview_moveto(max(0.0, (cx * f - event.x) / W))
+        cv.yview_moveto(max(0.0, (cy * f - event.y) / H))
+        self._dw_redraw(dw)
+        self._dw_schedule(dw)
+
+    def _dw_redraw(self, dw):
+        """Zones de la carte (fines) + zone en cours (points visibles)."""
+        cv = dw["canvas"]
+        if dw.get("img") is None:
+            return
+        try:
+            cv.delete("dw_ov")
+            for poly in self.polygon_list:
+                c = poly[1]
+                pts = []
+                for i in range(len(c) // 2):
+                    pts += list(self._dw_xy(dw, c[2 * i], c[2 * i + 1]))
+                if len(pts) >= 6:
+                    cv.create_polygon(pts, outline="#000000", fill="",
+                                      width=6, tags="dw_ov")
+                    cv.create_polygon(
+                        pts, outline=self.dico_color.get(int(poly[2]),
+                                                         "#ffffff"),
+                        fill="", width=3, tags="dw_ov")
+            c = dw["coords"]
+            pts = []
+            for i in range(len(c) // 2):
+                pts += list(self._dw_xy(dw, c[2 * i], c[2 * i + 1]))
+            color = self.dico_color.get(int(self.zlpol.get()), "#ffffff")
+            if len(pts) >= 6:
+                cv.create_polygon(pts, outline="#000000", fill="", width=7,
+                                  tags="dw_ov")
+                cv.create_polygon(pts, outline=color, fill="", width=4,
+                                  tags="dw_ov")
+            elif len(pts) == 4:
+                cv.create_line(pts, fill="#000000", width=7, tags="dw_ov")
+                cv.create_line(pts, fill=color, width=4, tags="dw_ov")
+            for i in range(len(pts) // 2):
+                r = 6 if i == 0 else 4
+                x, y = pts[2 * i], pts[2 * i + 1]
+                cv.create_oval(x - r, y - r, x + r, y + r, fill=color,
+                               outline="#000000", tags="dw_ov")
+            dw["info"].configure(text=_L(
+                "Zone : ZL%s · source %s (réglés sur la carte) · "
+                "%d point(s)", "Zone: ZL%s · source %s (set on the map) · "
+                "%d point(s)") % (self.zlpol.get(), self.zmap_combo.get(),
+                                  len(c) // 2))
+        except Exception as e:
+            UI.vprint(1, "   WARNING vue detail:", e)
+
+    def _dw_add_point(self, dw, e):
+        cv = dw["canvas"]
+        cv.focus_set()
+        if dw.get("img") is None:
+            return
+        x, y = cv.canvasx(e.x), cv.canvasy(e.y)
+        c = dw["coords"]
+        if len(c) >= 6:
+            (fx, fy) = self._dw_xy(dw, c[0], c[1])
+            if (fx - x) ** 2 + (fy - y) ** 2 <= 12 * 12:
+                self._detail_zone_to_map(c)
+                dw["coords"] = []
+                self._dw_redraw(dw)
+                UI.vprint(1, _L("Zone ajoutée à la carte (enregistrement "
+                                "à la fin : Sauv. zone / Appliquer).",
+                                "Zone added to the map (saved at the end: "
+                                "Save zone / Apply)."))
+                return
+        (lat, lon) = self._dw_latlon(dw, x, y)
+        c += [lat, lon]
+        self._dw_redraw(dw)
+
+    def _dw_del_last(self, dw):
+        dw["coords"] = dw["coords"][0:-2]
+        self._dw_redraw(dw)
+
+    def _detail_zone_to_map(self, coords):
+        """Ajoute une zone (lat/lon) a la liste de la carte, exactement
+        comme un detourage fait sur la carte (pas d'ecriture du cfg)."""
+        if getattr(self, "_in_detail", False):
+            self._exit_detail()
+        keep_p, keep_c = list(self.points), list(self.coords)
+        if len(keep_p) >= 6:
+            # zone en cours sur la carte : terminee d'abord
+            self.save_zone_cmd(_write=False)
+            keep_p, keep_c = [], []
+        else:
+            try:
+                self.canvas.delete(self.poly_curr)
+            except Exception:
+                pass
+        self.coords = list(coords)
+        self.points = []
+        for i in range(len(coords) // 2):
+            [x, y] = self.latlon_to_xy(coords[2 * i], coords[2 * i + 1],
+                                       self.zoomlevel)
+            self.points += [int(x), int(y)]
+        self.redraw_poly()
+        self.save_zone_cmd(_write=False)
+        if keep_p:
+            self.points, self.coords = keep_p, keep_c
+            self.redraw_poly()
+
+    def _detail_close(self):
+        """Ferme la fenetre detail ; sa zone (>= 3 points) rejoint la carte."""
+        dw = getattr(self, "_dw", None)
+        if not dw:
+            return
+        self._dw = None
+        dw["alive"] = False
+        try:
+            if len(dw["coords"]) >= 6:
+                self._detail_zone_to_map(dw["coords"])
+                UI.vprint(1, _L("Zone ajoutée à la carte (enregistrement "
+                                "à la fin : Sauv. zone / Appliquer).",
+                                "Zone added to the map (saved at the end: "
+                                "Save zone / Apply)."))
+            elif dw["coords"]:
+                UI.vprint(1, _L("Zone de moins de 3 points : ignorée.",
+                                "Zone with fewer than 3 points: ignored."))
+        except Exception as e:
+            UI.vprint(0, "   WARNING vue detail:", e)
+        try:
+            dw["win"].destroy()
+        except Exception:
+            pass
+        dw["img"] = None
+        dw["photo"] = None
 
     def _set_base_image(self, im_orig, scale):
         self._image_orig = im_orig
@@ -2902,14 +3617,17 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             pass
         try:
             color = self.dico_color[self.zlpol.get()]
-            if len(self.points) >= 4:
-                self.poly_curr = self.canvas.create_polygon(
-                    self.points, outline="#742374", fill="", width=2
-                )
-            else:
-                self.poly_curr = self.canvas.create_polygon(
-                    self.points, outline=color, fill="", width=5
-                )
+            # Contour couleur du ZL sur un lisere noir (2 traces, un meme
+            # repere commun : supprimer la zone efface les deux).
+            self._zone_tag_n = getattr(self, "_zone_tag_n", 0) + 1
+            tag = "zone%d" % self._zone_tag_n
+            w = 3 if len(self.points) >= 4 else 5
+            self.canvas.create_polygon(
+                self.points, outline="#000000", fill="", width=w + 3,
+                tags=tag)
+            self.canvas.create_polygon(
+                self.points, outline=color, fill="", width=w, tags=tag)
+            self.poly_curr = tag
         except:
             pass
         return
@@ -3086,10 +3804,13 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             self._zoom_scale = 1.0
         new_scale = self._zoom_scale * factor
         # Limite : 0.25x (zoom arrière max) à 8x (zoom avant max)
-        # En vue detail l'image est deja tres fine : x2 max (memoire)
-        max_scale = 2.0 if getattr(self, "_in_detail", False) else 8.0
-        if new_scale < 0.25 or new_scale > max_scale:
+        # En vue detail l'image est deja a la finesse maximale : agrandir
+        # au-dela de x1 n'ajoute aucun detail et rend la molette lente.
+        max_scale = 1.0 if getattr(self, "_in_detail", False) else 8.0
+        if new_scale < 0.25 or new_scale > max_scale * 1.001:
             return
+        if abs(new_scale - 1.0) < 1e-6:
+            new_scale = 1.0
         self._zoom_scale = new_scale
         # Position du curseur dans le canvas (avant zoom)
         cx = self.canvas.canvasx(event.x)
@@ -3276,6 +3997,8 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                 / 1024
             )
         self.gb.set("{:.1f}".format(total_size) + "Gb")
+        # Toute zone ajoutee/supprimee passe ici : pastilles a jour
+        self._refresh_airport_colors()
         return
 
     def save_zone_cmd(self, event=None, _write=True):
@@ -3438,6 +4161,8 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             UI.vprint(1, "   WARNING zones:", e)
 
     def _on_close(self):
+        # Fenetre detail encore ouverte : sa zone rejoint d'abord la liste
+        self._detail_close()
         self._ask_save_if_dirty()
         self.destroy()
 
