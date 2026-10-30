@@ -41,6 +41,44 @@
 import os
 
 
+def _L(fr, en):
+    """Libellé bilingue FR/EN résolu dans le module (langue active du
+    lanceur, repli EN)."""
+    try:
+        from O4_Lang import current_lang
+        return fr if str(current_lang()).upper().startswith("FR") else en
+    except Exception:
+        return en
+
+
+# Tailles proposées pour les vignettes (étape 2b2 : zoom − / +)
+_THUMB_SIZES = (128, 192, 256, 384)
+
+
+def _next_thumb_size(cur, step):
+    """Taille suivante (step=+1) ou précédente (step=-1) dans _THUMB_SIZES,
+    bornée aux extrémités."""
+    sizes = list(_THUMB_SIZES)
+    if cur not in sizes:
+        cur = min(sizes, key=lambda s: abs(s - cur))
+    i = max(0, min(len(sizes) - 1, sizes.index(cur) + step))
+    return sizes[i]
+
+
+def _wheel_units(delta, num=0, mac=False):
+    """Nombre de crans de défilement pour un évènement molette :
+    Linux = boutons 4/5 ; macOS = delta petit ; Windows = multiples de 120."""
+    if num == 4:
+        return -1
+    if num == 5:
+        return 1
+    if not delta:
+        return 0
+    if mac:
+        return -int(delta) if abs(delta) >= 1 else (-1 if delta > 0 else 1)
+    return -int(delta / 120) or (-1 if delta > 0 else 1)
+
+
 def _open_correction_window(parent_win, patch_dir, existing_files,
                              BG, FG, FG2, PREV_BG, FONT, FONT_T, _tr,
                              textures_dir=None, preview_corr_dir=None,
@@ -588,17 +626,18 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
 
         _photos = []   # conserver les références (sinon Tkinter efface l'image)
 
-        def _vignette(dds_name):
+        def _vignette(dds_name, size=None):
             # Vignette PNG en cache, (re)fabriquée seulement si nécessaire :
             # si le cache existe et est au moins aussi récent que le DDS, on
             # le réutilise. La taille est incluse dans le nom du cache :
-            # changer THUMB régénère proprement, sans réutiliser une ancienne
-            # taille (et prépare le zoom de l'étape 2b2).
+            # changer de taille (zoom − / +, étape 2b2) fabrique un cache à
+            # part, sans réutiliser une ancienne taille.
+            size = int(size or THUMB)
             dds_path = os.path.join(textures_dir, dds_name)
             if not preview_corr_dir:
                 return None
             cache_path = os.path.join(preview_corr_dir,
-                                      dds_name + f".{THUMB}.png")
+                                      dds_name + f".{size}.png")
             try:
                 if (os.path.isfile(cache_path) and
                         os.path.getmtime(cache_path) >= os.path.getmtime(dds_path)):
@@ -607,7 +646,7 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                 pass
             try:
                 im = Image.open(dds_path).convert("RGB")
-                im.thumbnail((THUMB, THUMB), Image.LANCZOS)
+                im.thumbnail((size, size), Image.LANCZOS)
                 im.save(cache_path, "PNG")
                 return cache_path
             except Exception:
@@ -935,6 +974,7 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
 
         total = len(dds_list)
         _cells = []            # cellules gardées pour les repositionner
+        _img_lbls = []         # image de chaque cellule (None si « ? »)
         for idx, dds_name in enumerate(dds_list):
             cache_path = _vignette(dds_name)
             cell = tk.Frame(grid, bg=PREV_BG)
@@ -942,6 +982,7 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                       padx=GAP // 2, pady=GAP // 2)
             _cells.append(cell)
             drawn = False
+            _lbl_img = None
             if cache_path:
                 try:
                     ph = ImageTk.PhotoImage(Image.open(cache_path))
@@ -957,6 +998,8 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
                     drawn = True
                 except Exception:
                     drawn = False
+                    _lbl_img = None
+            _img_lbls.append(_lbl_img)
             if not drawn:
                 tk.Label(cell, text="?", width=12, height=6,
                          bg=PREV_BG, fg="#ff4444",
@@ -1004,13 +1047,14 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
         # vignettes qui ne tiennent plus passent à la ligne et deviennent
         # accessibles via l'ascenseur vertical.
         _last_cols = [COLS]
+        _thumb = [THUMB]       # taille courante des vignettes (zoom 2b2)
 
-        def _reflow(event=None):
+        def _reflow(event=None, force=False):
             avail = cnv.winfo_width()
             if avail < 50:
                 return
-            cols = max(1, int((avail - MARGIN) // (THUMB + GAP)))
-            if cols == _last_cols[0]:
+            cols = max(1, int((avail - MARGIN) // (_thumb[0] + GAP)))
+            if cols == _last_cols[0] and not force:
                 return
             _last_cols[0] = cols
             for i, c in enumerate(_cells):
@@ -1036,6 +1080,87 @@ def _open_correction_window(parent_win, patch_dir, existing_files,
             _reflow_after[0] = viz.after(120, _reflow)
 
         cnv.bind("<Configure>", _on_configure)
+
+        # ── Étape 2b2 : zoom des vignettes (− / +) et molette ────────────
+        # La molette fait défiler la mosaïque. Les boutons − / + changent la
+        # taille des vignettes ; les cellules existantes sont GARDÉES (cases
+        # cochées, clics) : seule leur image change, puis la mosaïque se
+        # réagence. Chaque taille a son propre cache dans Preview_Correction/.
+        _zoom_busy = [False]
+        _lbl_size = tk.Label(frm_viz_bot, text="", font=FONT, bg=BG, fg=FG2)
+
+        def _maj_lbl_size():
+            _lbl_size.config(text=_L("Vignettes : %d px", "Thumbnails: %d px")
+                             % _thumb[0])
+
+        def _zoom_vignettes(step):
+            if _zoom_busy[0]:
+                return
+            new = _next_thumb_size(_thumb[0], step)
+            if new == _thumb[0]:
+                return
+            _zoom_busy[0] = True
+            try:
+                new_photos = []
+                for i, dds_name in enumerate(dds_list):
+                    lbl = _img_lbls[i]
+                    if lbl is None:
+                        continue
+                    p = _vignette(dds_name, new)
+                    if not p:
+                        continue
+                    try:
+                        ph = ImageTk.PhotoImage(Image.open(p))
+                        lbl.configure(image=ph)
+                        lbl.image = ph
+                        new_photos.append(ph)
+                    except Exception:
+                        pass
+                    if i % 8 == 0:
+                        lbl_info.config(
+                            text=_tr("Préparation des vignettes…")
+                            + f"  {i + 1}/{total}")
+                        try:
+                            viz.update()
+                        except Exception:
+                            pass
+                _photos[:] = new_photos
+                viz._vignette_photos = _photos
+                _thumb[0] = new
+                _maj_lbl_size()
+                lbl_info.config(text=f"{total} DDS")
+                _reflow(force=True)
+            finally:
+                _zoom_busy[0] = False
+
+        def _molette(event):
+            n = _wheel_units(getattr(event, "delta", 0),
+                             getattr(event, "num", 0),
+                             mac=(sys.platform == "darwin"))
+            if n:
+                try:
+                    cnv.yview_scroll(n, "units")
+                except Exception:
+                    pass
+
+        # Sur la fenêtre : la molette marche au-dessus de toute la mosaïque
+        # (vignettes comprises), sans toucher aux autres fenêtres.
+        viz.bind("<MouseWheel>", _molette)
+        viz.bind("<Button-4>", _molette)
+        viz.bind("<Button-5>", _molette)
+
+        _avant = (frm_viz_bot.winfo_children() or [None])[0]
+        _b_moins = _ctk_button(frm_viz_bot, text="−",
+                               command=lambda: _zoom_vignettes(-1))
+        _b_plus = _ctk_button(frm_viz_bot, text="+",
+                              command=lambda: _zoom_vignettes(1))
+        for _w in (_b_moins, _lbl_size, _b_plus):
+            if _avant is not None:
+                _w.pack(side=tk.LEFT, padx=3, ipadx=6, ipady=4,
+                        before=_avant)
+            else:
+                _w.pack(side=tk.LEFT, padx=3, ipadx=6, ipady=4)
+        _maj_lbl_size()
 
         viz.geometry(f"{int(vw)}x{int(vh)}"
                      f"+{(sw - int(vw)) // 2}+{(sh - int(vh)) // 2}")

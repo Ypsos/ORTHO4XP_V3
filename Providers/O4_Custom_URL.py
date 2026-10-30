@@ -68,18 +68,45 @@ def get_NIB_token():
 # Here  (version récente APP_KEY + script defer)
 Here_time=time.time()
 Here_value=None
+Here_error_time=0     # heure du dernier échec de lecture de la clé (0 = aucun)
+_HERE_MSG=("ERROR / ERREUR: HERE access key could not be read from wego.here.com "
+           "(the HERE website has changed or is unreachable). Use another provider "
+           "(BI, Arc, GO2). | La clé d'accès HERE n'a pas pu être lue sur "
+           "wego.here.com (site HERE modifié ou injoignable). Utilisez une autre "
+           "source (BI, Arc, GO2).")
 def get_Here_value():
-    global Here_time, Here_value
+    # Avant : si la lecture de la clé échouait (site HERE modifié), le témoin
+    # restait sur "loading" pour toujours et tous les téléchargements
+    # tournaient en boucle sur « Waiting for Here value to be updated ».
+    # Maintenant : témoin remis à zéro en cas d'échec, message clair, attente
+    # bornée à 60 s, et pas de nouvel essai réseau pendant 2 minutes.
+    global Here_time, Here_value, Here_error_time
+    waited=0
     while Here_value=="loading":
+        if waited>=60:
+            raise RuntimeError(_HERE_MSG)
         print("    Waiting for Here value to be updated.")
         time.sleep(3)
+        waited+=3
     if (not Here_value) or (time.time()-Here_time)>=10000:
+        if Here_error_time and (time.time()-Here_error_time)<120:
+            raise RuntimeError(_HERE_MSG)
         Here_value="loading"
-        js_path=str(requests.get('https://wego.here.com').content).split('<script defer="defer" src="')[1][:100].split('"')[0]
-        print("js_path: "+js_path)
-        Here_value=str(requests.get('https://wego.here.com'+js_path).content).split('APP_KEY:"')[1][:100].split('"')[0]
-        print("Here_value: "+Here_value)
-        Here_time=time.time()
+        try:
+            js_path=str(requests.get('https://wego.here.com',timeout=30).content).split('<script defer="defer" src="')[1][:100].split('"')[0]
+            print("js_path: "+js_path)
+            new_value=str(requests.get('https://wego.here.com'+js_path,timeout=30).content).split('APP_KEY:"')[1][:100].split('"')[0]
+            if not new_value:
+                raise ValueError("empty APP_KEY")
+            Here_value=new_value
+            print("Here_value: "+Here_value)
+            Here_time=time.time()
+            Here_error_time=0
+        except Exception as e:
+            Here_value=None
+            Here_error_time=time.time()
+            print(_HERE_MSG+" ("+str(e)[:80]+")")
+            raise RuntimeError(_HERE_MSG)
     return Here_value
 
 ############################################################################################################

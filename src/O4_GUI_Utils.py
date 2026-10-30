@@ -3117,7 +3117,7 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
             src_combo.pack(side=LEFT, padx=2, pady=4)
             info = tk.Label(top, text="", bg=_BG, fg=_FG2, anchor=W)
             info.pack(side=LEFT, padx=10, pady=4, fill="x", expand=True)
-            tk.Label(
+            aide = tk.Label(
                 win, anchor=W, bg=_BG, fg=_FG2, justify=LEFT,
                 text=_L("Shift+clic : ajouter un point · recliquer sur le "
                         "1er point : terminer la zone · ⌫ : retirer le "
@@ -3130,7 +3130,25 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
                         "wheel: zoom · right-drag: move · close the window: "
                         "the zone goes to the map (saved at the end with "
                         "Save zone / Apply)"),
-            ).pack(side="top", fill="x", padx=8)
+            )
+            aide.pack(side="top", fill="x", padx=8)
+
+            # Petit écran : les lignes de texte passent à la ligne au lieu
+            # de sortir de la fenêtre (largeur suivie à chaque redimension).
+            def _wrap_textes(e=None, _w=win):
+                try:
+                    if e is not None and e.widget is not _w:
+                        return
+                    ww = _w.winfo_width()
+                    if ww < 50:   # pas encore affichée : largeur prévue
+                        ww = min(1400, int(_w.winfo_screenwidth() * 0.8))
+                    ww = max(200, ww)
+                    aide.configure(wraplength=ww - 20)
+                    info.configure(wraplength=max(150, ww - 330))
+                except Exception:
+                    pass
+            win.bind("<Configure>", _wrap_textes, add="+")
+            _wrap_textes()
             cv = tk.Canvas(win, bg=_CON_BG, highlightthickness=0)
             cv.pack(side="top", fill="both", expand=True)
             dw = {
@@ -3287,17 +3305,51 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         dw["smin"] = max(0.05, fit)
         dw["scale"] = dw["smin"]
         dw["fitted"] = True
-        cv.config(scrollregion=(0, 0, int(img.width * dw["scale"]),
-                                int(img.height * dw["scale"])))
+        self._dw_region(dw)
         cv.xview_moveto(0)
         cv.yview_moveto(0)
         self._dw_render(dw)
         self._dw_redraw(dw)
 
+    def _dw_region(self, dw):
+        """Zone de défilement : l'image à l'échelle courante, CENTRÉE dans
+        la fenêtre quand elle est plus petite qu'elle (marges égales autour).
+        Renvoie (x0, y0, x1, y1)."""
+        img, cv = dw["img"], dw["canvas"]
+        s = dw["scale"]
+        W = max(1, int(img.width * s))
+        H = max(1, int(img.height * s))
+        vw = max(1, cv.winfo_width())
+        vh = max(1, cv.winfo_height())
+        px = max(0, (vw - W) // 2)
+        py = max(0, (vh - H) // 2)
+        region = (-px, -py, W + px, H + py)
+        cv.config(scrollregion=region)
+        dw["region"] = region
+        return region
+
+    def _dw_scroll_to(self, dw, left, top):
+        """Place le coin haut-gauche de la vue sur (left, top), coordonnées
+        de l'image à l'échelle courante (bornées par la zone)."""
+        cv = dw["canvas"]
+        x0, y0, x1, y1 = dw.get("region") or self._dw_region(dw)
+        cv.xview_moveto(max(0.0, min(1.0, (left - x0) / max(1, x1 - x0))))
+        cv.yview_moveto(max(0.0, min(1.0, (top - y0) / max(1, y1 - y0))))
+
     def _dw_on_resize(self, dw):
         if dw.get("img") is not None and not dw.get("fitted"):
             self._dw_fit(dw)
         else:
+            if dw.get("img") is not None:
+                # garder le centre de la vue en recentrant l'image si besoin
+                try:
+                    cv = dw["canvas"]
+                    l, t = cv.canvasx(0), cv.canvasy(0)
+                    self._dw_region(dw)
+                    self._dw_scroll_to(dw, l, t)
+                    self._dw_redraw(dw)
+                except Exception:
+                    pass
             self._dw_schedule(dw)
 
     def _dw_schedule(self, dw, delay=40):
@@ -3376,11 +3428,9 @@ class Ortho4XP_Custom_ZL(tk.Toplevel):
         f = s1 / s0
         cx, cy = cv.canvasx(event.x), cv.canvasy(event.y)
         dw["scale"] = s1
-        W = max(1, int(img.width * s1))
-        H = max(1, int(img.height * s1))
-        cv.config(scrollregion=(0, 0, W, H))
-        cv.xview_moveto(max(0.0, (cx * f - event.x) / W))
-        cv.yview_moveto(max(0.0, (cy * f - event.y) / H))
+        self._dw_region(dw)
+        # le point sous la souris reste sous la souris
+        self._dw_scroll_to(dw, cx * f - event.x, cy * f - event.y)
         self._dw_redraw(dw)
         self._dw_schedule(dw)
 

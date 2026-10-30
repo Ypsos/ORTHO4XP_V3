@@ -4,3 +4,6 @@ grid_type=webmercator
 max_threads=16
 imagery_dir=grouped
 #https://maps.hereapi.com/v3/background/mc/{zoom}/{x}/{y}/jpeg?xnlp=CL_JSMv3.1.58.0&apikey=qKa9-t3AFczkGxRvrmflMBlBenVG5GhHesDtVPlH_SI&style=satellite.day&ppi=100&size=512&lang=fr&lang2=en
+#30/10/2026 : HERE masqué de la liste (le site wego.here.com ne donne plus sa clé).
+#Remettre in_GUI=True pour le réafficher si HERE redevient utilisable.
+in_GUI=False
