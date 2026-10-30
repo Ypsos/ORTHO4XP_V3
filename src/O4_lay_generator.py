@@ -89,6 +89,38 @@ def _providers_dir():
     here = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(os.path.dirname(here), "Providers")
 
+def _L(fr, en):
+    """Libellé bilingue FR/EN résolu dans le module (langue active du
+    lanceur, repli EN)."""
+    try:
+        from O4_Lang import current_lang
+        return fr if str(current_lang()).upper().startswith("FR") else en
+    except Exception:
+        return en
+
+def _extents_dir():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(os.path.dirname(here), "Extents")
+
+def scan_extent_codes(base=None):
+    """Codes d'extent disponibles, lus EXACTEMENT comme le moteur
+    (O4_Imagery_Utils.initialize_extents_dict) : Extents/<dossier>/<code>.ext,
+    code = nom du fichier avant le premier point. Liste triée, sans doublon."""
+    base = base or _extents_dir()
+    codes = set()
+    try:
+        for dir_name in os.listdir(base):
+            d = os.path.join(base, dir_name)
+            if not os.path.isdir(d):
+                continue
+            for file_name in os.listdir(d):
+                if "." not in file_name or file_name.split(".")[-1] != "ext":
+                    continue
+                codes.add(file_name.split(".")[0])
+    except Exception:
+        pass
+    return sorted(codes, key=lambda c: c.lower())
+
 def _tile_name(lat, lon):
     """Réutilise la fonction officielle d'Ortho ; sinon recopie son format."""
     try:
@@ -103,6 +135,10 @@ def build_lay_text(fields: dict) -> str:
         "request_type", "grid_type", "url_prefix", "url_template",
         "layers", "epsg_code", "wms_size", "wms_version",
         "image_type", "imagery_dir", "in_GUI",
+        # extent : zone couverte par le provider (code d'un .ext de
+        # Extents/). Utilisé par un .comb dont la colonne zone vaut
+        # « default ». Champ vide = pas de ligne (moteur : global).
+        "extent",
     ]
     lines = []
     for key in order:
@@ -366,8 +402,26 @@ def run_lay_generator(parent=None):
 
     lbl(11, "in_GUI");           v_gui = combo(11, ["True", "False"], "True")
 
+    # extent : zone couverte (liste des .ext de Extents/, on peut aussi taper
+    # le début d'un code pour filtrer la liste). Vide = pas de ligne extent.
+    lbl(12, _L("extent (zone couverte)", "extent (covered area)"))
+    ext_codes = scan_extent_codes()
+    v_ext = tk.StringVar(value="")
+    ext_box = ttk.Combobox(win, textvariable=v_ext, values=[""] + ext_codes,
+                           width=41, style="O4Lay.TCombobox")
+    ext_box.grid(row=12, column=1, sticky="ew", padx=(4, 8), pady=3)
+
+    def _filter_ext(*_):
+        t = v_ext.get().strip().lower()
+        try:
+            ext_box.configure(values=[""] + [c for c in ext_codes
+                                             if t in c.lower()])
+        except Exception:
+            pass
+    ext_box.bind("<KeyRelease>", _filter_ext)
+
     status = tk.Label(win, text="", bg=BG, fg=FG2, anchor="w")
-    status.grid(row=12, column=0, columnspan=2, sticky="ew", padx=8)
+    status.grid(row=13, column=0, columnspan=2, sticky="ew", padx=8)
 
     def collect():
         fields = {
@@ -381,6 +435,7 @@ def run_lay_generator(parent=None):
             "image_type": v_img.get().strip(),
             "imagery_dir": v_dir.get().strip(),
             "in_GUI": "True" if v_gui.get() == "True" else "False",
+            "extent": v_ext.get().strip(),
         }
         if fields["request_type"] == "tms":
             fields["grid_type"] = "webmercator"
@@ -409,6 +464,7 @@ def run_lay_generator(parent=None):
         v_img.set(data.get("image_type", "jpeg"))
         v_dir.set(data.get("imagery_dir", "grouped"))
         v_gui.set("True" if str(data.get("in_GUI", "True")).lower() in ("true", "1", "yes") else "False")
+        v_ext.set(data.get("extent", ""))
         if name:
             v_name.set(name)
 
@@ -518,6 +574,7 @@ def run_lay_generator(parent=None):
             v.set("")
         v_type.set("wms"); v_epsg.set("3857"); v_size.set("512")
         v_ver.set("1.3.0"); v_img.set("jpeg"); v_dir.set("grouped"); v_gui.set("True")
+        v_ext.set("")
         status.config(text="Formulaire effacé.")
 
     def do_load():
@@ -549,6 +606,7 @@ def run_lay_generator(parent=None):
         v_img.set(data.get("image_type", "jpeg"))
         v_dir.set(data.get("imagery_dir", "grouped"))
         v_gui.set("True" if str(data.get("in_GUI", "True")).lower() in ("true", "1", "yes") else "False")
+        v_ext.set(data.get("extent", ""))
         v_name.set(os.path.splitext(os.path.basename(path))[0])
         status.config(text="Chargé : {}".format(os.path.basename(path)))
 
@@ -570,6 +628,17 @@ def run_lay_generator(parent=None):
         if problems:
             messagebox.showerror("Provider (.lay)", "\n".join(problems))
             return
+        # extent inconnu : le .comb l'ignorerait (« Unknown extent »)
+        ext = fields.get("extent", "")
+        if ext and ext not in scan_extent_codes():
+            if not messagebox.askyesno("Provider (.lay)", _L(
+                    "L'extent « %s » n'existe pas dans Extents/.\n"
+                    "Un .comb qui l'utilise (zone « default ») ignorerait "
+                    "ce provider.\n\nCréer quand même ?" % ext,
+                    "Extent '%s' does not exist in Extents/.\n"
+                    "A .comb using it (zone 'default') would skip this "
+                    "provider.\n\nCreate anyway?" % ext)):
+                return
         ok, path, msg = write_lay(cur_lat, cur_lon, name, fields,
                                   overwrite=False, dest_dir=v_dest_dir.get())
         if not ok and msg == "EXISTS":
@@ -589,7 +658,7 @@ def run_lay_generator(parent=None):
             status.config(text=tr("lay_msg_created", "Fichier créé :") + " " + path)
 
     bar = tk.Frame(win, bg=BG)
-    bar.grid(row=13, column=0, columnspan=2, pady=12)
+    bar.grid(row=14, column=0, columnspan=2, pady=12)
 
     # Rangée : dossier de destination du .lay (défaut = tuile active) + choix.
     row_folder = tk.Frame(bar, bg=BG)
@@ -612,14 +681,14 @@ def run_lay_generator(parent=None):
     _make_themed_button(tk, row_actions, tr("lay_btn_create", "💾 Créer le .lay"), do_create).pack(side="left", padx=5)
 
     tk.Label(win, text=tr("lay_preview_label", "Aperçu du fichier .lay qui sera généré"),
-             bg=BG, fg=FG2, anchor="w").grid(row=14, column=0, columnspan=2,
+             bg=BG, fg=FG2, anchor="w").grid(row=15, column=0, columnspan=2,
              sticky="ew", padx=8, pady=(6, 0))
     preview = tk.Text(win, height=10, width=54, bg=CON_BG, fg=CON_FG,
                       insertbackground=CON_FG, relief="flat", bd=6,
                       font=("Menlo", 11) if _OS == "mac" else ("Consolas", 10))
-    preview.grid(row=15, column=0, columnspan=2, sticky="ew", padx=8, pady=(2, 10))
+    preview.grid(row=16, column=0, columnspan=2, sticky="ew", padx=8, pady=(2, 10))
     for _v in (v_name, v_type, v_prefix, v_template, v_layers, v_epsg,
-               v_size, v_ver, v_img, v_dir, v_gui):
+               v_size, v_ver, v_img, v_dir, v_gui, v_ext):
         _v.trace_add("write", refresh_preview)
     refresh_preview()
 
